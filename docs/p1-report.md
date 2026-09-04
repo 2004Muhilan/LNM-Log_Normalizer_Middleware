@@ -249,7 +249,25 @@ concern made concrete: the subset guard plus profile twins (`proxy_*`) make stru
 determination rare; P3 should plan on device configuration and vendor tables carrying the effort
 savings, and the trace should stop presenting url/method as structurally determined.
 
-## 11. Phase-boundary signals
+## 11. Version control and reproduction
+
+Repository: `https://github.com/2004Muhilan/sih2026-ulpf` (private), branch `main`, first commit
+`2205a7a` — 81 files; no fixture or OCSF cache content in history (`git check-ignore -v` matched
+every cache path to an explicit rule; `git ls-files` contained nothing under `corpus/cache`,
+`ocsf/cache`, a venv or an SDK directory). `.gitattributes` forces LF checkouts everywhere because
+`dsl_hash` and `corpus_hash` are sha256 over file bytes. Licence gate: everything committed is
+ours, or Apache-2.0 (pinned OCSF tables — attribution in `ocsf/README.md`; logstash-patterns-core is
+referenced, not vendored), with the ELv2 reasoning in `corpus/README.md` and the root README.
+
+**Clean-clone test** (`scripts/clean-clone-test.sh`, fresh clone from GitHub into `/tmp` under
+WSL2): bootstrap ok; corpus refetched from the pinned commits — `catalogue.json` byte-identical;
+OCSF export and source refetched, tables rebuilt — `ocsf/pinned` byte-identical, cross-check agrees
+on all four classes; `p1-check`: 21/21 vectors, 23 pytest cases, Go suite pass; drafts: identical
+numbers (333/334 ASA, 97/100 Squid); working tree clean afterwards. One environment note: WSL's git
+has no GitHub credentials for the private remote, so the script bridges per-command to the Windows
+Git Credential Manager when present (no global configuration is changed).
+
+## 12. Phase-boundary signals
 
 - Executing csv/kv/positional drafts → P2 (first P2 test).
 - Real candidate enumeration for certificates → P3.
