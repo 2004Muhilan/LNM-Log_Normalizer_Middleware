@@ -1,0 +1,14 @@
+{
+  "ocsf_version": "1.3.0",
+  "export": {
+    "url": "https://schema.ocsf.io/1.3.0/export/schema",
+    "sha256": "6ccff0f70b6216abc8f82be3756a9a167662a535c64a6a60df111b0db363e3e2",
+    "cache_path": "ocsf/cache/ocsf-1.3.0-export.json"
+  },
+  "source": {
+    "url": "https://github.com/ocsf/ocsf-schema/archive/refs/tags/1.3.0.tar.gz",
+    "sha256": "73b0b69cdcaa79ac09c517c5aa6e104b19a7bacd14b1202e0394f1de0fef2a35",
+    "licence": "Apache-2.0",
+    "cache_path": "ocsf/cache/ocsf-schema-1.3.0"
+  }
+}

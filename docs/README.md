@@ -1,0 +1,22 @@
+# Phase reports
+
+Every phase ends with its own report here, committed as part of that phase's work. The reports are
+the project's memory: the basis of the final submission, and the only place the reasoning survives
+once the code has moved on.
+
+| Report | Status | Date |
+|---|---|---|
+| [P1 — contracts, corpus, and the dual-stack harness](p1-report.md) | accepted; boundary decisions verified (addendum) | 2026-09-05 |
+
+## Convention
+
+Shape (as in `p1-report.md`): demonstrable outcome; deliverables; detail on whichever checks carried
+the most weight; **raised, not absorbed** — every decision that touched a contract, an invariant, or
+a settled architecture point; phase-boundary signals.
+
+From P2 onward, two additions:
+
+- **What was tried and rejected**, not only what was built. The reasoning behind a discarded
+  approach stops a later phase from re-litigating something already settled.
+- **What the next phase inherits**: obligations, open questions, and anything deferred, with the
+  phase that picks it up.

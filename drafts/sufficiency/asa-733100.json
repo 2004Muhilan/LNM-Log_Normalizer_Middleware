@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "draft-asa-733100",
+  "description": "Cisco ASA %ASA-4-733100 threat-detection drop-rate message: prose with a padded bracketed object ('[   192.168.0.1]', '[ Scanning]', '[     Port-5432 5432]') and six numeric fields, some negative. Chosen as the hardest ASA shape: the bracketed object is free text that must stay opaque while the counters stay semantic.",
+  "regex_dialect": "re2",
+  "bounds": { "max_event_bytes": 8192, "max_fields": 64, "max_nesting": 4, "max_repeat": 16 },
+  "root": [
+    { "op": "regex", "pattern": "(?P<msg_id>%(?:ASA|FTD|PIX)-(?:[a-z]+-)?[0-7]-733100)",
+      "captures": { "msg_id": { "field": "msg_id", "kind": "semantic", "class": "word" } } },
+    { "op": "regex", "pattern": ":? ", "captures": {} },
+    { "op": "regex",
+      "pattern": "\\[(?P<object>[^\\]]+)\\] drop (?P<rate_id>rate-[0-9]+) exceeded\\. Current burst rate is (?P<burst>[0-9]+) per second, max configured rate is (?P<burst_max>-?[0-9]+); Current average rate is (?P<avg>[0-9]+) per second, max configured rate is (?P<avg_max>-?[0-9]+); Cumulative total count is (?P<total>[0-9]+)",
+      "captures": {
+        "object": { "field": "object", "kind": "opaque" },
+        "rate_id": { "field": "rate_id", "kind": "semantic", "class": "word" },
+        "burst": { "field": "burst_rate", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "burst_max": { "field": "burst_rate_max", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "avg": { "field": "average_rate", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "avg_max": { "field": "average_rate_max", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "total": { "field": "cumulative_total", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } }
+      } }
+  ]
+}

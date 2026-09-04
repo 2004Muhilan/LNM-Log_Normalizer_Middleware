@@ -1,0 +1,305 @@
+{
+  "schema_version": "1.0.0",
+  "pack_id": "squid-native",
+  "pack_version": "1.0",
+  "created_at": "2026-09-05T10:05:00Z",
+  "source": {
+    "source_id": "squid-proxy-01",
+    "vendor": "Squid",
+    "product": "Squid Cache",
+    "declared_envelope": "raw",
+    "transport_hint": "file"
+  },
+  "ocsf": {
+    "version": "1.3.0",
+    "pinned_classes": [
+      {
+        "uid": 4002,
+        "name": "http_activity",
+        "table_hash": "sha256:c464271e165faa8af6064254a3be8a3b7f4d2acb5a9f32ee5a71b2d0623e7cba"
+      }
+    ]
+  },
+  "acceptance": {
+    "policy_version": "1.0.0"
+  },
+  "time": {
+    "source_timezone": "UTC",
+    "timezone_confidence": "declared"
+  },
+  "anchors": [],
+  "tiebreaker_field": null,
+  "families": [
+    {
+      "family_id": "positional-10",
+      "description": "Squid native access.log; one structural family observed in the onboarding capture.",
+      "event_class_uid": 4002,
+      "routing_signature": {
+        "l1_envelope": "raw",
+        "l2_structure": "positional",
+        "l3_anchor_ids": [],
+        "l3_structural_literals": [
+          {
+            "slot_index": 7,
+            "text": "-"
+          }
+        ],
+        "l4_sketch": {
+          "arity_bucket": "10",
+          "token_class_sequence": [
+            "float",
+            "integer",
+            "ipv4",
+            "text",
+            "integer",
+            "word",
+            "url",
+            "literal",
+            "text",
+            "text"
+          ]
+        }
+      },
+      "parser": {
+        "spec_ref": "specs/squid-native-positional-10.json",
+        "spec_id": "squid-native-positional-10",
+        "dsl_hash": "sha256:a76f46323f0203ed4d852a34ca49f56b0f016a9398617c345e8703d47f1c7247",
+        "parser_hash": "sha256:a76f46323f0203ed4d852a34ca49f56b0f016a9398617c345e8703d47f1c7247"
+      },
+      "mapping": {
+        "mapping_version": "1.0",
+        "mapping_hash": "sha256:8392bcdc114b8f702afbd964627b23337cbf6dfdb0bf27f3334a0d5e9a9c10e3",
+        "fields": [
+          {
+            "path": "time",
+            "ocsf_attribute": "time",
+            "mandatory": true,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %ts.%03tu: seconds since epoch with milliseconds"
+            },
+            "transform": {
+              "kind": "none"
+            }
+          },
+          {
+            "path": "client_ip",
+            "ocsf_attribute": "src_endpoint.ip",
+            "mandatory": true,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "certificate_id": "cert_squid_pos3",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %>a: client address"
+            }
+          },
+          {
+            "path": "server_ip",
+            "ocsf_attribute": "dst_endpoint.ip",
+            "mandatory": true,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %<a: upstream server address"
+            }
+          },
+          {
+            "path": "url",
+            "ocsf_attribute": "http_request.url.url_string",
+            "mandatory": true,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %ru: request URL. Not structurally determined: the pinned 4002 table has 21 url_t leaves including proxy_http_request.url.url_string"
+            }
+          },
+          {
+            "path": "method",
+            "ocsf_attribute": "http_request.http_method",
+            "mandatory": true,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %rm: request method. Not structurally determined: 203 string_t leaves accept a bare word"
+            }
+          },
+          {
+            "path": "cache_result",
+            "ocsf_attribute": "action_id",
+            "mandatory": true,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %Ss: Squid result code; vendor documentation defines TCP_DENIED / TCP_DENIED_REPLY as denied and every other code as served (Allowed)"
+            },
+            "transform": {
+              "kind": "lookup",
+              "lookup": {
+                "TCP_DENIED": 2,
+                "TCP_DENIED_REPLY": 2
+              },
+              "default": 1
+            }
+          },
+          {
+            "path": "method",
+            "ocsf_attribute": "activity_id",
+            "mandatory": true,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %rm: request method, mapped onto the OCSF 1.3.0 http_activity activity_id enum"
+            },
+            "transform": {
+              "kind": "lookup",
+              "lookup": {
+                "CONNECT": 1,
+                "DELETE": 2,
+                "GET": 3,
+                "HEAD": 4,
+                "OPTIONS": 5,
+                "POST": 6,
+                "PUT": 7,
+                "TRACE": 8
+              }
+            }
+          },
+          {
+            "path": "status_code",
+            "ocsf_attribute": "http_response.code",
+            "mandatory": false,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %03>Hs: HTTP status code sent to the client"
+            }
+          },
+          {
+            "path": "content_type",
+            "ocsf_attribute": "http_response.content_type",
+            "mandatory": false,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %mt: MIME content type"
+            }
+          },
+          {
+            "path": "reply_bytes",
+            "ocsf_attribute": "traffic.bytes_out",
+            "mandatory": false,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "certificate_id": "cert_squid_pos5",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %<st: reply size sent to the client"
+            }
+          },
+          {
+            "path": "duration",
+            "ocsf_attribute": "duration",
+            "mandatory": false,
+            "provenance": {
+              "category": "vendor_schema_or_device_configuration",
+              "discriminator_id": "device_logformat_configuration",
+              "evidence_ref": "logformat %6tr: response time in milliseconds"
+            }
+          }
+        ],
+        "unmapped": [
+          {
+            "path": "cache_result",
+            "name": "cache_result"
+          },
+          {
+            "path": "hier_code",
+            "name": "hierarchy_code"
+          },
+          {
+            "path": "user",
+            "name": "user"
+          }
+        ],
+        "acceptance_snapshot": {
+          "mandatory_attributes": [
+            "time",
+            "src_endpoint.ip",
+            "dst_endpoint.ip",
+            "http_request.url.url_string",
+            "http_request.http_method",
+            "activity_id",
+            "action_id"
+          ],
+          "semantic_budget": 0.6
+        }
+      },
+      "validation": {
+        "byte_conservation": 1.0,
+        "critical_coverage": 1.0,
+        "weighted_semantic_coverage": 0.94,
+        "held_out": {
+          "samples": 5,
+          "passed": 5
+        }
+      },
+      "certificates": [
+        "cert_squid_pos3",
+        "cert_squid_pos5"
+      ],
+      "resolutions": [
+        {
+          "certificate_ids": [
+            "cert_squid_pos3",
+            "cert_squid_pos5"
+          ],
+          "fields": [
+            "time",
+            "url",
+            "method",
+            "duration",
+            "client_ip",
+            "cache_result",
+            "status_code",
+            "reply_bytes",
+            "hier_code",
+            "server_ip"
+          ],
+          "discriminator_id": "device_logformat_configuration",
+          "provenance": "vendor_schema_or_device_configuration",
+          "propagation_scope": {
+            "source_id": "squid-proxy-01",
+            "l1_envelope": "raw",
+            "l2_structure": "positional",
+            "l3_anchors": [],
+            "slot_index": 2,
+            "token_class": "ipv4"
+          }
+        }
+      ],
+      "sample_provenance": {
+        "tier": 1,
+        "operator_id": "op-014",
+        "sample_count": 6,
+        "corpus_hash": "sha256:6326f92d1dfd3f38e8d4abe3be125a48f7a4993541b49c4336288fa6c9f823f0"
+      }
+    }
+  ],
+  "provenance": {
+    "generator_version": "ulpf-gen-0.1",
+    "validator_version": "ulpf-val-0.1",
+    "model_hash": "none:fixture",
+    "discriminator_library_version": "1.0.0"
+  },
+  "hashes": {
+    "parser_hash": "sha256:891f34c1d086a69ab8d571bffc898f3a8a35bd30a5698ecdee18ad380d0720d4",
+    "dsl_hash": "sha256:891f34c1d086a69ab8d571bffc898f3a8a35bd30a5698ecdee18ad380d0720d4",
+    "mapping_hash": "sha256:24ef8c0dc6a3e6ae3ef31dbcb627cb39f5dfd6f8158d01775aa18c34f3834e53",
+    "corpus_hash": "sha256:6326f92d1dfd3f38e8d4abe3be125a48f7a4993541b49c4336288fa6c9f823f0"
+  },
+  "signing": {
+    "authority_id": "ulpf-pack-authority-dev",
+    "algorithm": "ed25519",
+    "signature_file": "pack.json.sig"
+  }
+}

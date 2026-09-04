@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "draft-asa-106023",
+  "description": "Cisco ASA %ASA-4-106023 'Deny <proto> src if:host[/port] dst if:host[/port] [(type N, code M)] [by access-group \"acl\"] [[0xhash, 0xhash]]'. Every trailing element is optional per the vendor syslog reference; ports are absent for ICMP. Optional named groups that do not participate in the match produce no span (declared-field-absent).",
+  "regex_dialect": "re2",
+  "bounds": { "max_event_bytes": 8192, "max_fields": 64, "max_nesting": 4, "max_repeat": 16 },
+  "root": [
+    { "op": "regex", "pattern": "(?P<msg_id>%(?:ASA|FTD|PIX)-(?:[a-z]+-)?[0-7]-106023)",
+      "captures": { "msg_id": { "field": "msg_id", "kind": "semantic", "class": "word" } } },
+    { "op": "regex", "pattern": ":? ", "captures": {} },
+    { "op": "regex",
+      "pattern": "Deny (?P<proto>protocol [0-9]+|[A-Za-z0-9]+) src (?P<src_if>[^:]+):(?P<src_host>[^/\\s(]+)(?:/(?P<src_port>[0-9]+))?(?:\\((?P<src_annotation>[^()]+)\\))? dst (?P<dst_if>[^:]+):(?P<dst_host>[^/\\s(]+)(?:/(?P<dst_port>[0-9]+))?(?:\\((?P<dst_annotation>[^()]+)\\))?",
+      "captures": {
+        "proto": { "field": "proto", "kind": "semantic", "class": "text" },
+        "src_annotation": { "field": "src_annotation", "kind": "semantic", "class": "text" },
+        "dst_annotation": { "field": "dst_annotation", "kind": "semantic", "class": "text" },
+        "src_if": { "field": "src_if", "kind": "semantic", "class": "text" },
+        "src_host": { "field": "src_host", "kind": "semantic", "class": "text" },
+        "src_port": { "field": "src_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "dst_if": { "field": "dst_if", "kind": "semantic", "class": "text" },
+        "dst_host": { "field": "dst_host", "kind": "semantic", "class": "text" },
+        "dst_port": { "field": "dst_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } }
+      } },
+    { "op": "optional", "step": { "op": "regex", "pattern": " \\(?type (?P<icmp_type>[0-9]+), code (?P<icmp_code>[0-9]+)(?:\\)|,)",
+      "captures": {
+        "icmp_type": { "field": "icmp_type", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "icmp_code": { "field": "icmp_code", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } }
+      } } },
+    { "op": "optional", "step": { "op": "regex", "pattern": " by access-group \"(?P<acl>[^\"]*)\"",
+      "captures": { "acl": { "field": "acl", "kind": "semantic", "class": "text" } } } },
+    { "op": "optional", "step": { "op": "regex", "pattern": " \\[(?P<hash1>0x[0-9a-fA-F]+), (?P<hash2>0x[0-9a-fA-F]+)\\]",
+      "captures": {
+        "hash1": { "field": "acl_hash_1", "kind": "semantic", "class": "hex" },
+        "hash2": { "field": "acl_hash_2", "kind": "semantic", "class": "hex" }
+      } } }
+  ]
+}

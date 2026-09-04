@@ -1,0 +1,30 @@
+{
+  "policy_version": "1.0.0",
+  "note": "Per-event-class acceptance policy DATA (architecture v0.7 §3.3). The policy ENGINE is a P3 deliverable; these tables exist in P1 because the pack contract snapshots them. Classes 4001 and 4002 follow the architecture table and the worked trace; 3002 and 2004 are drafts to be confirmed in P3.",
+  "classes": {
+    "4002": {
+      "name": "http_activity",
+      "status": "from-worked-trace",
+      "mandatory_attributes": ["time", "src_endpoint.ip", "dst_endpoint.ip", "http_request.url.url_string", "http_request.http_method", "activity_id", "action_id"],
+      "semantic_budget": 0.6
+    },
+    "4001": {
+      "name": "network_activity",
+      "status": "from-architecture-3.3",
+      "mandatory_attributes": ["time", "src_endpoint.ip", "dst_endpoint.ip", "action_id"],
+      "semantic_budget": 0.6
+    },
+    "3002": {
+      "name": "authentication",
+      "status": "draft-confirm-in-p3",
+      "mandatory_attributes": ["time", "user.name", "status_id"],
+      "semantic_budget": 0.5
+    },
+    "2004": {
+      "name": "detection_finding",
+      "status": "draft-confirm-in-p3",
+      "mandatory_attributes": ["time", "finding_info.title", "severity_id"],
+      "semantic_budget": 0.5
+    }
+  }
+}

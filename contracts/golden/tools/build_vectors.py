@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Golden-vector authoring tool. Idempotent.
+
+1. Fills the content hashes in squid-native/pack.json from the actual files (dsl_hash, mapping_hash,
+   corpus_hash, pack-level hashes). parser_hash is set equal to dsl_hash until P2 defines the compiled
+   representation (recorded in contracts/README.md as a P2 obligation).
+2. Produces the resolved certificates in squid-native/certificates/ from the ambiguous snapshots.
+3. Generates the negative vectors under negative/ by mutating the golden documents, so they cannot
+   drift from the positives.
+4. Writes index.json, which both validation suites iterate.
+"""
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+from pathlib import Path
+
+GOLDEN = Path(__file__).resolve().parents[1]
+SQ = GOLDEN / "squid-native"
+NEG = GOLDEN / "negative"
+LOGFORMAT = "logformat squid %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt"
+
+
+def sha(b: bytes) -> str:
+    return "sha256:" + hashlib.sha256(b).hexdigest()
+
+
+def canonical(o) -> bytes:
+    return json.dumps(o, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def load(p: Path):
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def dump(p: Path, o):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(o, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def rehash_pack():
+    pack = load(SQ / "pack.json")
+    corpus_hash = sha((SQ / "samples" / "access.log").read_bytes())
+    dsl, mapping, parser = [], [], []
+    for fam in pack["families"]:
+        spec_bytes = (SQ / fam["parser"]["spec_ref"]).read_bytes()
+        fam["parser"]["dsl_hash"] = sha(spec_bytes)
+        fam["parser"]["parser_hash"] = fam["parser"]["dsl_hash"]
+        fam["mapping"]["mapping_hash"] = sha(canonical(fam["mapping"]["fields"]))
+        fam["sample_provenance"]["corpus_hash"] = corpus_hash
+        dsl.append(fam["parser"]["dsl_hash"]); mapping.append(fam["mapping"]["mapping_hash"]); parser.append(fam["parser"]["parser_hash"])
+    pack["hashes"] = {
+        "parser_hash": sha("".join(parser).encode()),
+        "dsl_hash": sha("".join(dsl).encode()),
+        "mapping_hash": sha("".join(mapping).encode()),
+        "corpus_hash": corpus_hash,
+    }
+    dump(SQ / "pack.json", pack)
+    return pack
+
+
+def resolve_certificates():
+    resolved_to = {"cert_squid_pos3": "src_endpoint.ip", "cert_squid_pos5": "traffic.bytes_out"}
+    for snap in sorted((SQ / "certificate-snapshots").glob("*_ambiguous.json")):
+        cert = load(snap)
+        cert["status"] = "resolved"
+        cert["resolution"] = {
+            "discriminator_id": "device_logformat_configuration",
+            "provenance": "vendor_schema_or_device_configuration",
+            "resolved_to": resolved_to[cert["certificate_id"]],
+            "evidence_ref": {"kind": "operator_input", "summary": LOGFORMAT, "hash": sha(LOGFORMAT.encode())},
+            "operator_id": "op-014",
+            "resolved_at": "2026-09-05T10:04:00Z",
+            "propagation_scope": {"source_id": cert["source_id"], **cert["context"]},
+        }
+        dump(SQ / "certificates" / f"{cert['certificate_id']}.json", cert)
+
+
+def negatives(pack):
+    spec = load(SQ / "specs" / "squid-native-positional-10.json")
+    smap = load(SQ / "span-maps" / "line1-promoted.json")
+    cert = load(SQ / "certificate-snapshots" / "cert_squid_pos3_ambiguous.json")
+    out = []
+
+    s = copy.deepcopy(spec)
+    s["root"]["slots"][3] = {"token": {"parse": {"op": "regex", "pattern": "(?P<a>[A-Z_]+)/(?P<b>[0-9]+)\\1",
+                                                 "captures": {"a": {"field": "cache_result", "kind": "semantic"}, "b": {"field": "status_code", "kind": "semantic"}}}}}
+    dump(NEG / "spec-non-re2-backreference.json", s)
+    out.append({"kind": "parser-spec", "path": "negative/spec-non-re2-backreference.json", "expect": "invalid",
+                "reason_match": ["RE2", "regex"], "note": "backreference \\1 is not RE2; both stacks must refuse it"})
+
+    s = copy.deepcopy(spec)
+    s["root"] = {"op": "exec", "command": "/bin/sh"}
+    dump(NEG / "spec-unknown-op.json", s)
+    out.append({"kind": "parser-spec", "path": "negative/spec-unknown-op.json", "expect": "invalid",
+                "reason_match": ["schema", "oneOf", "root"], "note": "the op set is closed; invariant 1"})
+
+    m = copy.deepcopy(smap)
+    m["spans"] = [x for x in m["spans"] if not (x["start"] == 86 and x["end"] == 87)]
+    dump(NEG / "span-map-gap.json", m)
+    out.append({"kind": "span-map", "path": "negative/span-map-gap.json", "expect": "invalid", "reason_match": "gap"})
+
+    m = copy.deepcopy(smap)
+    m["spans"][2]["end"] = 23
+    dump(NEG / "span-map-overlap.json", m)
+    out.append({"kind": "span-map", "path": "negative/span-map-overlap.json", "expect": "invalid", "reason_match": "overlap"})
+
+    c = copy.deepcopy(cert)
+    c["ranked_candidates"][0]["confidence"] = 0.83
+    dump(NEG / "certificate-numeric-confidence.json", c)
+    out.append({"kind": "ambiguity-certificate", "path": "negative/certificate-numeric-confidence.json", "expect": "invalid",
+                "reason_match": "confidence", "note": "no numeric confidence anywhere (round 3 blocking change 2)"})
+
+    c = copy.deepcopy(cert)
+    c["enumeration"]["survivors"] = ["src_endpoint.ip"]
+    dump(NEG / "certificate-single-survivor-ambiguous.json", c)
+    out.append({"kind": "ambiguity-certificate", "path": "negative/certificate-single-survivor-ambiguous.json", "expect": "invalid",
+                "reason_match": "survivors", "note": "one survivor is structural determination, never an ambiguity"})
+
+    p = copy.deepcopy(pack)
+    p["families"][0]["mapping"]["fields"][3]["provenance"] = {"category": "model_proposal"}
+    dump(NEG / "pack-mandatory-model-only.json", p)
+    out.append({"kind": "parser-pack", "path": "negative/pack-mandatory-model-only.json", "expect": "invalid",
+                "reason_match": ["model_proposal", "not failed", "/provenance/category"], "note": "invariant 4 at the contract level"})
+
+    p = copy.deepcopy(pack)
+    p["families"][0]["mapping"]["fields"][3]["provenance"] = {"category": "structural_determination",
+                                                              "enumerated_survivors": ["http_request.url.url_string", "proxy_http_request.url.url_string"]}
+    dump(NEG / "pack-structural-determination-two-survivors.json", p)
+    out.append({"kind": "parser-pack", "path": "negative/pack-structural-determination-two-survivors.json", "expect": "invalid",
+                "reason_match": ["enumerated_survivors", "structural_determination"],
+                "note": "two survivors is an ambiguity, never a structural determination — the real 4002 table has both url leaves"})
+
+    p = copy.deepcopy(pack)
+    p["schema_version"] = "2.0.0"
+    dump(NEG / "pack-version-bumped.json", p)
+    out.append({"kind": "parser-pack", "path": "negative/pack-version-bumped.json", "expect": "invalid",
+                "reason_match": "unsupported schema_version", "note": "fail closed on unknown contract versions"})
+
+    p = copy.deepcopy(pack)
+    p["ocsf"]["pinned_attributes"] = ["src_endpoint.ip", "dst_endpoint.ip", "http_request.url"]
+    dump(NEG / "pack-attribute-pinning.json", p)
+    out.append({"kind": "parser-pack", "path": "negative/pack-attribute-pinning.json", "expect": "invalid",
+                "reason_match": "pinned_attributes", "note": "subset guard: the contract cannot express attribute-level pinning"})
+
+    p = copy.deepcopy(pack)
+    p["ocsf"]["pinned_classes"][0]["table_hash"] = "sha256:" + "ab" * 32
+    dump(NEG / "pack-subset-guard-stale-table.json", p)
+    out.append({"kind": "parser-pack", "path": "negative/pack-subset-guard-stale-table.json", "expect": "invalid",
+                "reason_match": "subset guard", "note": "a pack must pin the complete class table exactly as generated"})
+    return out
+
+
+def main():
+    pack = rehash_pack()
+    resolve_certificates()
+    vectors = [
+        {"kind": "parser-spec", "path": "squid-native/specs/squid-native-positional-10.json", "expect": "valid"},
+        {"kind": "parser-spec", "path": "squid-native/specs/squid-native-candidate.json", "expect": "valid"},
+        {"kind": "span-map", "path": "squid-native/span-maps/line1-promoted.json", "expect": "valid"},
+        {"kind": "span-map", "path": "squid-native/span-maps/line1-candidate.json", "expect": "valid"},
+        {"kind": "ambiguity-certificate", "path": "squid-native/certificate-snapshots/cert_squid_pos3_ambiguous.json", "expect": "valid"},
+        {"kind": "ambiguity-certificate", "path": "squid-native/certificate-snapshots/cert_squid_pos5_ambiguous.json", "expect": "valid"},
+        {"kind": "ambiguity-certificate", "path": "squid-native/certificates/cert_squid_pos3.json", "expect": "valid"},
+        {"kind": "ambiguity-certificate", "path": "squid-native/certificates/cert_squid_pos5.json", "expect": "valid"},
+        {"kind": "ambiguity-certificate", "path": "unresolved/cert_out_of_library.json", "expect": "valid"},
+        {"kind": "parser-pack", "path": "squid-native/pack.json", "expect": "valid"},
+    ] + negatives(pack)
+    dump(GOLDEN / "index.json", {"note": "Generated by contracts/golden/tools/build_vectors.py; both validation suites iterate this list.", "vectors": vectors})
+    print(f"wrote {len(vectors)} vectors")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "draft-asa-305011",
+  "description": "Cisco ASA %ASA-6-305011/305012 'Built/Teardown dynamic|static <proto> translation from if:host/port to if:host/port [duration h:mm:ss]'. Two message ids share one structure with an optional duration suffix on teardown.",
+  "regex_dialect": "re2",
+  "bounds": { "max_event_bytes": 8192, "max_fields": 64, "max_nesting": 4, "max_repeat": 16 },
+  "root": [
+    { "op": "regex", "pattern": "(?P<msg_id>%(?:ASA|FTD|PIX)-(?:[a-z]+-)?[0-7]-30501[12])",
+      "captures": { "msg_id": { "field": "msg_id", "kind": "semantic", "class": "word" } } },
+    { "op": "regex", "pattern": ":? ", "captures": {} },
+    { "op": "regex",
+      "pattern": "(?P<event>Built|Teardown) (?P<nat_type>dynamic|static) (?P<proto>[A-Za-z0-9]+) translation from (?P<src_if>[^:]+):(?P<src_host>[^/\\s]+)/(?P<src_port>[0-9]+)(?:\\((?P<src_user>[^()]+)\\))? to (?P<dst_if>[^:]+):(?P<dst_host>[^/\\s]+)/(?P<dst_port>[0-9]+)(?:\\((?P<dst_user>[^()]+)\\))?",
+      "captures": {
+        "src_user": { "field": "src_user", "kind": "semantic", "class": "text" },
+        "dst_user": { "field": "dst_user", "kind": "semantic", "class": "text" },
+        "event": { "field": "event", "kind": "semantic", "class": "word" },
+        "nat_type": { "field": "nat_type", "kind": "semantic", "class": "word" },
+        "proto": { "field": "proto", "kind": "semantic", "class": "word" },
+        "src_if": { "field": "src_if", "kind": "semantic", "class": "text" },
+        "src_host": { "field": "src_host", "kind": "semantic", "class": "text" },
+        "src_port": { "field": "src_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "dst_if": { "field": "dst_if", "kind": "semantic", "class": "text" },
+        "dst_host": { "field": "dst_host", "kind": "semantic", "class": "text" },
+        "dst_port": { "field": "dst_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } }
+      } },
+    { "op": "optional", "step": { "op": "regex", "pattern": " duration (?P<duration>[0-9]+:[0-9]{2}:[0-9]{2})",
+      "captures": { "duration": { "field": "duration_hms", "kind": "semantic", "class": "text" } } } }
+  ]
+}

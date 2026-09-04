@@ -1,0 +1,149 @@
+# ULPF discriminator library v1
+#
+# Pre-authored domain knowledge mapping ambiguity classes to evidence templates.
+# Selection is DIRECT LOOKUP (architecture v0.7 §10 decision 3):
+#   ranked candidate attribute set -> ambiguity class (subset match on `candidates`)
+#   -> ranked discriminator list (by cost_tier, then by fields resolved)
+#   -> sufficiency grouping (one evidence item may resolve several certificates).
+# Costs are ORDINAL tiers, never numbers. When no class matches, the certificate is
+# emitted unresolved with reason `no_library_discriminator`; the system never guesses.
+#
+# `candidates` lists OCSF attribute paths (dotted, within the event class). A candidate
+# entry ending in `.*` matches any leaf under that object; `pair_of` records which
+# prefixes the class separates so leaf-level variants (ip/port/hostname/mac) match too.
+
+library_version: "1.0.0"
+ocsf_version: "1.3.0"
+
+cost_tiers:
+  - id: free_if_available
+    order: 0
+    meaning: "No new observation required; the operator supplies an artifact they already have."
+  - id: one_labelled_sample
+    order: 1
+    meaning: "One event whose ground truth the operator knows or can cheaply produce."
+  - id: correlated_source
+    order: 2
+    meaning: "A second telemetry source that must be correlated with this one."
+
+# Discriminators shared by several classes are defined once here and referenced by id.
+discriminators:
+  vendor_schema_field_order:
+    cost_tier: free_if_available
+    evidence_form: document
+    applies_when: "Vendor documentation for this product/version is on hand."
+    request_template: >-
+      Provide the vendor field-order documentation (or the documented format name)
+      for {vendor} {product}. This resolves: {resolves}.
+    sufficiency: "The document names the field at slot {slot_index} unambiguously."
+
+  device_logformat_configuration:
+    cost_tier: free_if_available
+    evidence_form: operator_input
+    applies_when: "The source's output format is administrator-configurable (Squid, Apache, nginx, HAProxy, custom syslog templates) or the format is otherwise declared in device configuration."
+    request_template: >-
+      Provide the log-format directive from this device's configuration
+      (for Squid: the `logformat` line, or the built-in format name).
+      This resolves: {resolves}.
+    sufficiency: "The directive's format codes map one-to-one onto the induced slots; every slot named by the directive is resolved, not only the ambiguous ones."
+
+  operator_labelled_session:
+    cost_tier: one_labelled_sample
+    evidence_form: labelled_sample
+    applies_when: "The operator can identify one event whose client/server (or source/destination) roles are known, e.g. a connection they initiated themselves."
+    request_template: >-
+      Provide one log line for a session whose direction you know, and state which
+      address was the initiator. This resolves: {resolves}.
+    sufficiency: "The labelled initiator address appears in exactly one of the competing slots in that line."
+
+  paired_flow_telemetry:
+    cost_tier: correlated_source
+    evidence_form: correlated_source
+    applies_when: "A second source (NetFlow/IPFIX, packet capture, upstream firewall) observes the same sessions with known direction."
+    request_template: >-
+      Provide a correlated record from a second source for any one session in the
+      sample window. This resolves: {resolves}.
+    sufficiency: "The correlated record's initiator address matches exactly one competing slot."
+
+  relay_header_timestamp:
+    cost_tier: free_if_available
+    evidence_form: operator_input
+    applies_when: "The event arrived inside a syslog envelope whose header timestamp is the relay's receive time."
+    request_template: >-
+      Confirm whether the syslog header timestamp on this source is set by the device
+      (event time) or by a relay (receive time). This resolves: {resolves}.
+    sufficiency: "Operator confirmation of which clock stamps the header."
+
+  operator_labelled_event_outcome:
+    cost_tier: one_labelled_sample
+    evidence_form: labelled_sample
+    applies_when: "The operator can produce one event with a known outcome, e.g. a deliberately blocked connection or a failed login."
+    request_template: >-
+      Provide one log line for an event whose outcome you know (for example a
+      connection you know was blocked) and state the outcome. This resolves: {resolves}.
+    sufficiency: "Exactly one competing field's value agrees with the known outcome."
+
+  operator_labelled_transfer:
+    cost_tier: one_labelled_sample
+    evidence_form: labelled_sample
+    applies_when: "The operator can perform one transfer of known size and direction through the device."
+    request_template: >-
+      Perform (or identify) one transfer of known size and direction, and provide
+      its log line with the size and direction. This resolves: {resolves}.
+    sufficiency: "Exactly one competing counter matches the known size within the device's rounding."
+
+  device_self_address:
+    cost_tier: free_if_available
+    evidence_form: operator_input
+    applies_when: "The device's own listening/management address is known (often already in source metadata)."
+    request_template: >-
+      Confirm this device's own address as seen by clients. This resolves: {resolves}.
+    sufficiency: "The confirmed address appears in exactly one competing slot across the samples."
+
+  operator_labelled_request:
+    cost_tier: one_labelled_sample
+    evidence_form: labelled_sample
+    applies_when: "The operator can issue one HTTP request with a known request-body size and observe a known response size."
+    request_template: >-
+      Issue (or identify) one request with a known request size and a known response
+      size, and provide its log line with both numbers. This resolves: {resolves}.
+    sufficiency: "Each competing field matches exactly one of the two known numbers."
+
+ambiguity_classes:
+  endpoint_orientation:
+    description: "Which of two symmetric endpoint slots is the source and which the destination."
+    pair_of: [src_endpoint, dst_endpoint]
+    candidates: [src_endpoint.*, dst_endpoint.*]
+    discriminators: [vendor_schema_field_order, device_logformat_configuration, operator_labelled_session, paired_flow_telemetry]
+
+  temporal_role:
+    description: "Which of several timestamps is the event time versus a receive/logged/processed time."
+    candidates: [time, start_time, end_time, metadata.logged_time, metadata.processed_time, metadata.modified_time]
+    discriminators: [vendor_schema_field_order, device_logformat_configuration, relay_header_timestamp]
+
+  action_outcome:
+    description: "Whether a disposition field records the attempted action (allow/deny) or the effected outcome (success/failure)."
+    candidates: [action, action_id, status, status_id, disposition, disposition_id]
+    discriminators: [vendor_schema_field_order, device_logformat_configuration, operator_labelled_event_outcome]
+
+  volume_direction:
+    description: "Whether a counter is inbound, outbound, or undirected total, in bytes or packets."
+    candidates: [traffic.bytes, traffic.bytes_in, traffic.bytes_out, traffic.packets, traffic.packets_in, traffic.packets_out]
+    discriminators: [vendor_schema_field_order, device_logformat_configuration, operator_labelled_transfer]
+
+  client_server_role:
+    description: "For proxies and load balancers: which address is the client, the device itself, or the origin server."
+    pair_of: [src_endpoint, proxy_endpoint, dst_endpoint]
+    candidates: [src_endpoint.*, proxy_endpoint.*, dst_endpoint.*]
+    discriminators: [vendor_schema_field_order, device_logformat_configuration, device_self_address, operator_labelled_session]
+
+  request_response_role:
+    description: "Whether a size or header field belongs to the HTTP request or the HTTP response."
+    pair_of: [http_request, http_response]
+    candidates: [http_request.*, http_response.*]
+    discriminators: [vendor_schema_field_order, device_logformat_configuration, operator_labelled_request]
+
+# Ranking rule (deterministic): sort applicable discriminators by cost_tier.order ascending,
+# then by the number of certificate fields resolved descending, then by id. The first entry is
+# `selected`; the rest are `alternatives`. Certificates whose selected discriminator is the same
+# evidence item share one sufficiency_group and produce ONE request.

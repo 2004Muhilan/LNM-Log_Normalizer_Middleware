@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ulpf.local/contracts/span-map/1.0.0",
+  "title": "ULPF span map",
+  "description": "The parser's output for one event: byte spans over the original raw buffer (and over any derived buffers produced by a decode op). Invariant, checked by validators when status is 'ok': for every buffer, its spans sorted by start tile [0, length) exactly — no gaps, no overlaps, no out-of-bounds. Nothing is reconstructed; values are views onto raw bytes. Offsets are bytes, never characters.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "spec_id", "event", "status", "buffers", "spans"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "spec_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "dsl_hash": { "$ref": "#/$defs/sha256" },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_hash", "raw_length"],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{10,26}$" },
+        "raw_hash": { "$ref": "#/$defs/sha256" },
+        "raw_length": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "raw_base64": { "type": "string", "description": "Test vectors and debugging only. The evidence store, not the span map, is the system of record for raw bytes.", "pattern": "^[A-Za-z0-9+/]*={0,2}$" }
+      }
+    },
+    "status": { "type": "string", "enum": ["ok", "failed"] },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at_offset", "reason"],
+      "properties": {
+        "at_offset": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "step": { "type": "string", "description": "JSON-pointer-like path of the failing step inside the spec.", "maxLength": 256 }
+      }
+    },
+    "buffers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "length"],
+        "properties": {
+          "id": { "type": "string", "description": "'raw' for the event bytes; '<field path>#decoded' for a buffer produced by a decode op on that field.", "pattern": "^(raw|[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*(\\[[0-9]+\\])?#decoded)$" },
+          "length": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+          "derived_from": { "$ref": "#/$defs/span_path" },
+          "encoding": { "type": "string", "enum": ["base64", "hex", "url", "json-string", "c-escape", "cef-extension", "quoted-backslash", "quoted-doubled"] }
+        }
+      }
+    },
+    "spans": {
+      "type": "array",
+      "maxItems": 65536,
+      "items": { "$ref": "#/$defs/span" }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "failed" } } }, "then": { "required": ["failure"] } },
+    { "if": { "properties": { "status": { "const": "ok" } } }, "then": { "not": { "required": ["failure"] } } }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "span_path": {
+      "type": "string",
+      "description": "Field path from the spec; repeated occurrences are suffixed [n]; csv extras are extra.<n>; unknown kv keys are unknown.<key>.",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\[[0-9]+\\])?(\\.[A-Za-z0-9_][A-Za-z0-9_.\\-]*(\\[[0-9]+\\])?)*$",
+      "maxLength": 320
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buffer", "start", "end", "kind"],
+      "properties": {
+        "buffer": { "type": "string", "pattern": "^(raw|[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*(\\[[0-9]+\\])?#decoded)$" },
+        "start": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "end": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "kind": { "type": "string", "enum": ["semantic", "literal", "opaque"] },
+        "path": { "$ref": "#/$defs/span_path" },
+        "text": { "type": "string", "description": "Literal spans only: the matched text, informative.", "maxLength": 4096 },
+        "value": { "type": "string", "description": "Semantic spans: the decoded string value (unescaped for encoded spans). Omitted when decode_status is 'invalid'.", "maxLength": 1048576 },
+        "class": { "type": "string", "enum": ["integer", "float", "ipv4", "ipv6", "ip", "mac", "url", "hostname", "uuid", "hex", "word", "text"] },
+        "encoding": { "type": "string", "enum": ["csv-quoted", "quoted-backslash", "quoted-doubled", "base64", "hex", "url", "json-string", "c-escape", "cef-extension"] },
+        "decode_status": { "type": "string", "enum": ["ok", "invalid"] },
+        "coerced": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["to", "value"],
+          "properties": {
+            "to": { "type": "string", "enum": ["string", "int", "float", "bool", "ipv4", "ipv6", "ip", "mac", "timestamp", "enum"] },
+            "value": { "description": "int/float as JSON numbers; timestamp as epoch milliseconds (integer); bool as JSON boolean; others as strings.", "type": ["number", "string", "boolean"] },
+            "format_selected": { "description": "Timestamps coerced through an ordered formats list: index of the format that parsed.", "type": "integer", "minimum": 0, "maximum": 7 },
+            "precision_selected": { "description": "Timestamps coerced with epoch_auto: the single precision whose 2000–2100 window contained the value. Required whenever epoch_auto was used; the coercion rejects (never guesses) when zero or several precisions match.", "type": "string", "enum": ["s", "ms", "us", "ns"] }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "literal" } } }, "then": { "not": { "anyOf": [ { "required": ["path"] }, { "required": ["value"] }, { "required": ["class"] }, { "required": ["coerced"] }, { "required": ["encoding"] } ] } } },
+        { "if": { "properties": { "kind": { "enum": ["semantic", "opaque"] } } }, "then": { "required": ["path"], "not": { "required": ["text"] } } },
+        { "if": { "properties": { "kind": { "const": "opaque" } } }, "then": { "not": { "anyOf": [ { "required": ["class"] }, { "required": ["coerced"] } ] } } }
+      ]
+    }
+  }
+}

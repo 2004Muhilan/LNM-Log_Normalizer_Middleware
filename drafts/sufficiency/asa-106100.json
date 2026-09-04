@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "draft-asa-106100",
+  "description": "Cisco ASA %ASA-6-106100 'access-list <acl> permitted|denied|est-allowed <proto> if/host(port) -> if/host(port) hit-cnt N first hit|N-second interval [0xh, 0xh]'. Exercises the '%ASA-session-5-106100' tagged message-id variant, host names in place of IPs, and the interval alternation.",
+  "regex_dialect": "re2",
+  "bounds": { "max_event_bytes": 8192, "max_fields": 64, "max_nesting": 4, "max_repeat": 16 },
+  "root": [
+    { "op": "regex", "pattern": "(?P<msg_id>%(?:ASA|FTD|PIX)-(?:[a-z]+-)?[0-7]-106100)",
+      "captures": { "msg_id": { "field": "msg_id", "kind": "semantic", "class": "word" } } },
+    { "op": "regex", "pattern": ":? ", "captures": {} },
+    { "op": "regex",
+      "pattern": "access-list (?P<acl>[^\\s]+) (?P<action>permitted|denied|est-allowed) (?P<proto>[A-Za-z0-9]+) (?P<src_if>[^/\\s]+)/(?P<src_host>[^\\s(]+)\\((?P<src_port>[0-9]+)\\)(?:\\((?P<src_user>[^()]+)\\))? -> (?P<dst_if>[^/\\s]+)/(?P<dst_host>[^\\s(]+)\\((?P<dst_port>[0-9]+)\\)(?:\\((?P<dst_user>[^()]+)\\))? hit-cnt (?P<hits>[0-9]+) (?P<interval>first hit|[0-9]+-second interval) \\[(?P<hash1>0x[0-9a-fA-F]+), (?P<hash2>0x[0-9a-fA-F]+)\\]",
+      "captures": {
+        "src_user": { "field": "src_user", "kind": "semantic", "class": "text" },
+        "dst_user": { "field": "dst_user", "kind": "semantic", "class": "text" },
+        "acl": { "field": "acl", "kind": "semantic", "class": "text" },
+        "action": { "field": "action", "kind": "semantic", "class": "word", "coerce": { "op": "coerce", "to": "enum", "values": ["permitted", "denied", "est-allowed"], "on_failure": "reject" } },
+        "proto": { "field": "proto", "kind": "semantic", "class": "word" },
+        "src_if": { "field": "src_if", "kind": "semantic", "class": "text" },
+        "src_host": { "field": "src_host", "kind": "semantic", "class": "text" },
+        "src_port": { "field": "src_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "dst_if": { "field": "dst_if", "kind": "semantic", "class": "text" },
+        "dst_host": { "field": "dst_host", "kind": "semantic", "class": "text" },
+        "dst_port": { "field": "dst_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "hits": { "field": "hit_count", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+        "interval": { "field": "interval", "kind": "semantic", "class": "text" },
+        "hash1": { "field": "acl_hash_1", "kind": "semantic", "class": "hex" },
+        "hash2": { "field": "acl_hash_2", "kind": "semantic", "class": "hex" }
+      } }
+  ]
+}

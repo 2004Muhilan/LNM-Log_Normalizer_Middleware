@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "squid-native-candidate",
+  "description": "Stage 7 candidate parser: the induced ten-slot positional template before any semantic resolution. Slot classes are the observed token classes; no coercions yet.",
+  "regex_dialect": "re2",
+  "bounds": { "max_event_bytes": 8192, "max_fields": 64, "max_nesting": 4, "max_repeat": 16 },
+  "root": {
+    "op": "positional",
+    "delimiter": { "whitespace_run": true },
+    "leading_delimiter": "reject",
+    "trailing_delimiter": "reject",
+    "tail": null,
+    "slots": [
+      { "field": "pos_1", "kind": "semantic", "class": "float" },
+      { "field": "pos_2", "kind": "semantic", "class": "integer" },
+      { "field": "pos_3", "kind": "semantic", "class": "ipv4" },
+      { "field": "pos_4", "kind": "semantic", "class": "text" },
+      { "field": "pos_5", "kind": "semantic", "class": "integer" },
+      { "field": "pos_6", "kind": "semantic", "class": "word" },
+      { "field": "pos_7", "kind": "semantic", "class": "url" },
+      { "field": "pos_8", "kind": "semantic", "class": "text" },
+      { "field": "pos_9", "kind": "semantic", "class": "text" },
+      { "field": "pos_10", "kind": "semantic", "class": "text" }
+    ]
+  }
+}

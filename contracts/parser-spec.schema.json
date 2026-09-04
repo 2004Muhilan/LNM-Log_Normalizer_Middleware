@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ulpf.local/contracts/parser-spec/1.0.0",
+  "title": "ULPF parser spec (declarative parser DSL)",
+  "description": "A declarative, non-executable description of how one event family is parsed into a span map. The closed op set is: literal, regex, csv, kv, positional, quoted, optional, repeated, decode, coerce. Sequencing is structural (a JSON array of steps), not an op. Consuming ops (literal, regex, csv, kv, positional, quoted, optional, repeated) consume bytes and emit spans; value ops (decode, coerce) never consume bytes and are attached to a field cell. Regexes are RE2 syntax only. The runtime compiles this spec; it never executes anything supplied inside it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "spec_id", "regex_dialect", "bounds", "root"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "spec_id": { "$ref": "#/$defs/slug" },
+    "description": { "type": "string", "maxLength": 2000 },
+    "regex_dialect": { "const": "re2" },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_event_bytes", "max_fields", "max_nesting", "max_repeat"],
+      "properties": {
+        "max_event_bytes": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "max_fields": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "max_nesting": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "max_repeat": { "type": "integer", "minimum": 1, "maximum": 4096 }
+      }
+    },
+    "root": { "$ref": "#/$defs/step" }
+  },
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "field_path": {
+      "type": "string",
+      "description": "Dotted field path unique within the spec. Refers to the span, not to an OCSF attribute; OCSF mapping lives in the pack.",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+      "maxLength": 256
+    },
+    "single_char": { "type": "string", "minLength": 1, "maxLength": 1 },
+    "token_class": {
+      "type": "string",
+      "description": "Structural token class used by induction and validated by the runtime. Presentation names in the worked trace (FLOAT, INTEGER, IPV4, URL, LITERAL, BARE_STRING) map to float, integer, ipv4, url, a literal op, and text respectively.",
+      "enum": ["integer", "float", "ipv4", "ipv6", "ip", "mac", "url", "hostname", "uuid", "hex", "word", "text"]
+    },
+    "kind": { "type": "string", "enum": ["semantic", "opaque"] },
+    "timestamp_format": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "epoch_auto: each precision (s, ms, us, ns) has a plausible-date window of 2000-01-01 to 2100-01-01 in its own unit; the windows are disjoint by construction. If exactly one window contains the value that precision is selected and recorded as precision_selected in the span map; if none does the coercion fails (on_failure applies). It never guesses. Needed because FortiOS switches eventtime precision between versions.",
+          "enum": ["epoch_s", "epoch_ms", "epoch_us", "epoch_ns", "epoch_s_frac", "epoch_auto", "rfc3339", "rfc3164", "pattern"]
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Required when kind is 'pattern'. strptime-style, restricted to the token subset %Y %y %m %d %e %H %M %S %f %b %j %z %Z %p %I plus literal characters. Both stacks implement exactly this subset.",
+          "pattern": "^(?:[^%]|%[YymdeHMSfbjzZpI])+$",
+          "maxLength": 128
+        },
+        "assume_year": {
+          "description": "For formats without a year (rfc3164): 'ingest' uses the ingest-time year with rollover handling; an integer pins it.",
+          "oneOf": [ { "const": "ingest" }, { "type": "integer", "minimum": 1970, "maximum": 9999 } ]
+        },
+        "timezone": {
+          "type": "string",
+          "description": "'in_value' when the value carries an offset; 'source' uses the pack's source_timezone (which may be unresolved); 'utc' asserts UTC.",
+          "enum": ["in_value", "source", "utc"]
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "pattern" } } }, "then": { "required": ["pattern"] } },
+        { "if": { "properties": { "kind": { "const": "rfc3164" } } }, "then": { "required": ["assume_year"] } }
+      ]
+    },
+    "coerce": {
+      "type": "object",
+      "description": "Value op. Converts the decoded string value of a field; never consumes bytes.",
+      "additionalProperties": false,
+      "required": ["op", "to", "on_failure"],
+      "properties": {
+        "op": { "const": "coerce" },
+        "to": { "type": "string", "enum": ["string", "int", "float", "bool", "ipv4", "ipv6", "ip", "mac", "timestamp", "enum"] },
+        "format": { "$ref": "#/$defs/timestamp_format" },
+        "formats": {
+          "type": "array",
+          "description": "Ordered alternatives tried first-to-last; the first that parses wins, deterministically. Needed because PAN-OS emits '%Y/%m/%d %H:%M:%S' on 8.x/9.x and RFC 3339 on 10.x. Exactly one of format/formats when to is 'timestamp'.",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/timestamp_format" }
+        },
+        "values": { "type": "array", "minItems": 1, "maxItems": 4096, "uniqueItems": true, "items": { "type": "string", "maxLength": 256 } },
+        "on_failure": {
+          "type": "string",
+          "description": "'reject' fails the parse for this event; 'opaque' keeps the span but downgrades it to opaque.",
+          "enum": ["reject", "opaque"]
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "to": { "const": "timestamp" } } }, "then": { "oneOf": [ { "required": ["format"] }, { "required": ["formats"] } ] } },
+        { "if": { "properties": { "to": { "const": "enum" } } }, "then": { "required": ["values"] } },
+        { "if": { "not": { "properties": { "to": { "const": "timestamp" } } } }, "then": { "not": { "anyOf": [ { "required": ["format"] }, { "required": ["formats"] } ] } } },
+        { "if": { "not": { "properties": { "to": { "const": "enum" } } } }, "then": { "not": { "required": ["values"] } } }
+      ]
+    },
+    "decode": {
+      "type": "object",
+      "description": "Value op. Decodes the field's raw bytes into a derived buffer; never consumes bytes of the parent buffer. When 'then' is present, the derived buffer is parsed by that step and its spans are recorded against the derived buffer id '<field path>#decoded'.",
+      "additionalProperties": false,
+      "required": ["op", "encoding", "on_failure"],
+      "properties": {
+        "op": { "const": "decode" },
+        "encoding": { "type": "string", "enum": ["base64", "hex", "url", "json-string", "c-escape", "cef-extension"] },
+        "then": { "$ref": "#/$defs/step" },
+        "on_failure": { "type": "string", "enum": ["reject", "opaque"] }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "description": "A field-producing leaf: names the span and optionally constrains, coerces or decodes it.",
+      "additionalProperties": false,
+      "required": ["field", "kind"],
+      "properties": {
+        "field": { "$ref": "#/$defs/field_path" },
+        "kind": { "$ref": "#/$defs/kind" },
+        "class": { "$ref": "#/$defs/token_class" },
+        "coerce": { "$ref": "#/$defs/coerce" },
+        "decode": { "$ref": "#/$defs/decode" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "opaque" } } }, "then": { "not": { "anyOf": [ { "required": ["coerce"] }, { "required": ["decode"] }, { "required": ["class"] } ] } } }
+      ]
+    },
+    "delimiter": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["whitespace_run"], "properties": { "whitespace_run": { "const": true } },
+          "description": "A maximal run of one or more ASCII spaces/tabs; the whole run is one literal span." },
+        { "type": "object", "additionalProperties": false, "required": ["char"], "properties": { "char": { "$ref": "#/$defs/single_char" } } },
+        { "type": "object", "additionalProperties": false, "required": ["string"], "properties": { "string": { "type": "string", "minLength": 1, "maxLength": 16 } } }
+      ]
+    },
+    "step": {
+      "description": "Either one op object or a sequence (JSON array) of steps applied in order.",
+      "oneOf": [
+        { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/step" } },
+        { "$ref": "#/$defs/op_literal" },
+        { "$ref": "#/$defs/op_regex" },
+        { "$ref": "#/$defs/op_csv" },
+        { "$ref": "#/$defs/op_kv" },
+        { "$ref": "#/$defs/op_positional" },
+        { "$ref": "#/$defs/op_quoted" },
+        { "$ref": "#/$defs/op_optional" },
+        { "$ref": "#/$defs/op_repeated" }
+      ]
+    },
+    "op_literal": {
+      "type": "object",
+      "description": "Consumes exactly the given UTF-8 text; emits one literal span.",
+      "additionalProperties": false,
+      "required": ["op", "text"],
+      "properties": { "op": { "const": "literal" }, "text": { "type": "string", "minLength": 1, "maxLength": 1024 } }
+    },
+    "op_regex": {
+      "type": "object",
+      "description": "Anchored RE2 match at the current position. Named groups listed in 'captures' become semantic or opaque spans; every other matched byte becomes literal spans. Named groups must not nest; unlisted named groups are a compile error.",
+      "additionalProperties": false,
+      "required": ["op", "pattern", "captures"],
+      "properties": {
+        "op": { "const": "regex" },
+        "pattern": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "captures": {
+          "type": "object",
+          "description": "Keyed by named-group name.",
+          "minProperties": 0,
+          "maxProperties": 256,
+          "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "additionalProperties": { "$ref": "#/$defs/cell" }
+        }
+      }
+    },
+    "csv_cell": {
+      "oneOf": [
+        { "$ref": "#/$defs/cell" },
+        { "type": "object", "additionalProperties": false, "required": ["parse"], "properties": { "parse": { "$ref": "#/$defs/step" } },
+          "description": "The unquoted cell bytes are sub-parsed by the step, which must consume them exactly." }
+      ]
+    },
+    "op_csv": {
+      "type": "object",
+      "description": "Delimiter-separated cells to end of input. Delimiters are literal spans. A quoted cell's raw span includes its quotes and carries encoding 'csv-quoted'; its value is the unescaped content.",
+      "additionalProperties": false,
+      "required": ["op", "delimiter", "quote", "escape", "fields", "extra_fields", "missing_fields"],
+      "properties": {
+        "op": { "const": "csv" },
+        "delimiter": { "$ref": "#/$defs/single_char" },
+        "quote": { "oneOf": [ { "$ref": "#/$defs/single_char" }, { "type": "null" } ] },
+        "escape": { "type": "string", "enum": ["doubled", "backslash", "none"] },
+        "fields": { "type": "array", "minItems": 1, "maxItems": 1024, "items": { "$ref": "#/$defs/csv_cell" } },
+        "extra_fields": {
+          "type": "string",
+          "description": "Cells beyond the declared list: 'opaque' records each as an opaque span at path extra.<index>; 'reject' fails the parse.",
+          "enum": ["opaque", "reject"]
+        },
+        "missing_fields": {
+          "type": "string",
+          "description": "Fewer cells than declared: 'reject' fails; 'allow' records the declared fields as absent (no span).",
+          "enum": ["reject", "allow"]
+        }
+      }
+    },
+    "op_kv": {
+      "type": "object",
+      "description": "Key=value pairs to end of input. Key text and the key-value separator are literal spans; a known key's value is the cell's span; an unknown key's value is an opaque span at path unknown.<key> (or the parse is rejected). Pair separators are literal spans.",
+      "additionalProperties": false,
+      "required": ["op", "pair_separator", "key_value_separator", "quote", "escape", "key_pattern", "keys", "unknown_keys", "order"],
+      "properties": {
+        "op": { "const": "kv" },
+        "pair_separator": { "$ref": "#/$defs/delimiter" },
+        "key_value_separator": { "$ref": "#/$defs/single_char" },
+        "quote": { "oneOf": [ { "$ref": "#/$defs/single_char" }, { "type": "null" } ] },
+        "escape": { "type": "string", "enum": ["backslash", "doubled", "none"] },
+        "key_pattern": { "type": "string", "description": "RE2 pattern a key must match (anchored).", "minLength": 1, "maxLength": 256 },
+        "keys": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1024,
+          "propertyNames": { "pattern": "^[^\\s=]{1,128}$" },
+          "additionalProperties": { "$ref": "#/$defs/csv_cell" }
+        },
+        "unknown_keys": { "type": "string", "enum": ["opaque", "reject"] },
+        "order": { "type": "string", "description": "'any' accepts keys in any order; 'declared' requires the declared order with absent keys skipped.", "enum": ["any", "declared"] },
+        "allow_bare_keys": { "type": "boolean", "default": false, "description": "Accept a key with no separator and no value as a literal span." }
+      }
+    },
+    "slot": {
+      "oneOf": [
+        { "$ref": "#/$defs/cell",
+          "description": "Token slot: a maximal run of non-delimiter bytes." },
+        { "type": "object", "additionalProperties": false, "required": ["token"], "properties": { "token": { "type": "object", "additionalProperties": false, "required": ["parse"], "properties": { "parse": { "$ref": "#/$defs/step" } } } },
+          "description": "Token slot whose bytes are then sub-parsed by the step, which must consume the token exactly." },
+        { "type": "object", "additionalProperties": false, "required": ["step"], "properties": { "step": { "$ref": "#/$defs/step" } },
+          "description": "Direct slot: the step consumes from the input itself and may span delimiter bytes (quoted values, bracketed timestamps)." }
+      ]
+    },
+    "op_positional": {
+      "type": "object",
+      "description": "Slots separated by delimiter runs. Exactly one delimiter (run) between consecutive slots. After the last slot the input must end unless 'tail' is present, in which case the remaining bytes (after one delimiter run, if any) become the tail span.",
+      "additionalProperties": false,
+      "required": ["op", "delimiter", "slots", "leading_delimiter", "trailing_delimiter", "tail"],
+      "properties": {
+        "op": { "const": "positional" },
+        "delimiter": { "$ref": "#/$defs/delimiter" },
+        "slots": { "type": "array", "minItems": 1, "maxItems": 1024, "items": { "$ref": "#/$defs/slot" } },
+        "leading_delimiter": { "type": "string", "enum": ["allow", "reject"] },
+        "trailing_delimiter": { "type": "string", "enum": ["allow", "reject"] },
+        "tail": { "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/cell" } ] }
+      }
+    },
+    "op_quoted": {
+      "type": "object",
+      "description": "Consumes open quote, content, close quote. Quote characters are literal spans; the content is the cell's span with encoding 'quoted-<escape>' when an escape scheme applies. When 'parse' is present it applies to the unescaped content (a derived buffer when escape is not 'none').",
+      "additionalProperties": false,
+      "required": ["op", "open", "close", "escape", "content"],
+      "properties": {
+        "op": { "const": "quoted" },
+        "open": { "$ref": "#/$defs/single_char" },
+        "close": { "$ref": "#/$defs/single_char" },
+        "escape": { "type": "string", "enum": ["backslash", "doubled", "none"] },
+        "content": { "$ref": "#/$defs/cell" },
+        "parse": { "$ref": "#/$defs/step" }
+      }
+    },
+    "op_optional": {
+      "type": "object",
+      "description": "Attempts the step; on failure consumes nothing and emits nothing. Deterministic: no backtracking into a succeeded optional.",
+      "additionalProperties": false,
+      "required": ["op", "step"],
+      "properties": { "op": { "const": "optional" }, "step": { "$ref": "#/$defs/step" } }
+    },
+    "op_repeated": {
+      "type": "object",
+      "description": "Bounded repetition of a step, optionally separated. max is capped by bounds.max_repeat. Field paths inside a repeated step are indexed by occurrence: <path>[<n>].",
+      "additionalProperties": false,
+      "required": ["op", "step", "min", "max"],
+      "properties": {
+        "op": { "const": "repeated" },
+        "step": { "$ref": "#/$defs/step" },
+        "separator": { "$ref": "#/$defs/step" },
+        "min": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "max": { "type": "integer", "minimum": 1, "maximum": 4096 }
+      }
+    }
+  }
+}

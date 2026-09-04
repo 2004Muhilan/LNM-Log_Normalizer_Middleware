@@ -1,0 +1,5 @@
+# Byte-exact checkouts on every platform: dsl_hash and corpus_hash are sha256 over file bytes,
+# so CRLF conversion on a Windows clone would silently break the golden vectors.
+* text=auto eol=lf
+*.png binary
+*.gz binary

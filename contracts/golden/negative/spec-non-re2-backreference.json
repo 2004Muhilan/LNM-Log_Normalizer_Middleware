@@ -1,0 +1,162 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "squid-native-positional-10",
+  "description": "Squid native access.log after resolution against the operator-supplied logformat: %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt. Whitespace runs are literal spans (the %6tr right-alignment pads with spaces).",
+  "regex_dialect": "re2",
+  "bounds": {
+    "max_event_bytes": 8192,
+    "max_fields": 64,
+    "max_nesting": 4,
+    "max_repeat": 16
+  },
+  "root": {
+    "op": "positional",
+    "delimiter": {
+      "whitespace_run": true
+    },
+    "leading_delimiter": "reject",
+    "trailing_delimiter": "reject",
+    "tail": null,
+    "slots": [
+      {
+        "field": "time",
+        "kind": "semantic",
+        "class": "float",
+        "coerce": {
+          "op": "coerce",
+          "to": "timestamp",
+          "format": {
+            "kind": "epoch_s_frac",
+            "timezone": "utc"
+          },
+          "on_failure": "reject"
+        }
+      },
+      {
+        "field": "duration",
+        "kind": "semantic",
+        "class": "integer",
+        "coerce": {
+          "op": "coerce",
+          "to": "int",
+          "on_failure": "reject"
+        }
+      },
+      {
+        "field": "client_ip",
+        "kind": "semantic",
+        "class": "ip",
+        "coerce": {
+          "op": "coerce",
+          "to": "ip",
+          "on_failure": "reject"
+        }
+      },
+      {
+        "token": {
+          "parse": {
+            "op": "regex",
+            "pattern": "(?P<a>[A-Z_]+)/(?P<b>[0-9]+)\\1",
+            "captures": {
+              "a": {
+                "field": "cache_result",
+                "kind": "semantic"
+              },
+              "b": {
+                "field": "status_code",
+                "kind": "semantic"
+              }
+            }
+          }
+        }
+      },
+      {
+        "field": "reply_bytes",
+        "kind": "semantic",
+        "class": "integer",
+        "coerce": {
+          "op": "coerce",
+          "to": "int",
+          "on_failure": "reject"
+        }
+      },
+      {
+        "field": "method",
+        "kind": "semantic",
+        "class": "word",
+        "coerce": {
+          "op": "coerce",
+          "to": "enum",
+          "on_failure": "opaque",
+          "values": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "HEAD",
+            "OPTIONS",
+            "CONNECT",
+            "TRACE",
+            "PATCH",
+            "PROPFIND",
+            "PROPPATCH",
+            "MKCOL",
+            "COPY",
+            "MOVE",
+            "LOCK",
+            "UNLOCK",
+            "PURGE",
+            "REPORT",
+            "SEARCH",
+            "NONE"
+          ]
+        }
+      },
+      {
+        "field": "url",
+        "kind": "semantic",
+        "class": "url"
+      },
+      {
+        "field": "user",
+        "kind": "semantic",
+        "class": "text"
+      },
+      {
+        "token": {
+          "parse": {
+            "op": "positional",
+            "delimiter": {
+              "char": "/"
+            },
+            "leading_delimiter": "reject",
+            "trailing_delimiter": "reject",
+            "tail": null,
+            "slots": [
+              {
+                "field": "hier_code",
+                "kind": "semantic",
+                "class": "word"
+              },
+              {
+                "field": "server_ip",
+                "kind": "semantic",
+                "class": "text",
+                "coerce": {
+                  "op": "coerce",
+                  "to": "ip",
+                  "on_failure": "opaque"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "field": "content_type",
+        "kind": "semantic",
+        "class": "text"
+      }
+    ]
+  }
+}

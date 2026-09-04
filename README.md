@@ -1,0 +1,45 @@
+# ULPF — Universal Log Pre-processing Framework (SIH 2026, PS 26156)
+
+Two-stack build: **Go** runtime (`runtime/`), **Python** learning plane (`learning/`). Primary
+development environment is WSL2 (Ubuntu). See `ulpf-implementation-plan.md` for the phased plan and
+`ulpf-architecture.md` (kept by the team alongside this repo) for the specification.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `contracts/` | The four frozen data contracts (JSON Schema 2020-12), golden vectors, README with embedded decisions |
+| `learning/` | Python learning plane. P1: `ulpf_contracts` validator + pytest suite |
+| `runtime/` | Go runtime. P1: `contracts` loader/validator + tests |
+| `ocsf/` | Pinned OCSF 1.3.0 class tables (`pinned/`) generated from the schema export, cross-checked against the schema source; tools in `tools/` |
+| `library/` | Discriminator library v1 (data) |
+| `acceptance/` | Per-class acceptance policy data (engine is P3) |
+| `corpus/` | Corpus catalogue, licence verdict, fetch/inspection tools (fixture content is cached locally, never committed) |
+| `drafts/sufficiency/` | Hand-drafted vendor specs for the DSL sufficiency check, plus the checker and its notes |
+| `docs/` | Phase reports |
+| `scripts/` | WSL bootstrap and check scripts |
+
+## Test fixtures are not vendored — deliberately
+
+The reference corpus (Elastic Beats module test fixtures and logstash-patterns-core specs) is
+**fetched at build time** by `corpus/tools/fetch_corpus.py` from commits and content hashes pinned
+in `corpus/catalogue.json`, into the git-ignored `corpus/cache/`. The Beats fixtures are Elastic
+License 2.0: fine to run tests against, not something to embed in a repository that may become
+public — git history is permanent, and anything committed now would surface the moment visibility
+changes. The Apache-2.0 fallback and the full reasoning are in `corpus/README.md`. The same applies
+to the OCSF definition caches under `ocsf/cache/` (Apache-2.0, but 1.8 MB of reproducible data);
+the derived pinned tables in `ocsf/pinned/` *are* committed with the source hashes they came from.
+
+## Bootstrap and checks (WSL2)
+
+```bash
+bash scripts/wsl-bootstrap.sh      # Go toolchain under ~/sdk, Python venv under ~/.venvs/ulpf
+bash scripts/wsl-run.sh python corpus/tools/fetch_corpus.py   # fetch + catalogue the corpus (needs network)
+bash scripts/wsl-run.sh python ocsf/tools/fetch_ocsf.py       # fetch OCSF 1.3.0 export + source
+bash scripts/wsl-run.sh python ocsf/tools/build_pinned.py     # regenerate pinned tables
+bash scripts/run-crosscheck.sh     # independent completeness check of the pinned tables
+bash scripts/p1-check.sh           # golden vectors + Python suite + Go suite
+bash scripts/check-drafts.sh       # DSL sufficiency drafts against the corpus
+```
+
+From Windows, prefix commands with `wsl -d Ubuntu -- bash /mnt/c/<path-to-repo>/scripts/<script>.sh`.

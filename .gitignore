@@ -1,0 +1,17 @@
+# Reference corpus: fetched and cached locally, never committed (licence posture, see corpus/README.md)
+corpus/cache/
+
+# OCSF definition caches (reproducible from ocsf/pinned/manifest.json)
+ocsf/cache/
+
+# Toolchain and build artefacts (the bootstrap installs Go under ~/sdk and the venv under ~/.venvs,
+# outside the tree; these guard against anyone installing them inside it)
+.venv/
+venv/
+sdk/
+go-sdk/
+__pycache__/
+*.pyc
+.pytest_cache/
+runtime/bin/
+*.tmp

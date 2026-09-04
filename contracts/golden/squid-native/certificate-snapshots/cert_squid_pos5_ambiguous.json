@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "certificate_id": "cert_squid_pos5",
+  "created_at": "2026-09-05T10:00:00Z",
+  "source_id": "squid-proxy-01",
+  "pack_id": "squid-native",
+  "family_id": "positional-10",
+  "context": { "l1_envelope": "raw", "l2_structure": "positional", "l3_anchors": [], "slot_index": 4, "token_class": "integer" },
+  "field": { "path": "pos_5", "sample_values": ["45231", "8122", "512", "331004", "1893", "402"] },
+  "event_class": { "uid": 4002, "name": "http_activity", "ocsf_version": "1.3.0" },
+  "enumeration": {
+    "method": "validator-enumeration",
+    "table_hash": "sha256:c464271e165faa8af6064254a3be8a3b7f4d2acb5a9f32ee5a71b2d0623e7cba",
+    "candidates": [
+      { "attribute": "connection_info.protocol_num", "type": "integer_t", "basis": "excluded: values exceed the 0-255 protocol range" },
+      { "attribute": "count", "type": "integer_t", "basis": "integer accepts the value" },
+      { "attribute": "duration", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "file.size", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "http_request.length", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "http_response.code", "type": "integer_t", "basis": "excluded: values exceed the 100-599 HTTP status range" },
+      { "attribute": "http_response.latency", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "http_response.length", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "metadata.sequence", "type": "integer_t", "basis": "excluded: not monotonic across samples" },
+      { "attribute": "timezone_offset", "type": "integer_t", "basis": "excluded: values exceed the -1440..1440 minute range" },
+      { "attribute": "traffic.bytes", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.bytes_in", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.bytes_out", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.chunks", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.chunks_in", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.chunks_out", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.packets", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.packets_in", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "traffic.packets_out", "type": "long_t", "basis": "integer accepts the value" }
+    ],
+    "survivors": ["count", "duration", "file.size", "http_request.length", "http_response.latency", "http_response.length", "traffic.bytes", "traffic.bytes_in", "traffic.bytes_out", "traffic.chunks", "traffic.chunks_in", "traffic.chunks_out", "traffic.packets", "traffic.packets_in", "traffic.packets_out"]
+  },
+  "ranked_candidates": [
+    { "rank": 1, "attribute": "traffic.bytes_out", "proposed_by": "model", "note": "proxy to client" },
+    { "rank": 2, "attribute": "traffic.bytes_in", "proposed_by": "model", "note": "origin to proxy" },
+    { "rank": 3, "attribute": "traffic.bytes", "proposed_by": "model", "note": "undirected total" }
+  ],
+  "evidence": {
+    "vendor_metadata": "absent",
+    "structural": { "status": "weak", "note": "single unlabelled counter" },
+    "held_out_consistency": "tied",
+    "type_validity": "tied",
+    "discriminator": { "status": "available", "ambiguity_class": "volume_direction", "library_version": "1.0.0" }
+  },
+  "status": "ambiguous",
+  "request": {
+    "ambiguity_class": "volume_direction",
+    "sufficiency_group": "sg_squid_logformat",
+    "selected": { "discriminator_id": "device_logformat_configuration", "cost_tier": "free_if_available", "rank": 1, "resolves": ["pos_5", "pos_3", "pos_2", "pos_4", "pos_9"] },
+    "alternatives": [
+      { "discriminator_id": "vendor_schema_field_order", "cost_tier": "free_if_available", "rank": 2, "resolves": ["pos_5", "pos_3"] },
+      { "discriminator_id": "operator_labelled_transfer", "cost_tier": "one_labelled_sample", "rank": 3, "resolves": ["pos_5"] }
+    ],
+    "text": "Two fields cannot be resolved from the samples alone. Provide the logformat directive from this device's configuration, or confirm the format name if it is a built-in. This resolves both, and four other fields at the same time."
+  }
+}

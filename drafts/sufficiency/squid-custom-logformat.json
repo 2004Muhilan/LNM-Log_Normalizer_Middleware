@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "draft-squid-custom-logformat",
+  "description": "Squid under a NON-DEFAULT logformat (the Beats squid module's generated corpus): client_ip client_port [dd/Mon/yyyy:h:mm:ss tz] \"METHOD URL TAG\" server_ip word user \"file\" word word bytes \"referrer\" \"user-agent with spaces, parentheses and [brackets]\" action. Exercises: quoted slots consumed DIRECTLY inside a whitespace-delimited positional (they contain delimiter bytes), a bracketed timestamp as a literal/regex/literal step, a nested positional parse INSIDE quoted content, and a single-digit hour that strict two-digit %H would reject.",
+  "regex_dialect": "re2",
+  "bounds": { "max_event_bytes": 16384, "max_fields": 64, "max_nesting": 5, "max_repeat": 16 },
+  "root": {
+    "op": "positional",
+    "delimiter": { "whitespace_run": true },
+    "leading_delimiter": "reject",
+    "trailing_delimiter": "reject",
+    "tail": null,
+    "slots": [
+      { "field": "client_ip", "kind": "semantic", "class": "ip", "coerce": { "op": "coerce", "to": "ip", "on_failure": "reject" } },
+      { "field": "client_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+      { "step": [
+        { "op": "literal", "text": "[" },
+        { "op": "regex", "pattern": "(?P<ts>[0-9]{1,2}/[A-Za-z]{3}/[0-9]{4}:[0-9]{1,2}:[0-9]{2}:[0-9]{2}) (?P<tz>[^\\]\\s]+)",
+          "captures": {
+            "ts": { "field": "timestamp", "kind": "semantic", "class": "text", "coerce": { "op": "coerce", "to": "timestamp", "on_failure": "reject", "format": { "kind": "pattern", "pattern": "%d/%b/%Y:%H:%M:%S", "timezone": "source" } } },
+            "tz": { "field": "tz_tag", "kind": "semantic", "class": "text" }
+          } },
+        { "op": "literal", "text": "]" }
+      ] },
+      { "step": { "op": "quoted", "open": "\"", "close": "\"", "escape": "none",
+        "content": { "field": "request_line", "kind": "semantic", "class": "text" },
+        "parse": { "op": "positional", "delimiter": { "whitespace_run": true }, "leading_delimiter": "reject", "trailing_delimiter": "reject", "tail": null,
+          "slots": [
+            { "field": "method", "kind": "semantic", "class": "word" },
+            { "field": "url", "kind": "semantic", "class": "url" },
+            { "field": "request_tag", "kind": "semantic", "class": "text" }
+          ] } } },
+      { "field": "server_ip", "kind": "semantic", "class": "ip", "coerce": { "op": "coerce", "to": "ip", "on_failure": "reject" } },
+      { "field": "pos_6", "kind": "semantic", "class": "word" },
+      { "field": "user", "kind": "semantic", "class": "text" },
+      { "step": { "op": "quoted", "open": "\"", "close": "\"", "escape": "none",
+        "content": { "field": "file_name", "kind": "semantic", "class": "text" } } },
+      { "field": "pos_9", "kind": "semantic", "class": "word" },
+      { "field": "pos_10", "kind": "semantic", "class": "word" },
+      { "field": "bytes", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
+      { "step": { "op": "quoted", "open": "\"", "close": "\"", "escape": "none",
+        "content": { "field": "referrer", "kind": "semantic", "class": "url" } } },
+      { "step": { "op": "quoted", "open": "\"", "close": "\"", "escape": "none",
+        "content": { "field": "user_agent", "kind": "semantic", "class": "text" } } },
+      { "field": "action", "kind": "semantic", "class": "word" }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "spec_id": "squid-native-positional-10",
+  "event": {
+    "event_id": "ev_01HQ8F2K3M",
+    "raw_hash": "sha256:b6bf09bdddc9b70a39a856ee4ed153964dbb91c435e5a64bb7e721fc9ffca00b",
+    "raw_length": 124,
+    "raw_base64": "MTczNDU2Nzg5MC4xMjMgICAgMzQ1IDEwLjIwLjE0LjYyIFRDUF9NSVNTLzIwMCA0NTIzMSBHRVQgaHR0cDovL2V4YW1wbGUuY29tL2luZGV4Lmh0bWwgLSBISUVSX0RJUkVDVC85My4xODQuMjE2LjM0IHRleHQvaHRtbA=="
+  },
+  "status": "ok",
+  "buffers": [ { "id": "raw", "length": 124 } ],
+  "spans": [
+    { "buffer": "raw", "start": 0,   "end": 14,  "kind": "semantic", "path": "time",         "value": "1734567890.123", "class": "float",   "coerced": { "to": "timestamp", "value": 1734567890123 } },
+    { "buffer": "raw", "start": 14,  "end": 18,  "kind": "literal",  "text": "    " },
+    { "buffer": "raw", "start": 18,  "end": 21,  "kind": "semantic", "path": "duration",     "value": "345",            "class": "integer", "coerced": { "to": "int", "value": 345 } },
+    { "buffer": "raw", "start": 21,  "end": 22,  "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 22,  "end": 33,  "kind": "semantic", "path": "client_ip",    "value": "10.20.14.62",    "class": "ip",      "coerced": { "to": "ip", "value": "10.20.14.62" } },
+    { "buffer": "raw", "start": 33,  "end": 34,  "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 34,  "end": 42,  "kind": "semantic", "path": "cache_result", "value": "TCP_MISS",       "class": "word" },
+    { "buffer": "raw", "start": 42,  "end": 43,  "kind": "literal",  "text": "/" },
+    { "buffer": "raw", "start": 43,  "end": 46,  "kind": "semantic", "path": "status_code",  "value": "200",            "class": "integer", "coerced": { "to": "int", "value": 200 } },
+    { "buffer": "raw", "start": 46,  "end": 47,  "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 47,  "end": 52,  "kind": "semantic", "path": "reply_bytes",  "value": "45231",          "class": "integer", "coerced": { "to": "int", "value": 45231 } },
+    { "buffer": "raw", "start": 52,  "end": 53,  "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 53,  "end": 56,  "kind": "semantic", "path": "method",       "value": "GET",            "class": "word",    "coerced": { "to": "enum", "value": "GET" } },
+    { "buffer": "raw", "start": 56,  "end": 57,  "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 57,  "end": 86,  "kind": "semantic", "path": "url",          "value": "http://example.com/index.html", "class": "url" },
+    { "buffer": "raw", "start": 86,  "end": 87,  "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 87,  "end": 88,  "kind": "semantic", "path": "user",         "value": "-",              "class": "text" },
+    { "buffer": "raw", "start": 88,  "end": 89,  "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 89,  "end": 100, "kind": "semantic", "path": "hier_code",    "value": "HIER_DIRECT",    "class": "word" },
+    { "buffer": "raw", "start": 100, "end": 101, "kind": "literal",  "text": "/" },
+    { "buffer": "raw", "start": 101, "end": 114, "kind": "semantic", "path": "server_ip",    "value": "93.184.216.34",  "class": "text",    "coerced": { "to": "ip", "value": "93.184.216.34" } },
+    { "buffer": "raw", "start": 114, "end": 115, "kind": "literal",  "text": " " },
+    { "buffer": "raw", "start": 115, "end": 124, "kind": "semantic", "path": "content_type", "value": "text/html",      "class": "text" }
+  ]
+}

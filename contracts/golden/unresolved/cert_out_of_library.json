@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "certificate_id": "cert_squid_pos2_nolib",
+  "created_at": "2026-09-05T10:00:00Z",
+  "source_id": "squid-proxy-01",
+  "pack_id": "squid-native",
+  "family_id": "positional-10",
+  "context": { "l1_envelope": "raw", "l2_structure": "positional", "l3_anchors": [], "slot_index": 1, "token_class": "integer" },
+  "field": { "path": "pos_2", "sample_values": ["345", "12", "892", "1204", "78", "455"] },
+  "event_class": { "uid": 4002, "name": "http_activity", "ocsf_version": "1.3.0" },
+  "enumeration": {
+    "method": "validator-enumeration",
+    "table_hash": "sha256:c464271e165faa8af6064254a3be8a3b7f4d2acb5a9f32ee5a71b2d0623e7cba",
+    "candidates": [
+      { "attribute": "duration", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "http_response.latency", "type": "long_t", "basis": "integer accepts the value" },
+      { "attribute": "count", "type": "integer_t", "basis": "integer accepts the value" }
+    ],
+    "survivors": ["duration", "http_response.latency", "count"]
+  },
+  "ranked_candidates": [
+    { "rank": 1, "attribute": "duration", "proposed_by": "model", "note": "whole-transaction elapsed time" },
+    { "rank": 2, "attribute": "http_response.latency", "proposed_by": "model", "note": "time to first response byte" }
+  ],
+  "evidence": {
+    "vendor_metadata": "absent",
+    "structural": { "status": "weak", "note": "small integer, millisecond-scaled; duration versus latency is not separable from samples" },
+    "held_out_consistency": "tied",
+    "type_validity": "tied",
+    "discriminator": { "status": "none" }
+  },
+  "status": "unresolved",
+  "unresolved_reason": "no_library_discriminator"
+}

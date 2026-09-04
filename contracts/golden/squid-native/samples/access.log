@@ -1,0 +1,6 @@
+1734567890.123    345 10.20.14.62 TCP_MISS/200 45231 GET http://example.com/index.html - HIER_DIRECT/93.184.216.34 text/html
+1734567891.874     12 10.20.14.62 TCP_HIT/200 8122 GET http://example.com/logo.png - HIER_NONE/- image/png
+1734567893.201    892 10.20.9.140 TCP_MISS/404 512 GET http://intra.corp.local/missing - HIER_DIRECT/10.30.2.11 text/html
+1734567894.556   1204 10.20.14.62 TCP_MISS/200 331004 GET http://cdn.example.net/video.mp4 - HIER_DIRECT/151.101.1.44 video/mp4
+1734567896.010     78 10.20.31.7 TCP_DENIED/403 1893 CONNECT badsite.example:443 - HIER_NONE/- text/html
+1734567897.443    455 10.20.9.140 TCP_MISS/301 402 GET http://example.com/old - HIER_DIRECT/93.184.216.34 text/html

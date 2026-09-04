@@ -1,0 +1,352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ulpf.local/contracts/parser-pack/1.0.0",
+  "title": "ULPF parser pack",
+  "description": "The only artifact that crosses from the learning plane to the runtime. One pack per source, with per-family entries. A pack is a directory bundle: pack.json (this document), specs/<spec_id>.json (parser specs), certificates/<certificate_id>.json, and a detached signature over the exact bytes of pack.json. The signature is never inside the signed file. OCSF pinning is by event class only: this contract has no field in which attributes within a class could be listed, which is how the subset guard is enforced structurally.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pack_id", "pack_version", "created_at", "source", "ocsf", "acceptance", "time", "anchors", "tiebreaker_field", "families", "provenance", "hashes", "signing"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "pack_id": { "$ref": "#/$defs/slug" },
+    "pack_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "created_at": { "$ref": "#/$defs/rfc3339" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "vendor", "product"],
+      "properties": {
+        "source_id": { "$ref": "#/$defs/slug" },
+        "vendor": { "type": "string", "maxLength": 128 },
+        "product": { "type": "string", "maxLength": 128 },
+        "declared_envelope": { "$ref": "#/$defs/l1" },
+        "transport_hint": { "type": "string", "enum": ["file", "syslog-udp", "syslog-tcp", "http", "pull-directory"] }
+      }
+    },
+    "ocsf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "pinned_classes"],
+      "properties": {
+        "version": { "$ref": "#/$defs/semver" },
+        "pinned_classes": {
+          "type": "array",
+          "description": "Event classes pinned complete as OCSF defines them. table_hash is the sha256 of the generated class table in ocsf/pinned; the validator checks it against the pinned index.",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["uid", "name", "table_hash"],
+            "properties": {
+              "uid": { "type": "integer", "minimum": 0 },
+              "name": { "$ref": "#/$defs/slug" },
+              "table_hash": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_version"],
+      "properties": { "policy_version": { "$ref": "#/$defs/semver" } }
+    },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_timezone", "timezone_confidence"],
+      "properties": {
+        "source_timezone": { "oneOf": [ { "type": "null" }, { "type": "string", "maxLength": 64 } ] },
+        "timezone_confidence": { "type": "string", "enum": ["declared", "inferred", "unresolved"] }
+      },
+      "allOf": [
+        { "if": { "properties": { "timezone_confidence": { "const": "unresolved" } } }, "then": { "properties": { "source_timezone": { "type": "null" } } } },
+        { "if": { "properties": { "timezone_confidence": { "enum": ["declared", "inferred"] } } }, "then": { "properties": { "source_timezone": { "type": "string" } } } }
+      ]
+    },
+    "anchors": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["anchor_id", "locator", "expected_value_domain", "observed_cardinality", "anchor_status", "admission_basis"],
+        "properties": {
+          "anchor_id": { "$ref": "#/$defs/slug" },
+          "locator": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind"],
+            "properties": {
+              "kind": { "type": "string", "enum": ["envelope_header", "slot", "key", "pattern"] },
+              "slot_index": { "type": "integer", "minimum": 0 },
+              "key": { "type": "string", "maxLength": 128 },
+              "pattern": { "type": "string", "description": "RE2 pattern with one named group 'anchor'.", "maxLength": 512 },
+              "header_field": { "type": "string", "maxLength": 64 }
+            }
+          },
+          "expected_value_domain": {
+            "oneOf": [
+              { "type": "object", "additionalProperties": false, "required": ["kind", "values"], "properties": { "kind": { "const": "enum" }, "values": { "type": "array", "minItems": 1, "maxItems": 65536, "uniqueItems": true, "items": { "type": "string", "maxLength": 256 } } } },
+              { "type": "object", "additionalProperties": false, "required": ["kind", "pattern"], "properties": { "kind": { "const": "pattern" }, "pattern": { "type": "string", "maxLength": 512 } } }
+            ]
+          },
+          "observed_cardinality": { "type": "integer", "minimum": 0 },
+          "anchor_status": { "type": "string", "enum": ["active", "probation", "retired"] },
+          "admission_basis": {
+            "type": "string",
+            "description": "Sample-observed cardinality alone never admits an anchor; this field cannot express it.",
+            "enum": ["declared_domain", "measured_utility"]
+          },
+          "utility_note": { "type": "string", "maxLength": 512 }
+        }
+      }
+    },
+    "tiebreaker_field": {
+      "description": "The per-pack declared secondary discriminator applied when the routing DAG cannot reduce the candidate set below K. null when none is declared; the runtime then quarantines.",
+      "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/field_path" } ]
+    },
+    "families": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8192,
+      "items": { "$ref": "#/$defs/family" }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generator_version", "validator_version", "model_hash", "discriminator_library_version"],
+      "properties": {
+        "generator_version": { "type": "string", "pattern": "^ulpf-gen-[0-9A-Za-z._-]+$" },
+        "validator_version": { "type": "string", "pattern": "^ulpf-val-[0-9A-Za-z._-]+$" },
+        "model_hash": {
+          "type": "string",
+          "description": "sha256 of the model weights that generated candidate proposals, or an explicit non-model marker. Never absent.",
+          "pattern": "^(sha256:[0-9a-f]{64}|none:hand-authored|none:fixture)$"
+        },
+        "discriminator_library_version": { "$ref": "#/$defs/semver" }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "description": "Pack-level hashes: dsl_hash and mapping_hash are sha256 over the family-level hashes concatenated in family order; corpus_hash over the onboarding sample corpus; parser_hash is defined by the runtime's compiled representation (see contracts/README.md).",
+      "additionalProperties": false,
+      "required": ["parser_hash", "dsl_hash", "mapping_hash", "corpus_hash"],
+      "properties": {
+        "parser_hash": { "$ref": "#/$defs/sha256" },
+        "dsl_hash": { "$ref": "#/$defs/sha256" },
+        "mapping_hash": { "$ref": "#/$defs/sha256" },
+        "corpus_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "signing": {
+      "type": "object",
+      "description": "Metadata only. The detached signature lives in pack.json.sig and covers the exact bytes of pack.json.",
+      "additionalProperties": false,
+      "required": ["authority_id", "algorithm", "signature_file"],
+      "properties": {
+        "authority_id": { "$ref": "#/$defs/slug" },
+        "algorithm": { "const": "ed25519" },
+        "signature_file": { "const": "pack.json.sig" }
+      }
+    }
+  },
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "rfc3339": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
+    "field_path": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\[[0-9]+\\])?(\\.[A-Za-z0-9_][A-Za-z0-9_.\\-]*(\\[[0-9]+\\])?)*$", "maxLength": 320 },
+    "ocsf_attribute": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*(\\.[a-z_][a-z0-9_]*)*$", "maxLength": 256 },
+    "l1": { "type": "string", "enum": ["raw", "rfc3164", "rfc5424", "cef", "leef", "json", "xml", "csv"] },
+    "l2": { "type": "string", "enum": ["positional", "kv", "csv", "json", "xml", "mixed", "template"] },
+    "token_class": { "type": "string", "enum": ["integer", "float", "ipv4", "ipv6", "ip", "mac", "url", "hostname", "uuid", "hex", "word", "text"] },
+    "provenance_category": {
+      "type": "string",
+      "enum": ["vendor_schema_or_device_configuration", "validated_discriminator", "resolved_ambiguity_certificate", "operator_assertion", "structural_determination", "model_proposal"]
+    },
+    "propagation_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "l1_envelope", "l2_structure", "l3_anchors", "slot_index", "token_class"],
+      "properties": {
+        "source_id": { "$ref": "#/$defs/slug" },
+        "l1_envelope": { "$ref": "#/$defs/l1" },
+        "l2_structure": { "$ref": "#/$defs/l2" },
+        "l3_anchors": { "type": "array", "maxItems": 64, "items": { "type": "string", "maxLength": 256 } },
+        "slot_index": { "type": "integer", "minimum": 0, "maximum": 4095 },
+        "token_class": { "$ref": "#/$defs/token_class" }
+      }
+    },
+    "mapping_field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "ocsf_attribute", "mandatory", "provenance"],
+      "properties": {
+        "path": { "$ref": "#/$defs/field_path" },
+        "ocsf_attribute": { "$ref": "#/$defs/ocsf_attribute" },
+        "mandatory": { "type": "boolean" },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category"],
+          "properties": {
+            "category": { "$ref": "#/$defs/provenance_category" },
+            "certificate_id": { "type": "string", "pattern": "^cert_[0-9A-Za-z_-]{6,64}$" },
+            "discriminator_id": { "$ref": "#/$defs/slug" },
+            "enumerated_survivors": {
+              "type": "array",
+              "description": "Required for structural_determination and must contain exactly one attribute equal to ocsf_attribute.",
+              "minItems": 1,
+              "maxItems": 4096,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/ocsf_attribute" }
+            },
+            "evidence_ref": { "type": "string", "maxLength": 1000 },
+            "operator_id": { "$ref": "#/$defs/slug" }
+          },
+          "allOf": [
+            { "if": { "properties": { "category": { "const": "structural_determination" } } }, "then": { "required": ["enumerated_survivors"], "properties": { "enumerated_survivors": { "maxItems": 1 } } } },
+            { "if": { "properties": { "category": { "const": "operator_assertion" } } }, "then": { "required": ["operator_id"] } },
+            { "if": { "properties": { "category": { "const": "resolved_ambiguity_certificate" } } }, "then": { "required": ["certificate_id"] } },
+            { "if": { "properties": { "category": { "const": "validated_discriminator" } } }, "then": { "required": ["discriminator_id"] } }
+          ]
+        },
+        "transform": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["none", "epoch_ms", "int", "float", "lowercase", "compose_datetime", "lookup"] },
+            "with": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/field_path" } },
+            "lookup": { "type": "object", "maxProperties": 4096, "additionalProperties": { "type": ["string", "integer"] } },
+            "default": { "description": "lookup only: value emitted when the span value is not a key. Absent means an unmatched value is emitted as absent.", "type": ["string", "integer"] }
+          },
+          "allOf": [
+            { "if": { "properties": { "kind": { "const": "lookup" } } }, "then": { "required": ["lookup"] } },
+            { "if": { "not": { "properties": { "kind": { "const": "lookup" } } } }, "then": { "not": { "anyOf": [ { "required": ["lookup"] }, { "required": ["default"] } ] } } }
+          ]
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "mandatory": { "const": true } } }, "then": { "properties": { "provenance": { "properties": { "category": { "not": { "const": "model_proposal" } } } } } } }
+      ]
+    },
+    "family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family_id", "event_class_uid", "routing_signature", "parser", "mapping", "validation", "certificates", "resolutions", "sample_provenance"],
+      "properties": {
+        "family_id": { "$ref": "#/$defs/slug" },
+        "description": { "type": "string", "maxLength": 1000 },
+        "event_class_uid": { "type": "integer", "minimum": 0 },
+        "routing_signature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["l1_envelope", "l2_structure", "l3_anchor_ids", "l4_sketch"],
+          "properties": {
+            "l1_envelope": { "$ref": "#/$defs/l1" },
+            "l2_structure": { "$ref": "#/$defs/l2" },
+            "l3_anchor_ids": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/slug" } },
+            "l3_structural_literals": { "type": "array", "maxItems": 64, "items": { "type": "object", "additionalProperties": false, "required": ["slot_index", "text"], "properties": { "slot_index": { "type": "integer", "minimum": 0 }, "text": { "type": "string", "maxLength": 256 } } } },
+            "l4_sketch": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["arity_bucket", "token_class_sequence"],
+              "properties": {
+                "arity_bucket": { "type": "string", "pattern": "^[0-9]+(-[0-9]+)?$" },
+                "token_class_sequence": { "type": "array", "maxItems": 4096, "items": { "type": "string", "enum": ["integer", "float", "ipv4", "ipv6", "ip", "mac", "url", "hostname", "uuid", "hex", "word", "text", "literal"] } },
+                "head": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 32 } },
+                "tail": { "type": "array", "maxItems": 16, "items": { "type": "string", "maxLength": 32 } },
+                "optional_field_bitset": { "type": "string", "pattern": "^[01]+$", "maxLength": 4096 }
+              }
+            }
+          }
+        },
+        "parser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spec_ref", "spec_id", "dsl_hash", "parser_hash"],
+          "properties": {
+            "spec_ref": { "type": "string", "description": "Path relative to the pack directory.", "pattern": "^specs/[a-z0-9][a-z0-9._-]{0,127}\\.json$" },
+            "spec_id": { "$ref": "#/$defs/slug" },
+            "dsl_hash": { "$ref": "#/$defs/sha256" },
+            "parser_hash": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "mapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mapping_version", "mapping_hash", "fields", "unmapped", "acceptance_snapshot"],
+          "properties": {
+            "mapping_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+            "mapping_hash": { "$ref": "#/$defs/sha256" },
+            "fields": { "type": "array", "minItems": 1, "maxItems": 4096, "items": { "$ref": "#/$defs/mapping_field" } },
+            "unmapped": {
+              "type": "array",
+              "description": "Semantic spans carried under 'unmapped' in the output rather than mapped to an OCSF attribute.",
+              "maxItems": 4096,
+              "items": { "type": "object", "additionalProperties": false, "required": ["path", "name"], "properties": { "path": { "$ref": "#/$defs/field_path" }, "name": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*$" } } }
+            },
+            "acceptance_snapshot": {
+              "type": "object",
+              "description": "The per-class policy in force at promotion, snapshotted for reproducibility.",
+              "additionalProperties": false,
+              "required": ["mandatory_attributes", "semantic_budget"],
+              "properties": {
+                "mandatory_attributes": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/ocsf_attribute" } },
+                "semantic_budget": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["byte_conservation", "critical_coverage", "weighted_semantic_coverage", "held_out"],
+          "properties": {
+            "byte_conservation": { "const": 1.0 },
+            "critical_coverage": { "const": 1.0 },
+            "weighted_semantic_coverage": { "type": "number", "minimum": 0, "maximum": 1 },
+            "held_out": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["samples", "passed"],
+              "properties": { "samples": { "type": "integer", "minimum": 0 }, "passed": { "type": "integer", "minimum": 0 } }
+            }
+          }
+        },
+        "certificates": { "type": "array", "maxItems": 4096, "items": { "type": "string", "pattern": "^cert_[0-9A-Za-z_-]{6,64}$" } },
+        "resolutions": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fields", "discriminator_id", "provenance", "propagation_scope"],
+            "properties": {
+              "certificate_ids": { "type": "array", "maxItems": 64, "items": { "type": "string", "pattern": "^cert_[0-9A-Za-z_-]{6,64}$" } },
+              "fields": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/field_path" } },
+              "discriminator_id": { "$ref": "#/$defs/slug" },
+              "provenance": { "type": "string", "enum": ["vendor_schema_or_device_configuration", "validated_discriminator", "resolved_ambiguity_certificate", "operator_assertion"] },
+              "propagation_scope": { "$ref": "#/$defs/propagation_scope" }
+            }
+          }
+        },
+        "sample_provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tier", "operator_id", "sample_count", "corpus_hash"],
+          "properties": {
+            "tier": { "type": "integer", "enum": [1, 2] },
+            "operator_id": { "$ref": "#/$defs/slug" },
+            "sample_count": { "type": "integer", "minimum": 1 },
+            "corpus_hash": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      }
+    }
+  }
+}
