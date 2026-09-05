@@ -6,7 +6,7 @@
   "bounds": { "max_event_bytes": 8192, "max_fields": 64, "max_nesting": 4, "max_repeat": 16 },
   "root": [
     { "op": "regex", "pattern": "(?P<msg_id>%(?:ASA|FTD|PIX)-(?:[a-z]+-)?[0-7]-106100)",
-      "captures": { "msg_id": { "field": "msg_id", "kind": "semantic", "class": "word" } } },
+      "captures": { "msg_id": { "field": "msg_id", "kind": "semantic", "class": "text" } } },
     { "op": "regex", "pattern": ":? ", "captures": {} },
     { "op": "regex",
       "pattern": "access-list (?P<acl>[^\\s]+) (?P<action>permitted|denied|est-allowed) (?P<proto>[A-Za-z0-9]+) (?P<src_if>[^/\\s]+)/(?P<src_host>[^\\s(]+)\\((?P<src_port>[0-9]+)\\)(?:\\((?P<src_user>[^()]+)\\))? -> (?P<dst_if>[^/\\s]+)/(?P<dst_host>[^\\s(]+)\\((?P<dst_port>[0-9]+)\\)(?:\\((?P<dst_user>[^()]+)\\))? hit-cnt (?P<hits>[0-9]+) (?P<interval>first hit|[0-9]+-second interval) \\[(?P<hash1>0x[0-9a-fA-F]+), (?P<hash2>0x[0-9a-fA-F]+)\\]",

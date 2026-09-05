@@ -69,7 +69,7 @@
         "spec_ref": "specs/squid-native-positional-10.json",
         "spec_id": "squid-native-positional-10",
         "dsl_hash": "sha256:a76f46323f0203ed4d852a34ca49f56b0f016a9398617c345e8703d47f1c7247",
-        "parser_hash": "sha256:a76f46323f0203ed4d852a34ca49f56b0f016a9398617c345e8703d47f1c7247"
+        "parser_hash": "sha256:3c2bf50571892cd9a2520860424edfb9fcc6ad65bfc1cd5d5ac503eb2eb2036e"
       },
       "mapping": {
         "mapping_version": "1.0",
@@ -297,7 +297,7 @@
     "discriminator_library_version": "1.0.0"
   },
   "hashes": {
-    "parser_hash": "sha256:891f34c1d086a69ab8d571bffc898f3a8a35bd30a5698ecdee18ad380d0720d4",
+    "parser_hash": "sha256:f00815dc66a9ac1f7741ac28db9faf5b5916d93e28311de7fbfafdb7026fe18b",
     "dsl_hash": "sha256:891f34c1d086a69ab8d571bffc898f3a8a35bd30a5698ecdee18ad380d0720d4",
     "mapping_hash": "sha256:24ef8c0dc6a3e6ae3ef31dbcb627cb39f5dfd6f8158d01775aa18c34f3834e53",
     "corpus_hash": "sha256:6326f92d1dfd3f38e8d4abe3be125a48f7a4993541b49c4336288fa6c9f823f0"

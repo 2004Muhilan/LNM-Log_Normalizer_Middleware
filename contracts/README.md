@@ -11,6 +11,7 @@ versions before doing anything else (fail closed); the Python validator does the
 | Span map | `span-map.schema.json` | runtime parser (and the learning plane's verifier) | normalizer, differential tests |
 | Ambiguity certificate | `ambiguity-certificate.schema.json` | learning plane | review interface, pack |
 | Parser pack | `parser-pack.schema.json` | learning plane | runtime loader |
+| Normalized event (frozen at P2 exit) | `normalized-event.schema.json` | runtime | SIEM/lake consumers, P3 differential test |
 
 `golden/index.json` lists every golden vector with its expected outcome; both suites iterate it.
 Positives come from the corrected worked trace; negatives are generated from them by
@@ -123,13 +124,38 @@ framing: { method: newline | octet_count | multiline | batch_element,
 Reconstruction is exactly `raw_prefix + raw + raw_suffix`. **P2 obligation:** the kill-test verifies
 byte-exact stream reconstruction, not mere recovery of the event.
 
-## `parser_hash`
+## `parser_hash` (settled at P2)
 
-Defined as the sha256 of the runtime's compiled representation. Its computation is settled at P2
-exit **without a schema version bump** — the field and its type already exist; only the value rule
-is deferred — by regenerating the golden vectors. Version bumps are for schema changes.
+`parser_hash` = sha256 over the canonical JSON of the **compiled program** — the compiler's typed
+node tree (ops, patterns, cells, bounds) plus the compiler version string — as emitted by
+`ulpf-runtime compile --spec <file>`. It is invariant under spec reformatting (whitespace, key order)
+while `dsl_hash` is not, and it changes whenever the compiler changes. The runtime recompiles every
+family at pack load and refuses the pack if the stored `parser_hash` differs (fail closed). Only the
+runtime can compute it; the vector tool shells out to the binary. No schema bump was needed: the
+field and its type already existed.
 
-## Not a contract (yet)
+## Normalized event envelope (frozen at P2 exit)
 
-The normalized-output envelope (OCSF JSON plus `_lineage`) is not one of the four contracts. P3's
-differential test needs it agreed; propose freezing it at P2 exit.
+The runtime's output is one JSON object per event: OCSF attributes nested as objects (`class_uid`,
+`time`, `src_endpoint.ip` → `{"src_endpoint": {"ip": ...}}`), vendor extensions under `unmapped`,
+and a mandatory `_lineage` block carrying the §4.1 fields plus the **structured framing record**
+(`method`, `raw_prefix`, `raw_suffix` as base64, `fragment_count`, `original_message_length`,
+`truncation_status`, `framing_confidence`), `family_id`, `routing_signature`, the pack's timezone
+state, and `normalization_version` (with `derived_from` for P8 corrections). The golden vector
+`golden/squid-native/normalized/line1.json` is produced by the pipeline itself under a fixed clock
+and sequential ids. `_lineage.schema_version` carries the contract version.
+
+## Lessons from executing the drafts (P2)
+
+P1 validated the drafts and executed only their regexes; executing them through the compiler
+surfaced two class annotations that regex matching cannot check: ASA message ids (`%ASA-6-302013`)
+are not `word` (no `%` in the class), and PAN-OS `action` can be `drop ICMP` (a space). Both are
+`text` now. A token class is a runtime validator, so a wrong one is a parse failure and a quarantine,
+never a mis-typed value — which is why executing is the check that counts.
+
+## Empty cells and absent fields
+
+A zero-length span does not exist (start < end). An empty CSV cell, an empty KV value, or an
+optional regex group that did not participate produces **no span**: the declared field is absent
+for that event. Adjacent delimiters remain literal spans, so tiling still holds. `extra.<n>` opaque
+spans therefore appear only for non-empty extra cells.

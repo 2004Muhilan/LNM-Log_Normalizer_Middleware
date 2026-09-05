@@ -10,7 +10,7 @@ development environment is WSL2 (Ubuntu). See `ulpf-implementation-plan.md` for 
 |---|---|
 | `contracts/` | The four frozen data contracts (JSON Schema 2020-12), golden vectors, README with embedded decisions |
 | `learning/` | Python learning plane. P1: `ulpf_contracts` validator + pytest suite |
-| `runtime/` | Go runtime. P1: `contracts` loader/validator + tests |
+| `runtime/` | Go runtime: contract loader, DSL compiler/executor, framing, evidence store, interim router, normalizer, pipeline, CLI (`cmd/ulpf-runtime`), Dockerfile |
 | `ocsf/` | Pinned OCSF 1.3.0 class tables (`pinned/`) generated from the schema export, cross-checked against the schema source; tools in `tools/` |
 | `library/` | Discriminator library v1 (data) |
 | `acceptance/` | Per-class acceptance policy data (engine is P3) |
@@ -38,8 +38,20 @@ bash scripts/wsl-run.sh python corpus/tools/fetch_corpus.py   # fetch + catalogu
 bash scripts/wsl-run.sh python ocsf/tools/fetch_ocsf.py       # fetch OCSF 1.3.0 export + source
 bash scripts/wsl-run.sh python ocsf/tools/build_pinned.py     # regenerate pinned tables
 bash scripts/run-crosscheck.sh     # independent completeness check of the pinned tables
-bash scripts/p1-check.sh           # golden vectors + Python suite + Go suite
-bash scripts/check-drafts.sh       # DSL sufficiency drafts against the corpus
+bash scripts/p1-check.sh           # golden vectors + Python suite + Go suite (P1 exit)
+bash scripts/check-drafts.sh       # DSL sufficiency drafts against the corpus (regex-level)
+bash scripts/p2-check.sh           # P2 exit: build runtime, regenerate vectors, both suites, runtime tests
+                                   # (golden span maps, adversarial specs, framing, evidence, kill-test,
+                                   # corpus replay), container test stage + runtime image
+```
+
+Runtime CLI (after `go build -o runtime/bin/ulpf-runtime ./cmd/ulpf-runtime` in `runtime/`):
+
+```bash
+runtime/bin/ulpf-runtime verify-pack --pack contracts/golden/squid-native
+runtime/bin/ulpf-runtime run --pack contracts/golden/squid-native --input contracts/golden/squid-native/samples/access.log --evidence /tmp/ev --out - --quarantine /tmp/q.jsonl
+runtime/bin/ulpf-runtime reconstruct --evidence /tmp/ev --out /tmp/stream.log   # byte-exact original stream
+runtime/bin/ulpf-runtime compile --spec drafts/sufficiency/asa-302013.json      # dsl_hash + parser_hash
 ```
 
 From Windows, prefix commands with `wsl -d Ubuntu -- bash /mnt/c/<path-to-repo>/scripts/<script>.sh`.

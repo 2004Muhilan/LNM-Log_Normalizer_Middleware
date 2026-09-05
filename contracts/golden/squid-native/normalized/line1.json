@@ -1,0 +1,63 @@
+{
+  "_lineage": {
+    "collector_id": "col-01",
+    "event_id": "ev_00000000000000000000000001",
+    "event_time": 1734567890123,
+    "family_id": "positional-10",
+    "framing": {
+      "fragment_count": 1,
+      "framing_confidence": "high",
+      "method": "newline",
+      "original_message_length": 124,
+      "raw_prefix": "",
+      "raw_suffix": "Cg==",
+      "truncation_status": "none"
+    },
+    "ingest_channel": "file:/var/log/squid/access.log",
+    "ingest_time": 1734567890481,
+    "length": 124,
+    "mapping_version": "1.0",
+    "normalization_version": 1,
+    "ocsf_version": "1.3.0",
+    "offset": 0,
+    "parser_id": "squid-native",
+    "parser_version": "1.0",
+    "processing_time": 1734567890481,
+    "raw_hash": "sha256:b6bf09bdddc9b70a39a856ee4ed153964dbb91c435e5a64bb7e721fc9ffca00b",
+    "routing_signature": "raw|positional|10|float,integer,ipv4,text,integer,word,url,word,text,text",
+    "schema_version": "1.0.0",
+    "segment_id": "seg_00000",
+    "source_id": "squid-proxy-01",
+    "source_timezone": "UTC",
+    "timezone_confidence": "declared"
+  },
+  "action_id": 1,
+  "activity_id": 3,
+  "class_uid": 4002,
+  "dst_endpoint": {
+    "ip": "93.184.216.34"
+  },
+  "duration": 345,
+  "http_request": {
+    "http_method": "GET",
+    "url": {
+      "url_string": "http://example.com/index.html"
+    }
+  },
+  "http_response": {
+    "code": 200,
+    "content_type": "text/html"
+  },
+  "src_endpoint": {
+    "ip": "10.20.14.62"
+  },
+  "time": 1734567890123,
+  "traffic": {
+    "bytes_out": 45231
+  },
+  "unmapped": {
+    "cache_result": "TCP_MISS",
+    "hierarchy_code": "HIER_DIRECT",
+    "user": "-"
+  }
+}

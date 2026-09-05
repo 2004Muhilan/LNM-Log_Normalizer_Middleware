@@ -46,7 +46,7 @@
       { "field": "nat_dst_port", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
       { "field": "flags", "kind": "semantic", "class": "hex" },
       { "field": "protocol", "kind": "semantic", "class": "word" },
-      { "field": "action", "kind": "semantic", "class": "word" },
+      { "field": "action", "kind": "semantic", "class": "text" },
       { "field": "bytes", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
       { "field": "bytes_sent", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },
       { "field": "bytes_received", "kind": "semantic", "class": "integer", "coerce": { "op": "coerce", "to": "int", "on_failure": "reject" } },

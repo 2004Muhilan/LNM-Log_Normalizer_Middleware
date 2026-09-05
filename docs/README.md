@@ -7,6 +7,7 @@ once the code has moved on.
 | Report | Status | Date |
 |---|---|---|
 | [P1 — contracts, corpus, and the dual-stack harness](p1-report.md) | accepted; boundary decisions verified (addendum) | 2026-09-05 |
+| [P2 — runtime vertical slice on a hand-authored pack](p2-report.md) | exit criteria met; awaiting verification | 2026-09-05 |
 
 ## Convention
 

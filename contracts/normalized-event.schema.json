@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ulpf.local/contracts/normalized-event/1.0.0",
+  "title": "ULPF normalized event (OCSF JSON + _lineage envelope)",
+  "description": "The runtime's output record for one event: an OCSF event object (class_uid and the attributes the pack maps, nested as OCSF objects) plus the mandatory _lineage block (architecture §4.1) and the unmapped vendor extensions. OCSF attributes themselves are validated against the pinned class table by the pack, not enumerated here; this contract fixes the envelope so the learning plane's differential test (P3) can compare outputs field for field. Frozen at P2 exit.",
+  "type": "object",
+  "required": ["class_uid", "time", "_lineage"],
+  "properties": {
+    "class_uid": { "type": "integer", "minimum": 0 },
+    "time": { "type": "integer", "description": "OCSF event time, epoch milliseconds." },
+    "unmapped": {
+      "type": "object",
+      "description": "Vendor extensions carried under their pack-declared names; values are the decoded span values.",
+      "propertyNames": { "pattern": "^[a-z_][a-z0-9_]*$" },
+      "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+    },
+    "_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "event_id", "raw_hash", "segment_id", "offset", "length", "parser_id", "parser_version", "mapping_version", "ocsf_version", "source_id", "collector_id", "ingest_channel", "framing", "routing_signature", "event_time", "ingest_time", "processing_time", "normalization_version"],
+      "properties": {
+        "schema_version": { "const": "1.0.0" },
+        "event_id": { "type": "string", "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{10,26}$" },
+        "raw_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "segment_id": { "type": "string", "pattern": "^seg_[0-9]{5,}$" },
+        "offset": { "type": "integer", "minimum": 0 },
+        "length": { "type": "integer", "minimum": 0 },
+        "parser_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+        "parser_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+        "mapping_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+        "ocsf_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "source_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+        "collector_id": { "type": "string", "maxLength": 128 },
+        "ingest_channel": { "type": "string", "maxLength": 512 },
+        "framing": {
+          "type": "object",
+          "description": "Structured framing record: reconstruction is raw_prefix + raw + raw_suffix (base64).",
+          "additionalProperties": false,
+          "required": ["method", "raw_prefix", "raw_suffix", "fragment_count", "original_message_length", "truncation_status", "framing_confidence"],
+          "properties": {
+            "method": { "type": "string", "enum": ["newline", "octet_count", "multiline", "batch_element"] },
+            "raw_prefix": { "type": "string", "pattern": "^[A-Za-z0-9+/]*={0,2}$" },
+            "raw_suffix": { "type": "string", "pattern": "^[A-Za-z0-9+/]*={0,2}$" },
+            "fragment_count": { "type": "integer", "minimum": 1 },
+            "original_message_length": { "type": "integer", "minimum": 0 },
+            "truncation_status": { "type": "string", "enum": ["none", "truncated", "continuation"] },
+            "framing_confidence": { "type": "string", "enum": ["high", "low"] }
+          }
+        },
+        "routing_signature": { "type": "string", "description": "The L1–L4 signature key the event matched, as computed by the router.", "maxLength": 1024 },
+        "family_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+        "event_time": { "type": "integer" },
+        "ingest_time": { "type": "integer" },
+        "processing_time": { "type": "integer" },
+        "source_timezone": { "type": ["string", "null"] },
+        "timezone_confidence": { "type": "string", "enum": ["declared", "inferred", "unresolved"] },
+        "normalization_version": { "type": "integer", "minimum": 1, "description": "Corrections emit a new version with derived_from (invariant 8, P8); v1 is never rewritten." },
+        "derived_from": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

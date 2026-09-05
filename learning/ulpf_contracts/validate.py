@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts"
 PINNED_INDEX = ROOT / "ocsf" / "pinned" / "index.json"
 
-KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack")
+KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack", "normalized-event")
 SUPPORTED_VERSIONS = {kind: {"1.0.0"} for kind in KINDS}
 FORBIDDEN_KEYS = {"confidence", "probability", "score", "likelihood"}
 CONSUMING_OPS = {"literal", "regex", "csv", "kv", "positional", "quoted", "optional", "repeated"}
@@ -384,6 +384,8 @@ def validate_document(kind: str, doc, pack_dir: Path | None = None) -> list[str]
     if not isinstance(doc, dict):
         return ["document is not a JSON object"]
     ver = doc.get("schema_version")
+    if kind == "normalized-event":  # the envelope carries its version inside _lineage
+        ver = (doc.get("_lineage") or {}).get("schema_version") if isinstance(doc.get("_lineage"), dict) else None
     if ver not in SUPPORTED_VERSIONS[kind]:
         return [f"unsupported schema_version {ver!r} for {kind} (supported: {sorted(SUPPORTED_VERSIONS[kind])}) — refused"]
     errs = _schema_errors(kind, doc)
@@ -395,6 +397,8 @@ def validate_document(kind: str, doc, pack_dir: Path | None = None) -> list[str]
         return _check_span_map(doc)
     if kind == "ambiguity-certificate":
         return _check_certificate(doc)
+    if kind == "normalized-event":
+        return _forbidden_keys(doc)
     return _check_pack(doc, pack_dir)
 
 

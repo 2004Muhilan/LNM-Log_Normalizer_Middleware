@@ -29,13 +29,15 @@ const (
 	SpanMap     Kind = "span-map"
 	Certificate Kind = "ambiguity-certificate"
 	ParserPack  Kind = "parser-pack"
+	// NormalizedEvent is the runtime's output envelope (OCSF JSON + _lineage), frozen at P2 exit.
+	NormalizedEvent Kind = "normalized-event"
 )
 
-var Kinds = []Kind{ParserSpec, SpanMap, Certificate, ParserPack}
+var Kinds = []Kind{ParserSpec, SpanMap, Certificate, ParserPack, NormalizedEvent}
 
 // Supported lists the contract versions this runtime build understands.
 var Supported = map[Kind][]string{
-	ParserSpec: {"1.0.0"}, SpanMap: {"1.0.0"}, Certificate: {"1.0.0"}, ParserPack: {"1.0.0"},
+	ParserSpec: {"1.0.0"}, SpanMap: {"1.0.0"}, Certificate: {"1.0.0"}, ParserPack: {"1.0.0"}, NormalizedEvent: {"1.0.0"},
 }
 
 var ErrUnsupportedVersion = errors.New("unsupported schema_version")
@@ -127,6 +129,12 @@ func (l *Loader) Load(kind Kind, path string) (map[string]any, error) {
 // Validate checks version, schema and semantic invariants. It returns every problem found.
 func (l *Loader) Validate(kind Kind, doc map[string]any, packDir string) []error {
 	ver, _ := doc["schema_version"].(string)
+	if kind == NormalizedEvent {
+		// the version lives inside _lineage for this envelope
+		if lin, ok := doc["_lineage"].(map[string]any); ok {
+			ver, _ = lin["schema_version"].(string)
+		}
+	}
 	if !contains(Supported[kind], ver) {
 		return []error{fmt.Errorf("%w: %q for %s (supported %v) — refused", ErrUnsupportedVersion, ver, kind, Supported[kind])}
 	}
@@ -584,7 +592,7 @@ func (l *Loader) checkPack(doc map[string]any, packDir string) []error {
 			if isMandatory && str(prov["category"]) == "model_proposal" {
 				errs = append(errs, fmt.Errorf("%s.mapping.fields[%d]: mandatory field with model_proposal provenance (invariant 4)", p, i))
 			}
-			if str(prov["category"] ) == "structural_determination" {
+			if str(prov["category"]) == "structural_determination" {
 				es, _ := prov["enumerated_survivors"].([]any)
 				if len(es) != 1 || str(es[0]) != attr {
 					errs = append(errs, fmt.Errorf("%s.mapping.fields[%d]: structural_determination requires enumerated_survivors == [ocsf_attribute]", p, i))

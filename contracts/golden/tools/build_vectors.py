@@ -14,9 +14,18 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 GOLDEN = Path(__file__).resolve().parents[1]
+ROOT = GOLDEN.parents[1]
+# parser_hash is defined by the runtime (sha256 of the compiled representation); the Go binary is
+# the only thing that can compute it. Build it with scripts/p2-check.sh or set ULPF_RUNTIME_BIN.
+RUNTIME_BIN = os.environ.get("ULPF_RUNTIME_BIN", str(ROOT / "runtime" / "bin" / "ulpf-runtime"))
 SQ = GOLDEN / "squid-native"
 NEG = GOLDEN / "negative"
 LOGFORMAT = "logformat squid %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt"
@@ -44,9 +53,10 @@ def rehash_pack():
     corpus_hash = sha((SQ / "samples" / "access.log").read_bytes())
     dsl, mapping, parser = [], [], []
     for fam in pack["families"]:
-        spec_bytes = (SQ / fam["parser"]["spec_ref"]).read_bytes()
+        spec_path = SQ / fam["parser"]["spec_ref"]
+        spec_bytes = spec_path.read_bytes()
         fam["parser"]["dsl_hash"] = sha(spec_bytes)
-        fam["parser"]["parser_hash"] = fam["parser"]["dsl_hash"]
+        fam["parser"]["parser_hash"] = runtime_parser_hash(spec_path)
         fam["mapping"]["mapping_hash"] = sha(canonical(fam["mapping"]["fields"]))
         fam["sample_provenance"]["corpus_hash"] = corpus_hash
         dsl.append(fam["parser"]["dsl_hash"]); mapping.append(fam["mapping"]["mapping_hash"]); parser.append(fam["parser"]["parser_hash"])
@@ -58,6 +68,32 @@ def rehash_pack():
     }
     dump(SQ / "pack.json", pack)
     return pack
+
+
+def runtime_parser_hash(spec_path: Path) -> str:
+    if not Path(RUNTIME_BIN).exists():
+        sys.exit(f"runtime binary not found at {RUNTIME_BIN}; build it first (scripts/p2-check.sh) — parser_hash is runtime-defined")
+    out = subprocess.run([RUNTIME_BIN, "compile", "--spec", str(spec_path)], check=True, capture_output=True, text=True).stdout
+    info = json.loads(out)
+    if info["dsl_hash"] != sha(spec_path.read_bytes()):
+        sys.exit("runtime dsl_hash disagrees with the file hash")
+    return info["parser_hash"]
+
+
+def normalized_golden():
+    """Run the golden pack over its samples with a fixed clock and sequential ids; keep line 1 as
+    the normalized-event golden vector (contracts/normalized-event.schema.json)."""
+    tmp = Path(tempfile.mkdtemp(prefix="ulpf-golden-"))
+    try:
+        env = dict(os.environ, ULPF_ROOT=str(ROOT))
+        subprocess.run([RUNTIME_BIN, "run", "--pack", str(SQ), "--input", str(SQ / "samples" / "access.log"),
+                        "--evidence", str(tmp / "evidence"), "--out", str(tmp / "out.jsonl"),
+                        "--collector", "col-01", "--channel", "file:/var/log/squid/access.log",
+                        "--fixed-clock-ms", "1734567890481", "--deterministic-ids"], check=True, env=env, capture_output=True)
+        first = (tmp / "out.jsonl").read_text(encoding="utf-8").splitlines()[0]
+        dump(SQ / "normalized" / "line1.json", json.loads(first))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def resolve_certificates():
@@ -155,7 +191,9 @@ def negatives(pack):
 def main():
     pack = rehash_pack()
     resolve_certificates()
+    normalized_golden()
     vectors = [
+        {"kind": "normalized-event", "path": "squid-native/normalized/line1.json", "expect": "valid"},
         {"kind": "parser-spec", "path": "squid-native/specs/squid-native-positional-10.json", "expect": "valid"},
         {"kind": "parser-spec", "path": "squid-native/specs/squid-native-candidate.json", "expect": "valid"},
         {"kind": "span-map", "path": "squid-native/span-maps/line1-promoted.json", "expect": "valid"},

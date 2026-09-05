@@ -27,6 +27,8 @@ def test_version_bump_is_refused_for_every_kind():
     for kind in ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack"):
         errs = validate_document(kind, {"schema_version": "2.0.0"})
         assert errs and "unsupported schema_version" in errs[0]
+    errs = validate_document("normalized-event", {"class_uid": 1, "time": 1, "_lineage": {"schema_version": "2.0.0"}})
+    assert errs and "unsupported schema_version" in errs[0]
 
 
 def test_numeric_confidence_is_rejected_anywhere_in_a_certificate():
