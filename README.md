@@ -8,7 +8,7 @@ development environment is WSL2 (Ubuntu). See `ulpf-implementation-plan.md` for 
 
 | Path | What |
 |---|---|
-| `contracts/` | The four frozen data contracts (JSON Schema 2020-12), golden vectors, README with embedded decisions |
+| `contracts/` | The five frozen data contracts (JSON Schema 2020-12; four at P1 exit, the normalized event at P2 exit; 1.1.0 since P3), golden vectors, README with embedded decisions |
 | `learning/` | Python learning plane: `ulpf_contracts` (contract validation) and `ulpf_learn` (induction, enumerator, acceptance engine, ambiguity analyzer, discriminator appliers, pack emission, review CLI, reference DSL executor); fixtures stand in for the model until P4 |
 | `runtime/` | Go runtime: contract loader, DSL compiler/executor, framing, evidence store, interim router, normalizer, pipeline, CLI (`cmd/ulpf-runtime`), Dockerfile |
 | `ocsf/` | Pinned OCSF 1.3.0 class tables (`pinned/`) generated from the schema export, cross-checked against the schema source; tools in `tools/` |

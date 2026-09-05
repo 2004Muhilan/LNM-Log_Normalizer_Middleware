@@ -1,11 +1,20 @@
 """Ambiguity analyzer — the centrepiece.
 
 For every field whose proposal is not sufficient evidence: enumerate survivors over the pinned table,
-check the ranked candidates against them, and either (a) grant structural determination (one
-survivor), (b) emit an AMBIGUOUS certificate with the lowest-cost sufficient discriminator selected by
-direct library lookup, or (c) emit an UNRESOLVED certificate when no library class applies — never a
-guess (invariant 5). Certificates that one evidence item resolves share a sufficiency group and yield
-ONE request.
+and either (a) leave structural determination to the acceptance engine (one survivor), (b) emit an
+AMBIGUOUS certificate with the lowest-cost sufficient discriminator selected by direct library lookup,
+(c) emit an UNRESOLVED certificate when the provider ranks competing survivors that no library class
+covers — never a guess (invariant 5), or (d) record the field as UNEVIDENCED. Certificates that one
+evidence item resolves share a sufficiency group and yield ONE request.
+
+Who decides that a field is ambiguous (P3->P4 boundary decision): **the library, anchored on the
+proposal, over the validator's survivors** — not the provider's ranking. For the rank-1 proposal X,
+every ambiguity class X belongs to contributes its rivals: the class's candidates that also survive
+enumeration (`pair_of` classes hold the leaf fixed and vary the role prefix). Two or more rivals →
+ambiguous, whatever the provider ranked; the provider's ranking is only an ordering hint inside the
+certificate. A single-proposal model therefore still produces certificates. A bare survivors ∩ class
+intersection was tried and rejected: type compatibility alone makes every integer slot a
+`volume_direction` and every word slot an `action_outcome`.
 """
 from __future__ import annotations
 
@@ -33,6 +42,34 @@ def _slug(s: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in s)
 
 
+def _decide(lib: Library, ranked_in: list[str], survivors: list[str]) -> tuple[str | None, list[str], list[str]] | None:
+    """Decide whether the slot is ambiguous and over which set.
+
+    Returns (class or None, ranked candidates, provider candidates dropped) — or None when the field is
+    merely unevidenced. Order of precedence:
+      1. the provider ranked ≥2 survivors and one class covers them all → that class, the provider's
+         order, then the class's remaining rivals in table order (the P3 rule, still honoured);
+      2. otherwise the library, anchored on rank-1: the class with the fewest rivals ≥2 (the most
+         specific claim; ties broken by library order) → its rivals, provider-ranked ones first;
+      3. otherwise the provider ranked ≥2 survivors that no class covers → UNRESOLVED (invariant 5);
+      4. otherwise None: a single proposal with no library-named rival.
+    ranked_candidates ⊆ survivors holds by construction in every branch."""
+    x = ranked_in[0]
+    covering = lib.match_class(ranked_in) if len(ranked_in) >= 2 else None
+    options = [(name, riv) for name, riv in lib.rivals(x, survivors) if len(riv) >= 2]
+    if covering:
+        riv = dict(options).get(covering, [])
+        return covering, ranked_in + [a for a in riv if a not in ranked_in], []
+    if options:
+        options.sort(key=lambda o: len(o[1]))
+        name, riv = options[0]
+        ordered = [a for a in ranked_in if a in riv] + [a for a in riv if a not in ranked_in]
+        return name, ordered, [a for a in ranked_in if a not in riv]
+    if len(ranked_in) >= 2:
+        return None, ranked_in, []
+    return None
+
+
 def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analysis:
     pol = policy_for(plan.event_class_uid)
     mandatory = set(pol["mandatory_attributes"])
@@ -54,17 +91,22 @@ def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analy
         en = enumerate_candidates(plan.event_class_uid, part.cls, slot.samples)
         if len(en.survivors) == 1 and en.survivors[0] == ranked[0]:
             continue  # structural determination is granted by the acceptance engine, with the set recorded
-        if len(ranked) < 2:
-            # A single proposal is not an ambiguity; it is an unevidenced proposal. The competing set is
+        ranked_in = [a for a in ranked if a in en.survivors]
+        if not ranked_in:
+            # The validator refutes the proposal outright: nothing proposed is type-compatible with the
+            # slot. Not a certificate (nobody has evidence for any rival) — a refuted proposal, covered
+            # by the request like every other unevidenced field.
+            unevidenced.append({"field": part.field, "attribute": ranked[0], "reason": "refuted: no proposed candidate is type-compatible with the slot"})
+            continue
+        decision = _decide(lib, ranked_in, en.survivors)
+        if decision is None:
+            # Rank-1 belongs to no ambiguity class (or its classes have no surviving rival) and the
+            # provider ranked nothing else that survives: an unevidenced proposal. The competing set is
             # never fabricated from the enumeration (tried and rejected in P3: it produced
             # device.location.lat as a rival for an epoch timestamp). The request covers the field.
-            unevidenced.append({"field": part.field, "attribute": ranked[0], "reason": f"{part.proposed_by} proposal alone; enumeration leaves {len(en.survivors)} survivors, so it is not structurally determined"})
+            unevidenced.append({"field": part.field, "attribute": ranked_in[0], "reason": f"{part.proposed_by} proposal alone; enumeration leaves {len(en.survivors)} survivors and no library class names a rival"})
             continue
-        ranked_in = [a for a in ranked if a in en.survivors]
-        if len(ranked_in) < 2:
-            unevidenced.append({"field": part.field, "attribute": ranked[0], "reason": "proposed candidates are not type-compatible with the slot"})
-            continue
-        cls_name = lib.match_class(ranked_in)
+        cls_name, ranked_in, dropped = decision
         cert_id = f"cert_{_slug(plan.source_id)}_pos{slot.index + 1}"
         cert = {
             "schema_version": "1.0.0", "certificate_id": cert_id, "created_at": now_iso(),
@@ -75,7 +117,9 @@ def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analy
             "enumeration": en.record(),
             "ranked_candidates": [{"rank": i + 1, "attribute": a, "proposed_by": part.proposed_by if a in ranked else "enumeration"} for i, a in enumerate(ranked_in)],
             "evidence": {"vendor_metadata": "absent",
-                         "structural": {"status": "weak", "note": f"slot {slot.index + 1}: {part.cls} token; {len(en.survivors)} type-compatible attributes survive"},
+                         "structural": {"status": "weak", "note": f"slot {slot.index + 1}: {part.cls} token; {len(en.survivors)} type-compatible attributes survive"
+                                        + (f"; rivals named by library class {cls_name}" if cls_name else "; no library class names a rival")
+                                        + (f"; provider also ranked {dropped}, outside the class" if dropped else "")},
                          "held_out_consistency": "tied", "type_validity": "tied",
                          "discriminator": {"status": "none"}},
         }

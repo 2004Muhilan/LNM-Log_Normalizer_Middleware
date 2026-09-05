@@ -8,7 +8,7 @@ once the code has moved on.
 |---|---|---|
 | [P1 — contracts, corpus, and the dual-stack harness](p1-report.md) | accepted; boundary decisions verified (addendum) | 2026-09-05 |
 | [P2 — runtime vertical slice on a hand-authored pack](p2-report.md) | accepted; boundary items settled (spec.go verified, usability definition) — §7 | 2026-09-05 |
-| [P3 — learning plane, deterministic half: certificates without a model](p3-report.md) | exit criteria met; awaiting verification | 2026-09-05 |
+| [P3 — learning plane, deterministic half: certificates without a model](p3-report.md) | accepted; boundary items settled (library-decided ambiguity implemented; model and serving runtime decided) — §6 | 2026-09-05 |
 
 ## Convention
 

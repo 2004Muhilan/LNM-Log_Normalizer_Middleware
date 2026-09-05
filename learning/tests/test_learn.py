@@ -39,18 +39,25 @@ def test_trace_stage8_certificates_and_stage9_request(session):
     assert c[3]["status"] == "ambiguous" and c[3]["evidence"]["discriminator"]["ambiguity_class"] == "endpoint_orientation"
     assert [r["attribute"] for r in c[3]["ranked_candidates"]] == ["src_endpoint.ip", "dst_endpoint.ip"]
     assert c[5]["status"] == "ambiguous" and c[5]["evidence"]["discriminator"]["ambiguity_class"] == "volume_direction"
-    assert [r["attribute"] for r in c[5]["ranked_candidates"]] == ["traffic.bytes_out", "traffic.bytes_in", "traffic.bytes"]
+    # the library names the rivals: the class's surviving members, provider order first, then table order
+    assert [r["attribute"] for r in c[5]["ranked_candidates"]] == ["traffic.bytes_out", "traffic.bytes_in", "traffic.bytes",
+                                                                  "traffic.packets", "traffic.packets_in", "traffic.packets_out"]
+    assert [r["proposed_by"] for r in c[5]["ranked_candidates"]] == ["fixture"] * 3 + ["enumeration"] * 3
+    # the lone timestamp is a temporal_role ambiguity under the library rule (a shift from the trace's three)
+    assert c[1]["status"] == "ambiguous" and c[1]["evidence"]["discriminator"]["ambiguity_class"] == "temporal_role"
+    assert c[1]["ranked_candidates"][0]["attribute"] == "time" and len(c[1]["ranked_candidates"]) == 6
     # both are resolved by ONE evidence item: same sufficiency group, rank-1 discriminator is the logformat
     assert c[3]["request"]["sufficiency_group"] == c[5]["request"]["sufficiency_group"]
     assert c[3]["request"]["selected"]["discriminator_id"] == "device_logformat_configuration"
     assert c[3]["request"]["selected"]["rank"] == 1
     assert "operator_labelled_session" in [a["discriminator_id"] for a in c[3]["request"]["alternatives"]]
     assert s.state["pending_request"]["discriminator_id"] == "device_logformat_configuration"
-    # exactly the trace's certificates: two ambiguous (3, 5) and one out-of-library (2); single
-    # proposals are unevidenced fields covered by the request, never fabricated ambiguities
-    assert sorted(c) == [2, 3, 5]
+    # the trace's certificates (3, 5 ambiguous; 2 out-of-library) plus the timestamp; method, url and
+    # MIME type belong to no class with a surviving rival, so they are unevidenced — never fabricated
+    assert sorted(c) == [1, 2, 3, 5]
     assert set(s.state["pending_request"]["resolves"]) == {f"pos_{i}" for i in range(1, 11)}
-    assert {u["field"] for u in s.state["unevidenced"]} == {"pos_1", "pos_6", "pos_7", "pos_10"}
+    assert {u["field"] for u in s.state["unevidenced"]} == {"pos_6", "pos_7", "pos_10"}
+    assert s.state["pending_request"]["text"].startswith("3 field(s) cannot be resolved from the samples alone (2 mandatory).")
     # enumeration is over the pinned table, not over the proposal: survivors exceed the ranked set
     assert len(c[3]["enumeration"]["survivors"]) > 2 and set(r["attribute"] for r in c[3]["ranked_candidates"]) <= set(c[3]["enumeration"]["survivors"])
     for cert in c.values():
@@ -87,6 +94,7 @@ def test_trace_stage10_to_13_resolution_promotion_and_differential(session, tmp_
     assert c[3]["status"] == "resolved" and c[3]["resolution"]["resolved_to"] == "src_endpoint.ip"
     assert c[5]["status"] == "resolved" and c[5]["resolution"]["resolved_to"] == "traffic.bytes_out"
     assert c[2]["status"] == "resolved" and c[2]["resolution"]["resolved_to"] == "duration"  # the same evidence settled it
+    assert c[1]["status"] == "resolved" and c[1]["resolution"]["resolved_to"] == "time"
     assert c[3]["resolution"]["provenance"] == "vendor_schema_or_device_configuration"
     pack_dir = tmp_path / "pack"
     pack_path = s.promote(pack_dir, "squid-native-emitted")
@@ -147,6 +155,69 @@ def test_cooperative_operator_absent_labelled_session_resolves_only_pos3(session
     assert c[3]["status"] == "resolved" and c[3]["resolution"]["provenance"] == "validated_discriminator"
     assert c[5]["status"] == "ambiguous"  # bytes direction still unknown: the certificate is retained
     assert not v.promotable
+
+
+class _SingleProposalProvider:
+    """What a grammar-constrained model most likely does: one attribute per slot, no ranking."""
+    name = "single"
+
+    def propose(self, structure):
+        from ulpf_learn.provider import Proposal, SlotProposal
+        one = {0: ["time"], 1: ["duration"], 2: ["src_endpoint.ip"], 4: ["traffic.bytes_out"], 5: ["http_request.http_method"],
+               6: ["http_request.url.url_string"], 9: ["http_response.content_type"]}
+        slots = [SlotProposal(i, one.get(i, []), "", "user" if i == 7 else None, "/" if i in (3, 8) else None) for i in range(structure.arity)]
+        return Proposal(4002, "http_activity", slots, "model", "sha256:test")
+
+
+def test_library_decides_ambiguity_not_the_provider(tmp_path):
+    """P3->P4 boundary: certificates survive a single-proposal model. The library, anchored on the
+    proposal and intersected with the validator's survivors, decides what is ambiguous."""
+    s = Session(tmp_path / "session")
+    s.onboard(GOLDEN / "samples" / "access.log", "squid-proxy-01", "op-014", provider=_SingleProposalProvider())
+    c = certs_by_slot(s)
+    assert sorted(c) == [1, 3, 5]  # no ranking anywhere, yet the same ambiguities; slot 2 (duration alone) is unevidenced
+    assert c[3]["evidence"]["discriminator"]["ambiguity_class"] == "endpoint_orientation"
+    assert [r["attribute"] for r in c[3]["ranked_candidates"]] == ["src_endpoint.ip", "dst_endpoint.ip"]  # not client_server_role's 3
+    assert [r["proposed_by"] for r in c[3]["ranked_candidates"]] == ["model", "enumeration"]
+    assert c[5]["evidence"]["discriminator"]["ambiguity_class"] == "volume_direction" and len(c[5]["ranked_candidates"]) == 6
+    assert c[1]["evidence"]["discriminator"]["ambiguity_class"] == "temporal_role"
+    # noise the bare intersection would have produced does not: method and MIME type are in
+    # request_response_role's wildcard but have no role-twin among the survivors
+    assert {u["field"] for u in s.state["unevidenced"]} == {"pos_2", "pos_6", "pos_7", "pos_10"}
+    assert s.state["pending_request"]["discriminator_id"] == "device_logformat_configuration"
+    for cert in c.values():
+        assert set(r["attribute"] for r in cert["ranked_candidates"]) <= set(cert["enumeration"]["survivors"])
+        assert validate_file("ambiguity-certificate", _dump(cert)) == []
+    # the same evidence resolves them, provider-independent
+    v = s.respond("device_logformat_configuration", LOGFORMAT)
+    assert v.promotable, v.blockers
+    assert all(cert["status"] == "resolved" for cert in certs_by_slot(s).values())
+
+
+def test_refuted_and_out_of_class_proposals(tmp_path):
+    from ulpf_learn.analyze import _decide
+    from ulpf_learn.library import Library
+    lib = Library()
+    ipv4_survivors = ["device.ip", "dst_endpoint.ip", "dst_endpoint.proxy_endpoint.ip", "proxy.ip", "proxy_endpoint.ip", "src_endpoint.ip", "src_endpoint.proxy_endpoint.ip"]
+    # provider ranks an out-of-class rival: the class decides the set, the extra is recorded as dropped
+    cls, ranked, dropped = _decide(lib, ["src_endpoint.ip", "device.ip"], ipv4_survivors)
+    assert cls == "endpoint_orientation" and ranked == ["src_endpoint.ip", "dst_endpoint.ip"] and dropped == ["device.ip"]
+    # provider ranks three roles: the covering class wins over the most specific one
+    cls, ranked, _ = _decide(lib, ["src_endpoint.ip", "proxy_endpoint.ip", "dst_endpoint.ip"], ipv4_survivors)
+    assert cls == "client_server_role" and ranked == ["src_endpoint.ip", "proxy_endpoint.ip", "dst_endpoint.ip"]
+    # a lone proposal in no class: unevidenced, not a certificate
+    assert _decide(lib, ["device.ip"], ipv4_survivors) is None
+    # competing proposals no class covers: unresolved (invariant 5)
+    assert _decide(lib, ["duration", "http_response.latency"], ["duration", "http_response.latency", "traffic.bytes"]) == (None, ["duration", "http_response.latency"], [])
+
+
+def test_enumerator_timestamp_windows_follow_epoch_auto():
+    from ulpf_learn.enumerate_ import enumerate_candidates
+    assert "time" in enumerate_candidates(4002, "integer", ["1734567890"]).survivors          # seconds (P3 excluded these)
+    assert "time" in enumerate_candidates(4002, "integer", ["1734567890123"]).survivors       # milliseconds
+    assert "time" in enumerate_candidates(4002, "float", ["1734567890.123"]).survivors        # fractional seconds
+    assert "time" not in enumerate_candidates(4002, "integer", ["1893", "331004"]).survivors  # a counter is in no window
+    assert "time" not in enumerate_candidates(4002, "integer", ["1734567890", "1734567890123"]).survivors  # mixed precisions: never guess
 
 
 def _dump(doc) -> Path:

@@ -11,6 +11,15 @@
 # `candidates` lists OCSF attribute paths (dotted, within the event class). A candidate
 # entry ending in `.*` matches any leaf under that object; `pair_of` records which
 # prefixes the class separates so leaf-level variants (ip/port/hostname/mac) match too.
+#
+# Who decides that a slot is ambiguous (P3->P4 boundary, docs/p3-report.md §3.8): THIS
+# LIBRARY, not the provider. For the provider's rank-1 attribute X, every class X belongs
+# to names its rivals = the class's members that survive the validator enumeration; a
+# `pair_of` class holds X's leaf fixed and varies the role prefix (src_endpoint.ip rivals
+# dst_endpoint.ip, never dst_endpoint.uid); an explicit-list class contributes every
+# surviving member. Two or more rivals -> ambiguous certificate, whatever the provider
+# ranked; the provider's ranking is an ordering hint. So `pair_of` is load-bearing: it is
+# what keeps the `.*` wildcard from generating rivals by type compatibility alone.
 
 library_version: "1.0.0"
 ocsf_version: "1.3.0"

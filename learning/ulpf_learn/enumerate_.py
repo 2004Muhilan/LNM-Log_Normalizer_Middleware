@@ -55,6 +55,26 @@ def load_table(class_uid: int) -> dict:
     return _tables[class_uid]
 
 
+# epoch_auto's disjoint plausible-date windows (contracts/README.md): 2000-01-01..2100-01-01 per unit
+_EPOCH_WINDOWS = [(946684800 * 10 ** k, 4102444800 * 10 ** k) for k in (0, 3, 6, 9)]
+
+
+def _epoch_window(samples: list[str]) -> bool:
+    """True when every numeric sample falls in the SAME epoch_auto window — the same rule the runtime's
+    `epoch_auto` coercion applies, so a timestamp_t survivor is one the coercion could actually accept.
+    (P3 as shipped checked milliseconds only, and only integer-shaped samples; an epoch in seconds had
+    no timestamp_t survivor and a fractional epoch skipped the check. Fixed at the P3->P4 boundary.)"""
+    values = []
+    for s in samples:
+        try:
+            values.append(float(s))
+        except ValueError:
+            return False
+    if not values:
+        return True
+    return any(all(lo <= v < hi for v in values) for lo, hi in _EPOCH_WINDOWS)
+
+
 def enumerate_candidates(class_uid: int, token_class: str, samples: list[str], max_depth: int = 2) -> Enumeration:
     table = load_table(class_uid)
     accepts = ACCEPTS.get(token_class, set())
@@ -70,8 +90,8 @@ def enumerate_candidates(class_uid: int, token_class: str, samples: list[str], m
             excluded = "array attribute; the slot holds a scalar"
         elif t == "port_t" and any(not (0 <= int(s) <= 65535) for s in samples if s.lstrip("-").isdigit()):
             excluded = "values exceed the 0-65535 port range"
-        elif t == "timestamp_t" and any(not (946684800000 <= int(s) < 4102444800000) for s in samples if s.lstrip("-").isdigit()):
-            excluded = "values are not epoch milliseconds in the 2000-2100 window"
+        elif t == "timestamp_t" and not _epoch_window(samples):
+            excluded = "values fall in no single epoch_auto precision window (s/ms/us/ns, 2000-2100)"
         elif leaf.get("enum") and token_class in ("integer",) and any(s not in leaf["enum"] for s in samples):
             excluded = "values are outside the attribute's enum"
         elif leaf.get("enum") and token_class not in ("integer",):

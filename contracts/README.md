@@ -1,6 +1,6 @@
 # ULPF contracts (frozen at P1 exit)
 
-The four data contracts both stacks depend on. Schemas are JSON Schema draft 2020-12; every
+The five data contracts both stacks depend on (four frozen at P1 exit, the normalized event at P2 exit; see "1.1.0" below for the one additive bump). Schemas are JSON Schema draft 2020-12; every
 instance carries `schema_version`. Post-freeze changes require a version bump, a same-commit update
 of `golden/`, and green suites on both sides (`scripts/p1-check.sh`). The Go loader refuses unknown
 versions before doing anything else (fail closed); the Python validator does the same.
@@ -71,7 +71,10 @@ walk rejecting any key named confidence/probability/score/likelihood. `enumerati
 `survivors` come from the deterministic validator over the pinned class table (never from the
 model); `ranked_candidates` must be a subset of survivors with at least two entries when
 ambiguous/unresolved. Ambiguity-class lookup is a subset match of the ranked attribute set against
-the library class's `candidates`. Cost tiers are ordinal strings.
+the library class's `candidates`. Cost tiers are ordinal strings. *Who decides that a field is
+ambiguous* is policy, not contract: since the P3→P4 boundary the library names the rivals (anchored on
+the provider's rank-1 attribute, over the validator's survivors), and the provider's ranking is an
+ordering hint — `docs/p3-report.md` §6.1. Both properties above hold by construction under that rule.
 
 **Packs.** Per source, per-family entries. OCSF pinning is by class only — there is no field in
 which attributes within a class could be listed (subset guard), and `table_hash` must equal the
