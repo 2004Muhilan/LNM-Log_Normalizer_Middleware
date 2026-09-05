@@ -4,6 +4,7 @@
  "class_uid": 3002,
  "caption": "Authentication",
  "category": "iam",
+ "category_uid": 3,
  "extends": "iam",
  "profiles_applied": [
   "cloud",
@@ -22141,5 +22142,5 @@
    "requirement": "optional"
   }
  ],
- "table_hash": "sha256:80bd8a77751efef1d7e1be43279acc8f8e28570ac65d2007ab29a029891e1726"
+ "table_hash": "sha256:807fb6356c05916889fa40723dacf053eaf475ab68a5bfd29e6bfff4e9d74fd6"
 }

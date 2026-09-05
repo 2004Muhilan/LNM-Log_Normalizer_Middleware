@@ -4,6 +4,7 @@
  "class_uid": 4001,
  "caption": "Network Activity",
  "category": "network",
+ "category_uid": 4,
  "extends": "network",
  "profiles_applied": [
   "cloud",
@@ -24747,5 +24748,5 @@
    "requirement": "recommended"
   }
  ],
- "table_hash": "sha256:e95e58e12ad66e01ba37d74250b467ff4c56932d3e8b249361ae9a52a227618f"
+ "table_hash": "sha256:1296539263354af50835f14fbb7da59d2610817432f3b1b63725410eb044cc49"
 }

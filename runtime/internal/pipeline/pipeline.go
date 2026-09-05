@@ -47,6 +47,7 @@ type Stats struct {
 	UnmappedMandatory int            `json:"unmapped_mandatory_events"`
 	AbsentStructural  int            `json:"events_with_structural_absence"`
 	AbsentUncoercible int            `json:"events_with_uncoercible_absence"`
+	AbsentDeclared    int            `json:"events_with_declared_null"`
 	Quarantined       int            `json:"quarantined"`
 	Reasons           map[string]int `json:"quarantine_reasons"`
 }
@@ -139,16 +140,20 @@ func Run(in io.Reader, o Options) (Stats, error) {
 		} else {
 			st.UnmappedMandatory++
 		}
-		structural, uncoercible := false, false
+		structural, uncoercible, declared := false, false, false
 		for _, a := range res.Absent {
 			structural = structural || a.Cause == "structural"
 			uncoercible = uncoercible || a.Cause == "uncoercible"
+			declared = declared || a.Cause == "declared_null"
 		}
 		if structural {
 			st.AbsentStructural++
 		}
 		if uncoercible {
 			st.AbsentUncoercible++
+		}
+		if declared {
+			st.AbsentDeclared++
 		}
 		b, _ := json.Marshal(ev)
 		if _, err := out.Write(append(b, '\n')); err != nil {

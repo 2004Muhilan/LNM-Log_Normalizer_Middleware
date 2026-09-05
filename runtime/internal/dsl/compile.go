@@ -32,6 +32,9 @@ type cell struct {
 	Class  string
 	Coerce *spec.Coerce
 	Decode *decodeOp
+	// Nulls are the pack-declared null markers in force for this cell (spec default unless the cell
+	// overrides). A value equal to one is a declared null: recorded, not coerced, not class-checked.
+	Nulls []string
 }
 
 type decodeOp struct {
@@ -119,6 +122,7 @@ func (p *Program) ParserHash() string {
 
 type compiler struct {
 	bounds spec.Bounds
+	nulls  []string // spec-level null_values default
 	fields map[string]bool
 	order  []string
 	errs   []string
@@ -135,7 +139,7 @@ func Compile(b []byte) (*Program, error) {
 	if s.RegexDialect != "re2" {
 		return nil, fmt.Errorf("regex_dialect must be re2")
 	}
-	c := &compiler{bounds: s.Bounds, fields: map[string]bool{}}
+	c := &compiler{bounds: s.Bounds, nulls: s.NullValues, fields: map[string]bool{}}
 	root := c.step(s.Root, 1, "$.root")
 	if root == nil && len(c.errs) == 0 {
 		c.fail("$.root", "empty")
@@ -351,13 +355,17 @@ func (c *compiler) cell(sc *spec.Cell, depth int, path string) *cell {
 	}
 	c.fields[sc.Field] = true
 	c.order = append(c.order, sc.Field)
-	if sc.Kind == "opaque" && (sc.Class != "" || sc.Coerce != nil || sc.Decode != nil) {
-		c.fail(path, "opaque cell cannot carry class/coerce/decode")
+	if sc.Kind == "opaque" && (sc.Class != "" || sc.Coerce != nil || sc.Decode != nil || sc.NullValues != nil) {
+		c.fail(path, "opaque cell cannot carry class/coerce/decode/null_values")
 	}
 	if sc.Class != "" && classRe(sc.Class) == nil {
 		c.fail(path, fmt.Sprintf("unknown token class %q", sc.Class))
 	}
-	out := &cell{Field: sc.Field, Kind: sc.Kind, Class: sc.Class, Coerce: sc.Coerce}
+	nulls := c.nulls
+	if sc.NullValues != nil {
+		nulls = sc.NullValues // explicit per-cell list, possibly empty (opt-out)
+	}
+	out := &cell{Field: sc.Field, Kind: sc.Kind, Class: sc.Class, Coerce: sc.Coerce, Nulls: nulls}
 	if sc.Coerce != nil {
 		if err := checkCoerce(sc.Coerce); err != nil {
 			c.fail(path, err.Error())
@@ -498,6 +506,9 @@ func (c *cell) canon() any {
 	}
 	if c.Coerce != nil {
 		m["coerce"] = c.Coerce
+	}
+	if len(c.Nulls) > 0 {
+		m["null_values"] = c.Nulls
 	}
 	if c.Decode != nil {
 		d := map[string]any{"encoding": c.Decode.Encoding, "on_failure": c.Decode.OnFailure}

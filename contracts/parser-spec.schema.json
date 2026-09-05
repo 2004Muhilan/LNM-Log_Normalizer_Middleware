@@ -7,10 +7,17 @@
   "additionalProperties": false,
   "required": ["schema_version", "spec_id", "regex_dialect", "bounds", "root"],
   "properties": {
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.0.0 documents remain valid." },
     "spec_id": { "$ref": "#/$defs/slug" },
     "description": { "type": "string", "maxLength": 2000 },
     "regex_dialect": { "const": "re2" },
+    "null_values": {
+      "type": "array",
+      "description": "1.1.0. Spec-level default set of vendor null markers (Squid/Apache '-', FortiGate 'N/A'). A semantic cell whose raw value equals a marker is recorded as a declared null: the span is kept with declared_null true, no class check and no coercion run, and the mapped attribute is absent with cause declared_null. Per-cell null_values overrides this list; an explicit empty list opts a cell out. Declared markers are pack evidence (device configuration / vendor table), never inference.",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+    },
     "bounds": {
       "type": "object",
       "additionalProperties": false,
@@ -122,10 +129,17 @@
         "kind": { "$ref": "#/$defs/kind" },
         "class": { "$ref": "#/$defs/token_class" },
         "coerce": { "$ref": "#/$defs/coerce" },
-        "decode": { "$ref": "#/$defs/decode" }
+        "decode": { "$ref": "#/$defs/decode" },
+        "null_values": {
+          "type": "array",
+          "description": "1.1.0. Overrides the spec-level null_values for this cell; [] opts out (the marker is a legitimate value here).",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+        }
       },
       "allOf": [
-        { "if": { "properties": { "kind": { "const": "opaque" } } }, "then": { "not": { "anyOf": [ { "required": ["coerce"] }, { "required": ["decode"] }, { "required": ["class"] } ] } } }
+        { "if": { "properties": { "kind": { "const": "opaque" } } }, "then": { "not": { "anyOf": [ { "required": ["coerce"] }, { "required": ["decode"] }, { "required": ["class"] }, { "required": ["null_values"] } ] } } }
       ]
     },
     "delimiter": {

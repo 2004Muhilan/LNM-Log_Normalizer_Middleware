@@ -7,6 +7,10 @@
   "required": ["class_uid", "time", "_lineage"],
   "properties": {
     "class_uid": { "type": "integer", "minimum": 0 },
+    "category_uid": { "type": "integer", "minimum": 0, "description": "1.1.0. Derived from the class via the pinned table." },
+    "type_uid": { "type": "integer", "minimum": 0, "description": "1.1.0. class_uid * 100 + activity_id (0 when activity_id is absent)." },
+    "severity_id": { "type": "integer", "minimum": 0, "description": "1.1.0. Pack-declared (constant or mapped) with provenance — a judgement, never derived." },
+    "metadata": { "type": "object", "description": "1.1.0. OCSF metadata: version and product from the pack." },
     "time": { "type": "integer", "description": "OCSF event time, epoch milliseconds." },
     "unmapped": {
       "type": "object",
@@ -19,7 +23,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "event_id", "raw_hash", "segment_id", "offset", "length", "parser_id", "parser_version", "mapping_version", "ocsf_version", "source_id", "collector_id", "ingest_channel", "framing", "routing_signature", "event_time", "ingest_time", "processing_time", "normalization_version"],
       "properties": {
-        "schema_version": { "const": "1.0.0" },
+        "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.0.0 documents remain valid." },
         "event_id": { "type": "string", "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{10,26}$" },
         "raw_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "segment_id": { "type": "string", "pattern": "^seg_[0-9]{5,}$" },
@@ -66,7 +70,7 @@
             "required": ["attribute", "cause"],
             "properties": {
               "attribute": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*(\\.[a-z_][a-z0-9_]*)*$" },
-              "cause": { "type": "string", "enum": ["structural", "uncoercible"] }
+              "cause": { "type": "string", "enum": ["structural", "uncoercible", "declared_null"], "description": "declared_null (1.1.0): the source carried a pack-declared null marker for the field." }
             }
           }
         }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "spec_id": "squid-native-positional-10",
   "event": {
     "event_id": "ev_01HQ8F2K3M",
@@ -174,7 +174,7 @@
       "kind": "semantic",
       "path": "user",
       "value": "-",
-      "class": "text"
+      "declared_null": true
     },
     {
       "buffer": "raw",

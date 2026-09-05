@@ -86,6 +86,14 @@ func (x *exec) emitCell(c *cell, start, end int, value []byte, encoding string, 
 		x.opaque(c, start, end)
 		return nil
 	}
+	// Declared null marker: precedence over class validation and coercion (P3 boundary decision).
+	for _, n := range c.Nulls {
+		if string(value) == n {
+			v := n
+			x.m.Spans = append(x.m.Spans, spanmap.Span{Buffer: x.bufID, Start: start, End: end, Kind: "semantic", Path: c.Field + x.suffix, Value: &v, Encoding: encoding, DeclaredNull: true})
+			return nil
+		}
+	}
 	sp := spanmap.Span{Buffer: x.bufID, Start: start, End: end, Kind: "semantic", Path: c.Field + x.suffix, Class: c.Class, Encoding: encoding}
 	if c.Class != "" && !classOK(c.Class, value) {
 		return fail(start, step, "value %q does not match token class %s", clip(value), c.Class)

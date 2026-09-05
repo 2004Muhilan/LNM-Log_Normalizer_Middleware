@@ -49,7 +49,12 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 	vals := map[string]any{}    // path -> coerced value or string
 	strs := map[string]string{} // path -> string value
 	opaque := map[string]bool{} // paths whose span exists but carries no usable value
+	nulls := map[string]bool{}  // paths whose span is a pack-declared null marker
 	for _, s := range m.Spans {
+		if s.DeclaredNull {
+			nulls[s.Path] = true
+			continue
+		}
 		if s.Kind == "opaque" {
 			opaque[s.Path] = true
 			continue
@@ -69,9 +74,15 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 	}
 	out := map[string]any{"class_uid": ctx.Family.EventClassUID}
 	present := map[string]bool{}
-	mapped := map[string]string{} // attribute -> path
+	mapped := map[string]string{} // attribute -> path ("" for constants)
 	for _, f := range ctx.Family.Mapping.Fields {
 		mapped[f.OCSFAttribute] = f.Path
+		if f.Constant != nil {
+			// pack-declared constant (e.g. severity_id): provenance-bearing, never derived
+			setPath(out, f.OCSFAttribute, normNumber(f.Constant))
+			present[f.OCSFAttribute] = true
+			continue
+		}
 		v, ok := vals[f.Path]
 		if !ok && !(f.Transform != nil && f.Transform.Kind == "compose_datetime") {
 			continue
@@ -92,11 +103,30 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 		switch {
 		case !isMapped:
 			res.Unmapped = append(res.Unmapped, a) // the acceptance gate should have blocked this pack
+		case nulls[path]:
+			res.Absent = append(res.Absent, Absent{Attribute: a, Cause: "declared_null"})
 		case opaque[path]:
 			res.Absent = append(res.Absent, Absent{Attribute: a, Cause: "uncoercible"})
 		default:
 			res.Absent = append(res.Absent, Absent{Attribute: a, Cause: "structural"})
 		}
+	}
+	// OCSF base attributes that are mechanical derivations (P3 boundary): category from the pinned
+	// class table, type_uid from class and activity, metadata from the pack. severity_id is NOT
+	// derived — it is pack-declared like any other attribute.
+	if cat, ok := ctx.Pack.CategoryUIDs[ctx.Family.EventClassUID]; ok {
+		out["category_uid"] = cat
+	}
+	activity := int64(0)
+	if a, ok := out["activity_id"]; ok {
+		if n, ok := toInt64(a); ok {
+			activity = n
+		}
+	}
+	out["type_uid"] = int64(ctx.Family.EventClassUID)*100 + activity
+	out["metadata"] = map[string]any{
+		"version": ctx.Pack.OCSF.Version,
+		"product": map[string]any{"vendor_name": ctx.Pack.Source.Vendor, "name": ctx.Pack.Source.Product},
 	}
 	unmapped := map[string]any{}
 	for _, u := range ctx.Family.Mapping.Unmapped {

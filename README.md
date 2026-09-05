@@ -9,7 +9,7 @@ development environment is WSL2 (Ubuntu). See `ulpf-implementation-plan.md` for 
 | Path | What |
 |---|---|
 | `contracts/` | The four frozen data contracts (JSON Schema 2020-12), golden vectors, README with embedded decisions |
-| `learning/` | Python learning plane. P1: `ulpf_contracts` validator + pytest suite |
+| `learning/` | Python learning plane: `ulpf_contracts` (contract validation) and `ulpf_learn` (induction, enumerator, acceptance engine, ambiguity analyzer, discriminator appliers, pack emission, review CLI, reference DSL executor); fixtures stand in for the model until P4 |
 | `runtime/` | Go runtime: contract loader, DSL compiler/executor, framing, evidence store, interim router, normalizer, pipeline, CLI (`cmd/ulpf-runtime`), Dockerfile |
 | `ocsf/` | Pinned OCSF 1.3.0 class tables (`pinned/`) generated from the schema export, cross-checked against the schema source; tools in `tools/` |
 | `library/` | Discriminator library v1 (data) |
@@ -43,6 +43,17 @@ bash scripts/check-drafts.sh       # DSL sufficiency drafts against the corpus (
 bash scripts/p2-check.sh           # P2 exit: build runtime, regenerate vectors, both suites, runtime tests
                                    # (golden span maps, adversarial specs, framing, evidence, kill-test,
                                    # corpus replay), container test stage + runtime image
+```
+
+Onboarding (the demo sequence — `scripts/p3-check.sh` runs it scripted):
+
+```bash
+cd learning
+python -m ulpf_learn onboard --samples ../contracts/golden/squid-native/samples/access.log --source-id squid-proxy-01 --operator op-014 --session /tmp/s
+python -m ulpf_learn certificates --session /tmp/s      # the ambiguity certificates, incl. the unresolved one
+python -m ulpf_learn respond --session /tmp/s --discriminator device_logformat_configuration --input "logformat squid %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt"
+python -m ulpf_learn promote --session /tmp/s --out /tmp/pack --pack-id squid-native-emitted
+python -m ulpf_learn review --session /tmp/s            # interactive form of the same loop
 ```
 
 Runtime CLI (after `go build -o runtime/bin/ulpf-runtime ./cmd/ulpf-runtime` in `runtime/`):

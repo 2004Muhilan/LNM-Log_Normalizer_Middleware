@@ -1,8 +1,11 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "spec_id": "squid-native-positional-10",
   "description": "Squid native access.log after resolution against the operator-supplied logformat: %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt. Whitespace runs are literal spans (the %6tr right-alignment pads with spaces).",
   "regex_dialect": "re2",
+  "null_values": [
+    "-"
+  ],
   "bounds": {
     "max_event_bytes": 8192,
     "max_fields": 64,

@@ -1,0 +1,22 @@
+{
+  "note": "Fixture standing in for the model provider (P4). Mirrors the worked trace's Stage 6 proposal for the induced 10-slot Squid structure. Candidates are RANKED lists over OCSF attributes; the acceptance engine treats them as proposals, never as evidence. Slot 2 deliberately proposes an ambiguity outside the discriminator library (duration vs latency) so the unresolved path is exercised.",
+  "model_hash": "none:fixture",
+  "by_arity": {
+    "10": {
+      "event_class_uid": 4002,
+      "event_class_name": "http_activity",
+      "slots": {
+        "1": { "candidates": ["time"], "note": "Unix epoch with millis" },
+        "2": { "candidates": ["duration", "http_response.latency"], "note": "small integer, ms-scaled: whole-transaction time or time to first byte" },
+        "3": { "candidates": ["src_endpoint.ip", "dst_endpoint.ip"] },
+        "4": { "candidates": [], "sub_split": "/", "note": "'/'-joined pair: cache disposition and HTTP status" },
+        "5": { "candidates": ["traffic.bytes_out", "traffic.bytes_in", "traffic.bytes"], "note": "single unlabelled counter" },
+        "6": { "candidates": ["http_request.http_method"], "note": "GET, CONNECT" },
+        "7": { "candidates": ["http_request.url.url_string"], "note": "parseable URL" },
+        "8": { "candidates": [], "unmapped_name": "user", "note": "constant '-' in the samples" },
+        "9": { "candidates": [], "sub_split": "/", "note": "hierarchy code and upstream address" },
+        "10": { "candidates": ["http_response.content_type"], "note": "MIME type" }
+      }
+    }
+  }
+}

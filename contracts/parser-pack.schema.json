@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "pack_id", "pack_version", "created_at", "source", "ocsf", "acceptance", "time", "anchors", "tiebreaker_field", "families", "provenance", "hashes", "signing"],
   "properties": {
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.0.0 documents remain valid." },
     "pack_id": { "$ref": "#/$defs/slug" },
     "pack_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
     "created_at": { "$ref": "#/$defs/rfc3339" },
@@ -183,9 +183,11 @@
     "mapping_field": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "ocsf_attribute", "mandatory", "provenance"],
+      "required": ["ocsf_attribute", "mandatory", "provenance"],
+      "oneOf": [ { "required": ["path"] }, { "required": ["constant"] } ],
       "properties": {
         "path": { "$ref": "#/$defs/field_path" },
+        "constant": { "description": "1.1.0. A pack-declared constant value for the attribute (e.g. severity_id for a source that carries no severity). Requires provenance like any mapped field; never a derivation.", "type": ["string", "integer", "number", "boolean"] },
         "ocsf_attribute": { "$ref": "#/$defs/ocsf_attribute" },
         "mandatory": { "type": "boolean" },
         "provenance": {

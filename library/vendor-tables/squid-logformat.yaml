@@ -1,0 +1,46 @@
+# Squid `logformat` directive codes -> semantics. Vendor documentation (squid-cache.org, logformat
+# directive). This is DEVICE CONFIGURATION / VENDOR TABLE evidence: when an operator supplies the
+# directive in force on their proxy, every code resolves its slot with provenance
+# vendor_schema_or_device_configuration — no inference. Modifiers (width, [ quoting, precision) are
+# stripped by the parser; the code letters carry the meaning.
+vendor: Squid
+product: Squid Cache
+event_class_uid: 4002
+null_values: ["-"]            # Squid writes "-" for any unavailable field
+timezone_confidence: declared  # %ts is UTC epoch by definition
+source_timezone: UTC
+severity_id:
+  constant: 1
+  note: "access.log carries no severity; every access record is Informational. Recorded as an operator assertion."
+
+# compound: two codes joined by a literal in ONE slot; the first entry describes how to treat them
+compounds:
+  "ts.tu":                    # %ts.%03tu -> one epoch-with-fraction token
+    field: time
+    class: float
+    coerce: { op: coerce, to: timestamp, format: { kind: epoch_s_frac, timezone: utc }, on_failure: reject }
+    attribute: time
+    mandatory: true
+    description: "seconds since epoch with milliseconds"
+
+codes:
+  ts:  { field: time_s,        class: integer, attribute: time, coerce: { op: coerce, to: timestamp, format: { kind: epoch_s, timezone: utc }, on_failure: reject }, mandatory: true, description: "seconds since epoch" }
+  tr:  { field: duration,      class: integer, attribute: duration, coerce: { op: coerce, to: int, on_failure: reject }, description: "response time in milliseconds" }
+  ">a": { field: client_ip,    class: ip,      attribute: src_endpoint.ip, coerce: { op: coerce, to: ip, on_failure: reject }, mandatory: true, description: "client address" }
+  "<a": { field: server_ip,    class: text,    attribute: dst_endpoint.ip, coerce: { op: coerce, to: ip, on_failure: opaque }, mandatory: true, description: "upstream server address" }
+  Ss:  { field: cache_result,  class: word,    attribute: action_id, mandatory: true, description: "Squid result code; TCP_DENIED / TCP_DENIED_REPLY are denied, every other code is served",
+         transform: { kind: lookup, lookup: { TCP_DENIED: 2, TCP_DENIED_REPLY: 2 }, default: 1 }, unmapped_name: cache_result }
+  ">Hs": { field: status_code, class: integer, attribute: http_response.code, coerce: { op: coerce, to: int, on_failure: reject }, description: "HTTP status code sent to the client" }
+  "<Hs": { field: server_status_code, class: integer, attribute: http_response.code, coerce: { op: coerce, to: int, on_failure: reject }, description: "HTTP status code received from the server" }
+  "<st": { field: reply_bytes, class: integer, attribute: traffic.bytes_out, coerce: { op: coerce, to: int, on_failure: reject }, description: "reply size sent to the client" }
+  ">st": { field: request_bytes, class: integer, attribute: traffic.bytes_in, coerce: { op: coerce, to: int, on_failure: reject }, description: "request size received from the client" }
+  rm:  { field: method,        class: word,    attribute: http_request.http_method, mandatory: true, description: "request method",
+         coerce: { op: coerce, to: enum, on_failure: opaque, values: [GET, POST, PUT, DELETE, HEAD, OPTIONS, CONNECT, TRACE, PATCH, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK, PURGE, REPORT, SEARCH, NONE] },
+         also: [{ attribute: activity_id, mandatory: true, transform: { kind: lookup, lookup: { CONNECT: 1, DELETE: 2, GET: 3, HEAD: 4, OPTIONS: 5, POST: 6, PUT: 7, TRACE: 8 } }, description: "request method mapped onto the http_activity activity_id enum" }] }
+  ru:  { field: url,           class: url,     attribute: http_request.url.url_string, mandatory: true, description: "request URL" }
+  un:  { field: user,          class: text,    unmapped_name: user, description: "user name" }
+  ul:  { field: user_login,    class: text,    unmapped_name: user_login, description: "user name from authentication" }
+  Sh:  { field: hier_code,     class: word,    unmapped_name: hierarchy_code, description: "Squid hierarchy status" }
+  mt:  { field: content_type,  class: text,    attribute: http_response.content_type, description: "MIME content type" }
+  tl:  { field: local_time,    class: text,    description: "local time in common log format" }
+  rv:  { field: http_version,  class: text,    unmapped_name: http_version, description: "request protocol version" }

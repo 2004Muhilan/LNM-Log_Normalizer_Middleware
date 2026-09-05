@@ -52,15 +52,17 @@ func TestGoldenSamplesEndToEnd(t *testing.T) {
 	// six lines: all parse and all are usable. Two carry Squid's "-" for the upstream address
 	// (HIER_NONE): dst_endpoint.ip is mapped but absent for that event — a fact, not a defect —
 	// and the absence is flagged with its cause (a span exists, so the cause is uncoercible).
-	if st.Frames != 6 || st.Emitted != 6 || st.Quarantined != 0 || st.Usable != 6 || st.UnmappedMandatory != 0 || st.AbsentUncoercible != 2 || st.AbsentStructural != 0 {
+	// With the pack declaring "-" as Squid's null marker, the two HIER_NONE/- lines are declared
+	// nulls (vendor said "no upstream"), not coercion failures.
+	if st.Frames != 6 || st.Emitted != 6 || st.Quarantined != 0 || st.Usable != 6 || st.UnmappedMandatory != 0 || st.AbsentDeclared != 2 || st.AbsentUncoercible != 0 || st.AbsentStructural != 0 {
 		t.Fatalf("stats: %+v\n%s", st, q.String())
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	var second map[string]any
 	_ = json.Unmarshal([]byte(lines[1]), &second)
 	absent, _ := second["_lineage"].(map[string]any)["absent"].([]any)
-	if len(absent) != 1 || absent[0].(map[string]any)["attribute"] != "dst_endpoint.ip" || absent[0].(map[string]any)["cause"] != "uncoercible" {
-		t.Fatalf("line 2 should flag dst_endpoint.ip absent (uncoercible): %v", second["_lineage"])
+	if len(absent) != 1 || absent[0].(map[string]any)["attribute"] != "dst_endpoint.ip" || absent[0].(map[string]any)["cause"] != "declared_null" {
+		t.Fatalf("line 2 should flag dst_endpoint.ip absent (declared_null): %v", second["_lineage"])
 	}
 	if _, has := second["dst_endpoint"]; has {
 		t.Fatalf("line 2 must not carry a guessed dst_endpoint: %v", second["dst_endpoint"])
@@ -88,6 +90,13 @@ func TestGoldenSamplesEndToEnd(t *testing.T) {
 	fr := lin["framing"].(map[string]any)
 	if fr["raw_suffix"] != "Cg==" || fr["raw_prefix"] != "" {
 		t.Fatalf("framing must carry the literal stripped bytes: %v", fr)
+	}
+	// OCSF base attributes: derived category/type/metadata, pack-declared severity (P3 boundary)
+	if ev["category_uid"] != float64(4) || ev["type_uid"] != float64(400203) || ev["severity_id"] != float64(1) {
+		t.Fatalf("base attributes: category=%v type=%v severity=%v", ev["category_uid"], ev["type_uid"], ev["severity_id"])
+	}
+	if md, ok := ev["metadata"].(map[string]any); !ok || md["version"] != "1.3.0" {
+		t.Fatalf("metadata: %v", ev["metadata"])
 	}
 }
 

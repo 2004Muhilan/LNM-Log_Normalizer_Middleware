@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "spec_id", "event", "status", "buffers", "spans"],
   "properties": {
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.0.0 documents remain valid." },
     "spec_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
     "dsl_hash": { "$ref": "#/$defs/sha256" },
     "event": {
@@ -81,6 +81,7 @@
         "class": { "type": "string", "enum": ["integer", "float", "ipv4", "ipv6", "ip", "mac", "url", "hostname", "uuid", "hex", "word", "text"] },
         "encoding": { "type": "string", "enum": ["csv-quoted", "quoted-backslash", "quoted-doubled", "base64", "hex", "url", "json-string", "c-escape", "cef-extension"] },
         "decode_status": { "type": "string", "enum": ["ok", "invalid"] },
+        "declared_null": { "type": "boolean", "description": "1.1.0. The value equals a pack-declared null marker: the field is absent for this event (cause declared_null). Semantic spans only; no class or coercion is recorded." },
         "coerced": {
           "type": "object",
           "additionalProperties": false,
@@ -96,7 +97,8 @@
       "allOf": [
         { "if": { "properties": { "kind": { "const": "literal" } } }, "then": { "not": { "anyOf": [ { "required": ["path"] }, { "required": ["value"] }, { "required": ["class"] }, { "required": ["coerced"] }, { "required": ["encoding"] } ] } } },
         { "if": { "properties": { "kind": { "enum": ["semantic", "opaque"] } } }, "then": { "required": ["path"], "not": { "required": ["text"] } } },
-        { "if": { "properties": { "kind": { "const": "opaque" } } }, "then": { "not": { "anyOf": [ { "required": ["class"] }, { "required": ["coerced"] } ] } } }
+        { "if": { "properties": { "kind": { "const": "opaque" } } }, "then": { "not": { "anyOf": [ { "required": ["class"] }, { "required": ["coerced"] }, { "required": ["declared_null"] } ] } } },
+        { "if": { "properties": { "declared_null": { "const": true } }, "required": ["declared_null"] }, "then": { "not": { "anyOf": [ { "required": ["class"] }, { "required": ["coerced"] } ] } } }
       ]
     }
   }

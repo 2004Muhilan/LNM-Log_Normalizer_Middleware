@@ -1,6 +1,15 @@
 {
   "policy_version": "1.0.0",
-  "note": "Per-event-class acceptance policy DATA (architecture v0.7 §3.3). The policy ENGINE is a P3 deliverable; these tables exist in P1 because the pack contract snapshots them. Classes 4001 and 4002 follow the architecture table and the worked trace; 3002 and 2004 are drafts to be confirmed in P3.",
+  "note": "Per-event-class acceptance policy DATA (architecture v0.7 §3.3). The engine is learning/ulpf_learn/acceptance.py (P3). Classes 4001 and 4002 follow the architecture table and the worked trace; 3002 and 2004 remain drafts until a source of those classes is onboarded (P6).",
+  "enumeration": {
+    "note": "Candidate enumerator policy (P3): runs over the complete pinned class table; scalar leaves only; leaf depth at most 2 dots (admits src_endpoint.ip and http_request.url.url_string); type-family compatibility plus value-domain checks (port range, epoch window, integer enum membership). Structural determination requires exactly one survivor.",
+    "scalars_only": true,
+    "max_depth": 2
+  },
+  "usability": {
+    "note": "Mandatory is a mapping obligation, not a per-event presence requirement (P2 boundary). Absence causes: structural (no span), uncoercible (span failed coercion), declared_null (pack-declared vendor marker). All three leave the event usable; time is the exception and quarantines.",
+    "absence_causes": ["structural", "uncoercible", "declared_null"]
+  },
   "classes": {
     "4002": {
       "name": "http_activity",

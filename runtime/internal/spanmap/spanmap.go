@@ -10,7 +10,7 @@ import (
 	"sort"
 )
 
-const SchemaVersion = "1.0.0"
+const SchemaVersion = "1.1.0" // the engine always emits the current span-map contract version
 
 type Buffer struct {
 	ID          string `json:"id"`
@@ -37,6 +37,7 @@ type Span struct {
 	Class        string   `json:"class,omitempty"`
 	Encoding     string   `json:"encoding,omitempty"`
 	DecodeStatus string   `json:"decode_status,omitempty"`
+	DeclaredNull bool     `json:"declared_null,omitempty"`
 	Coerced      *Coerced `json:"coerced,omitempty"`
 }
 

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "spec_id": "squid-native-candidate",
   "event": {
     "event_id": "ev_01HQ8F2K3M",

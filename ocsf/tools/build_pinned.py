@@ -95,6 +95,7 @@ def main() -> int:
             "class_uid": cls["uid"],
             "caption": cls.get("caption"),
             "category": cls.get("category"),
+            "category_uid": cls.get("category_uid"),
             "extends": cls.get("extends"),
             "profiles_applied": cls.get("profiles", []),
             "top_level_attribute_count": len(top),
@@ -104,7 +105,7 @@ def main() -> int:
         table_sha = sha256(canonical(table))
         table["table_hash"] = table_sha
         (PINNED / f"{cname}.json").write_text(json.dumps(table, indent=1) + "\n", encoding="utf-8")
-        index["classes"].append({"name": cname, "uid": cls["uid"], "top_level_attribute_count": len(top),
+        index["classes"].append({"name": cname, "uid": cls["uid"], "category_uid": cls.get("category_uid"), "top_level_attribute_count": len(top),
                                  "leaf_path_count": len(table["leaf_paths"]), "table_hash": table_sha,
                                  "file": f"ocsf/pinned/{cname}.json"})
         print(f"{cname:20s} uid={cls['uid']:5d} top-level={len(top):3d} leaves={len(table['leaf_paths']):5d} {table_sha[:23]}")

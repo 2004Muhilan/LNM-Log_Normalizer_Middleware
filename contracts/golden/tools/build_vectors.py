@@ -50,6 +50,10 @@ def dump(p: Path, o):
 
 def rehash_pack():
     pack = load(SQ / "pack.json")
+    # subset guard: the pack pins classes; their table_hash comes from the generated pinned index
+    pinned = {c["uid"]: c["table_hash"] for c in load(ROOT / "ocsf" / "pinned" / "index.json")["classes"]}
+    for c in pack["ocsf"]["pinned_classes"]:
+        c["table_hash"] = pinned[c["uid"]]
     corpus_hash = sha((SQ / "samples" / "access.log").read_bytes())
     dsl, mapping, parser = [], [], []
     for fam in pack["families"]:

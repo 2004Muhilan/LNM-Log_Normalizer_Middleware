@@ -155,6 +155,24 @@ expected steady state and the absence causes are the informative numbers. The si
 `time`: OCSF and this envelope require it on every event, so its absence quarantines the event at the
 normalize stage rather than flagging it.
 
+## 1.1.0 (P3 boundary) — one additive bump, four contracts
+
+Every 1.1.0 change is additive; 1.0.0 documents remain valid and both validators accept both.
+The golden candidate spec and its span map deliberately stay at 1.0.0 to prove that.
+
+- **parser-spec**: `null_values` at spec level (default) and cell level (override; `[]` opts out).
+  A semantic value equal to a marker is a *declared null*: checked before class validation and
+  coercion, so `on_failure` never fires for it; the span is kept with `declared_null: true`, no class,
+  no coercion. Markers are pack evidence (device configuration / vendor table), never inference.
+- **span-map**: `declared_null` on semantic spans.
+- **normalized-event**: `_lineage.absent[].cause` gains `declared_null`; `category_uid`, `type_uid`,
+  `severity_id`, `metadata` are emitted — the first two and the last are mechanical (category from the
+  pinned class table, `type_uid = class_uid*100 + activity_id`, metadata from the pack);
+  **`severity_id` is pack-declared with provenance**, never derived.
+- **parser-pack**: a mapping entry may carry `constant` instead of `path` (e.g. `severity_id: 1`
+  asserted by the operator for a source that carries no severity), with the same provenance rules.
+- **pinned tables** carry `category_uid` (hashes changed; cross-check still agrees on all four classes).
+
 ## Lessons from executing the drafts (P2)
 
 P1 validated the drafts and executed only their regexes; executing them through the compiler

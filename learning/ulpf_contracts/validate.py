@@ -14,7 +14,7 @@ CONTRACTS = ROOT / "contracts"
 PINNED_INDEX = ROOT / "ocsf" / "pinned" / "index.json"
 
 KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack", "normalized-event")
-SUPPORTED_VERSIONS = {kind: {"1.0.0"} for kind in KINDS}
+SUPPORTED_VERSIONS = {kind: {"1.0.0", "1.1.0"} for kind in KINDS}
 FORBIDDEN_KEYS = {"confidence", "probability", "score", "likelihood"}
 CONSUMING_OPS = {"literal", "regex", "csv", "kv", "positional", "quoted", "optional", "repeated"}
 
@@ -337,7 +337,7 @@ def _check_pack(doc: dict, pack_dir: Path | None) -> list[str]:
             errs.append(f"{p}: mapping_hash != sha256 of canonical mapping.fields")
         mapping_hashes.append(m["mapping_hash"])
         mapped_attrs = {f["ocsf_attribute"] for f in m["fields"]}
-        paths = [f["path"] for f in m["fields"]]
+        paths = [f["path"] for f in m["fields"] if "path" in f]
         attrs_list = [f["ocsf_attribute"] for f in m["fields"]]
         if len(set(attrs_list)) != len(attrs_list):
             errs.append(f"{p}: mapping.fields: an OCSF attribute is mapped more than once")
@@ -353,7 +353,7 @@ def _check_pack(doc: dict, pack_dir: Path | None) -> list[str]:
                 errs.append(f"{p}.mapping.fields[{i}]: structural_determination requires enumerated_survivors == [ocsf_attribute]")
             if f["ocsf_attribute"] in m["acceptance_snapshot"]["mandatory_attributes"] and not f["mandatory"]:
                 errs.append(f"{p}.mapping.fields[{i}]: attribute is in mandatory_attributes but mandatory is false")
-            if spec_fields_set is not None and f["path"] not in spec_fields_set:
+            if spec_fields_set is not None and "path" in f and f["path"] not in spec_fields_set:
                 errs.append(f"{p}.mapping.fields[{i}]: path {f['path']!r} is not a field of the spec")
         missing = set(m["acceptance_snapshot"]["mandatory_attributes"]) - mapped_attrs
         if missing:

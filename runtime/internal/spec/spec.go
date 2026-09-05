@@ -20,6 +20,7 @@ type Spec struct {
 	SpecID        string          `json:"spec_id"`
 	Description   string          `json:"description,omitempty"`
 	RegexDialect  string          `json:"regex_dialect"`
+	NullValues    []string        `json:"null_values,omitempty"`
 	Bounds        Bounds          `json:"bounds"`
 	Root          json.RawMessage `json:"root"`
 }
@@ -48,11 +49,12 @@ type Decode struct {
 }
 
 type Cell struct {
-	Field  string  `json:"field"`
-	Kind   string  `json:"kind"`
-	Class  string  `json:"class,omitempty"`
-	Coerce *Coerce `json:"coerce,omitempty"`
-	Decode *Decode `json:"decode,omitempty"`
+	Field      string   `json:"field"`
+	Kind       string   `json:"kind"`
+	Class      string   `json:"class,omitempty"`
+	Coerce     *Coerce  `json:"coerce,omitempty"`
+	Decode     *Decode  `json:"decode,omitempty"`
+	NullValues []string `json:"null_values,omitempty"`
 }
 
 // Delim is one of {whitespace_run:true} | {char:"x"} | {string:"xyz"}.
@@ -214,7 +216,7 @@ func Parse(b []byte) (*Spec, error) {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return nil, err
 	}
-	if s.SchemaVersion != "1.0.0" {
+	if s.SchemaVersion != "1.0.0" && s.SchemaVersion != "1.1.0" {
 		return nil, fmt.Errorf("unsupported schema_version %q", s.SchemaVersion)
 	}
 	return &s, nil

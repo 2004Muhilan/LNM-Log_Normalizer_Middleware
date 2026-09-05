@@ -16,7 +16,8 @@ import (
 )
 
 type MappingField struct {
-	Path          string          `json:"path"`
+	Path          string          `json:"path,omitempty"`
+	Constant      any             `json:"constant,omitempty"`
 	OCSFAttribute string          `json:"ocsf_attribute"`
 	Mandatory     bool            `json:"mandatory"`
 	Transform     *Transform      `json:"transform,omitempty"`
@@ -93,6 +94,7 @@ type Pack struct {
 	Families        []Family       `json:"families"`
 	Dir             string         `json:"-"`
 	Location        *time.Location `json:"-"`
+	CategoryUIDs    map[int]int64  `json:"-"` // class uid -> category uid, from the pinned index
 }
 
 type LoadOptions struct {
@@ -128,6 +130,12 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 		return nil, err
 	}
 	p.Dir = dir
+	p.CategoryUIDs = map[int]int64{}
+	for _, f := range p.Families {
+		if cat, ok := loader.CategoryUID(int64(f.EventClassUID)); ok {
+			p.CategoryUIDs[f.EventClassUID] = cat
+		}
+	}
 	if p.Time.SourceTimezone != nil && p.Time.TimezoneConfidence != "unresolved" {
 		if loc, err := time.LoadLocation(*p.Time.SourceTimezone); err == nil {
 			p.Location = loc

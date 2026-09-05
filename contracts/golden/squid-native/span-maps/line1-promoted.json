@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "spec_id": "squid-native-positional-10",
   "event": {
     "event_id": "ev_01HQ8F2K3M",
@@ -26,7 +26,7 @@
     { "buffer": "raw", "start": 56,  "end": 57,  "kind": "literal",  "text": " " },
     { "buffer": "raw", "start": 57,  "end": 86,  "kind": "semantic", "path": "url",          "value": "http://example.com/index.html", "class": "url" },
     { "buffer": "raw", "start": 86,  "end": 87,  "kind": "literal",  "text": " " },
-    { "buffer": "raw", "start": 87,  "end": 88,  "kind": "semantic", "path": "user",         "value": "-",              "class": "text" },
+    { "buffer": "raw", "start": 87,  "end": 88,  "kind": "semantic", "path": "user",         "value": "-",              "declared_null": true },
     { "buffer": "raw", "start": 88,  "end": 89,  "kind": "literal",  "text": " " },
     { "buffer": "raw", "start": 89,  "end": 100, "kind": "semantic", "path": "hier_code",    "value": "HIER_DIRECT",    "class": "word" },
     { "buffer": "raw", "start": 100, "end": 101, "kind": "literal",  "text": "/" },

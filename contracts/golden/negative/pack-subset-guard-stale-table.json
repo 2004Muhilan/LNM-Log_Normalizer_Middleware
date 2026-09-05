@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "pack_id": "squid-native",
   "pack_version": "1.0",
   "created_at": "2026-09-05T10:05:00Z",
@@ -63,12 +63,12 @@
       "parser": {
         "spec_ref": "specs/squid-native-positional-10.json",
         "spec_id": "squid-native-positional-10",
-        "dsl_hash": "sha256:a76f46323f0203ed4d852a34ca49f56b0f016a9398617c345e8703d47f1c7247",
-        "parser_hash": "sha256:3c2bf50571892cd9a2520860424edfb9fcc6ad65bfc1cd5d5ac503eb2eb2036e"
+        "dsl_hash": "sha256:7e30aa01b6786bb66f0f164896249d1844b39115487eb4f4712c6c811c79fd21",
+        "parser_hash": "sha256:ffb7cd1696d1757649b78a06ecb9f024361716e29151e3a3cc43c51a3e861734"
       },
       "mapping": {
         "mapping_version": "1.0",
-        "mapping_hash": "sha256:8392bcdc114b8f702afbd964627b23337cbf6dfdb0bf27f3334a0d5e9a9c10e3",
+        "mapping_hash": "sha256:3ebed3d69f04109968fd18428361f0b60c343b6ac911f82bad0772b38f5eebe6",
         "fields": [
           {
             "path": "time",
@@ -205,6 +205,16 @@
               "discriminator_id": "device_logformat_configuration",
               "evidence_ref": "logformat %6tr: response time in milliseconds"
             }
+          },
+          {
+            "constant": 1,
+            "ocsf_attribute": "severity_id",
+            "mandatory": false,
+            "provenance": {
+              "category": "operator_assertion",
+              "operator_id": "op-014",
+              "evidence_ref": "Squid access.log carries no severity; every access record is asserted Informational (1). A judgement recorded as such, not a derivation."
+            }
           }
         ],
         "unmapped": [
@@ -292,9 +302,9 @@
     "discriminator_library_version": "1.0.0"
   },
   "hashes": {
-    "parser_hash": "sha256:f00815dc66a9ac1f7741ac28db9faf5b5916d93e28311de7fbfafdb7026fe18b",
-    "dsl_hash": "sha256:891f34c1d086a69ab8d571bffc898f3a8a35bd30a5698ecdee18ad380d0720d4",
-    "mapping_hash": "sha256:24ef8c0dc6a3e6ae3ef31dbcb627cb39f5dfd6f8158d01775aa18c34f3834e53",
+    "parser_hash": "sha256:0de8b5982e35c38df5c988ffc1a98e7f3fde6f38a88b33e449b86ff6df4db7d4",
+    "dsl_hash": "sha256:a0d15a7420c9343ea97c23be321c579b1153ea229d2cd32c9bb29c9b55f0f303",
+    "mapping_hash": "sha256:37f42989280d1d3722992e2232ae37f8cc581aac467b769b6252f85f24fe7b08",
     "corpus_hash": "sha256:6326f92d1dfd3f38e8d4abe3be125a48f7a4993541b49c4336288fa6c9f823f0"
   },
   "signing": {

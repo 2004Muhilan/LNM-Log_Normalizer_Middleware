@@ -4,6 +4,7 @@
  "class_uid": 2004,
  "caption": "Detection Finding",
  "category": "findings",
+ "category_uid": 2,
  "extends": "finding",
  "profiles_applied": [
   "cloud",
@@ -33686,5 +33687,5 @@
    "requirement": "optional"
   }
  ],
- "table_hash": "sha256:5c2b9b7469c3cbbbdc9a00c4db50a4c37a91a3b74dc24f37021909e8f4c967db"
+ "table_hash": "sha256:53f72b2bceb9d541d07f752e6937f0758949dd20bd602c0a7e434dd2c088a087"
 }

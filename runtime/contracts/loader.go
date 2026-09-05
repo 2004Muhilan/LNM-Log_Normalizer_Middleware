@@ -37,7 +37,7 @@ var Kinds = []Kind{ParserSpec, SpanMap, Certificate, ParserPack, NormalizedEvent
 
 // Supported lists the contract versions this runtime build understands.
 var Supported = map[Kind][]string{
-	ParserSpec: {"1.0.0"}, SpanMap: {"1.0.0"}, Certificate: {"1.0.0"}, ParserPack: {"1.0.0"}, NormalizedEvent: {"1.0.0"},
+	ParserSpec: {"1.0.0", "1.1.0"}, SpanMap: {"1.0.0", "1.1.0"}, Certificate: {"1.0.0"}, ParserPack: {"1.0.0", "1.1.0"}, NormalizedEvent: {"1.0.0", "1.1.0"},
 }
 
 var ErrUnsupportedVersion = errors.New("unsupported schema_version")
@@ -45,15 +45,22 @@ var ErrUnsupportedVersion = errors.New("unsupported schema_version")
 var forbiddenKeys = map[string]bool{"confidence": true, "probability": true, "score": true, "likelihood": true}
 
 type Loader struct {
-	schemas map[Kind]*jsonschema.Schema
-	pinned  map[int64]string          // class uid -> table_hash
-	leaves  map[int64]map[string]bool // class uid -> leaf attribute paths
+	schemas    map[Kind]*jsonschema.Schema
+	pinned     map[int64]string          // class uid -> table_hash
+	leaves     map[int64]map[string]bool // class uid -> leaf attribute paths
+	categories map[int64]int64           // class uid -> category uid
+}
+
+// CategoryUID returns the OCSF category of a pinned class.
+func (l *Loader) CategoryUID(uid int64) (int64, bool) {
+	c, ok := l.categories[uid]
+	return c, ok
 }
 
 // NewLoader compiles the four schemas from contractsDir and, when pinnedIndex exists, loads the
 // pinned OCSF class tables used by the subset guard.
 func NewLoader(contractsDir, pinnedIndex string) (*Loader, error) {
-	l := &Loader{schemas: map[Kind]*jsonschema.Schema{}, pinned: map[int64]string{}, leaves: map[int64]map[string]bool{}}
+	l := &Loader{schemas: map[Kind]*jsonschema.Schema{}, pinned: map[int64]string{}, leaves: map[int64]map[string]bool{}, categories: map[int64]int64{}}
 	c := jsonschema.NewCompiler()
 	for _, k := range Kinds {
 		sch, err := c.Compile(filepath.Join(contractsDir, string(k)+".schema.json"))
@@ -66,9 +73,10 @@ func NewLoader(contractsDir, pinnedIndex string) (*Loader, error) {
 		if raw, err := os.ReadFile(pinnedIndex); err == nil {
 			var idx struct {
 				Classes []struct {
-					UID       int64  `json:"uid"`
-					TableHash string `json:"table_hash"`
-					File      string `json:"file"`
+					UID         int64  `json:"uid"`
+					CategoryUID int64  `json:"category_uid"`
+					TableHash   string `json:"table_hash"`
+					File        string `json:"file"`
 				} `json:"classes"`
 			}
 			if err := json.Unmarshal(raw, &idx); err != nil {
@@ -77,6 +85,7 @@ func NewLoader(contractsDir, pinnedIndex string) (*Loader, error) {
 			root := filepath.Dir(filepath.Dir(filepath.Dir(pinnedIndex)))
 			for _, cl := range idx.Classes {
 				l.pinned[cl.UID] = cl.TableHash
+				l.categories[cl.UID] = cl.CategoryUID
 				traw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(cl.File)))
 				if err != nil {
 					return nil, fmt.Errorf("pinned table %s: %w", cl.File, err)
@@ -582,8 +591,11 @@ func (l *Loader) checkPack(doc map[string]any, packDir string) []error {
 				errs = append(errs, fmt.Errorf("%s: mapping.fields: an OCSF attribute is mapped more than once", p))
 			}
 			mapped[attr] = true
-			paths[str(fm["path"])] = true
-			allPaths[str(fm["path"])] = true
+			hasPath := fm["path"] != nil
+			if hasPath {
+				paths[str(fm["path"])] = true
+				allPaths[str(fm["path"])] = true
+			}
 			if leaves != nil && !leaves[attr] {
 				errs = append(errs, fmt.Errorf("%s.mapping.fields[%d]: %q is not an attribute of the pinned class table", p, i, attr))
 			}
@@ -601,7 +613,7 @@ func (l *Loader) checkPack(doc map[string]any, packDir string) []error {
 			if mandatory[attr] && !isMandatory {
 				errs = append(errs, fmt.Errorf("%s.mapping.fields[%d]: attribute is in mandatory_attributes but mandatory is false", p, i))
 			}
-			if specFields != nil && !specFields[str(fm["path"])] {
+			if hasPath && specFields != nil && !specFields[str(fm["path"])] {
 				errs = append(errs, fmt.Errorf("%s.mapping.fields[%d]: path %q is not a field of the spec", p, i, str(fm["path"])))
 			}
 		}

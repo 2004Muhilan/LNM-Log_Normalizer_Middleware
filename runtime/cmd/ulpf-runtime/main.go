@@ -35,6 +35,25 @@ func main() {
 		p, err := dsl.Compile(b)
 		die(err)
 		json.NewEncoder(os.Stdout).Encode(map[string]any{"spec_id": p.SpecID, "dsl_hash": p.DSLHash, "parser_hash": p.ParserHash(), "compiler": dsl.CompilerVersion, "fields": p.Fields()})
+	case "parse":
+		// Differential-test surface: span maps (JSONL) for every line of an input under one spec.
+		fs := flag.NewFlagSet("parse", flag.ExitOnError)
+		specPath := fs.String("spec", "", "parser spec file")
+		input := fs.String("input", "", "input file, one event per line")
+		fs.Parse(os.Args[2:])
+		b, err := os.ReadFile(*specPath)
+		die(err)
+		p, err := dsl.Compile(b)
+		die(err)
+		data, err := os.ReadFile(*input)
+		die(err)
+		enc := json.NewEncoder(os.Stdout)
+		for _, line := range splitLines(data) {
+			m, err := p.Parse(line, dsl.Env{})
+			die(err)
+			m.Sort()
+			die(enc.Encode(m))
+		}
 	case "verify-pack":
 		fs := flag.NewFlagSet("verify-pack", flag.ExitOnError)
 		dir := fs.String("pack", "", "pack directory")
@@ -133,6 +152,25 @@ func repoRoot() string {
 		dir = filepath.Dir(dir)
 	}
 	return "/"
+}
+
+// splitLines splits on LF, drops a trailing CR, and skips empty lines.
+func splitLines(data []byte) [][]byte {
+	var out [][]byte
+	start := 0
+	for i := 0; i <= len(data); i++ {
+		if i == len(data) || data[i] == '\n' {
+			line := data[start:i]
+			if len(line) > 0 && line[len(line)-1] == '\r' {
+				line = line[:len(line)-1]
+			}
+			if len(line) > 0 {
+				out = append(out, line)
+			}
+			start = i + 1
+		}
+	}
+	return out
 }
 
 func die(err error) {
