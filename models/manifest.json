@@ -1,0 +1,26 @@
+{
+  "note": "Model weights are never committed. Each entry pins a GGUF by source and sha256; learning/tools/models.py fetches into the git-ignored models/cache/, verifies the digest, installs a verified copy into the learning image at build time, and verifies again at container start. `sha256:<digest>` is the pack's model_hash. Digests are the Hugging Face LFS object ids read from the repo tree API on 2026-09-05.",
+  "llama_cpp": {"tag": "b10819", "note": "pinned in learning/Dockerfile; CUDA 12.8.1; CMAKE_CUDA_ARCHITECTURES=75-real;120-real"},
+  "models": [
+    {"id": "qwen3.5-9b-q4_k_m", "family": "qwen3.5", "params_b": 9, "quant": "Q4_K_M", "role": "primary",
+     "repo": "unsloth/Qwen3.5-9B-GGUF", "file": "Qwen3.5-9B-Q4_K_M.gguf", "bytes_approx_gb": 5.68, "licence": "Apache-2.0", "released": "2026-03-02",
+     "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+     "thinking": "off by default in the small series; the template inserts an empty think block when enable_thinking=false"},
+    {"id": "qwen3.5-4b-q4_k_m", "family": "qwen3.5", "params_b": 4, "quant": "Q4_K_M", "role": "comparator (demo-hardware fit)",
+     "repo": "unsloth/Qwen3.5-4B-GGUF", "file": "Qwen3.5-4B-Q4_K_M.gguf", "bytes_approx_gb": 2.74, "licence": "Apache-2.0", "released": "2026-03-02",
+     "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"},
+    {"id": "qwen3.5-4b-q8_0", "family": "qwen3.5", "params_b": 4, "quant": "Q8_0", "role": "comparator (equal footprint to 9B-Q4)",
+     "repo": "unsloth/Qwen3.5-4B-GGUF", "file": "Qwen3.5-4B-Q8_0.gguf", "bytes_approx_gb": 4.48, "licence": "Apache-2.0", "released": "2026-03-02",
+     "sha256": "10cc391b403021dd11c614679d2fd92f611c3681d29e29651b717316965d61e1"},
+    {"id": "qwen3.5-2b-q4_k_m", "family": "qwen3.5", "params_b": 2, "quant": "Q4_K_M", "role": "floor",
+     "repo": "unsloth/Qwen3.5-2B-GGUF", "file": "Qwen3.5-2B-Q4_K_M.gguf", "bytes_approx_gb": 1.28, "licence": "Apache-2.0", "released": "2026-03-02",
+     "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223"},
+    {"id": "granite-4.1-8b-q4_k_m", "family": "granite-4.1", "params_b": 8, "quant": "Q4_K_M", "role": "cross-family comparator (non-reasoning by design)",
+     "repo": "ibm-granite/granite-4.1-8b-GGUF", "file": "granite-4.1-8b-Q4_K_M.gguf", "bytes_approx_gb": 5.35, "licence": "Apache-2.0", "released": "2026-04-29",
+     "sha256": "ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e"},
+    {"id": "gemma-4-12b-q4_0", "family": "gemma-4", "params_b": 12, "quant": "Q4_0", "role": "comparison only: above band, Q4 only, not a candidate",
+     "repo": "ggml-org/gemma-4-12B-it-GGUF", "file": "gemma-4-12B-it-Q4_0.gguf", "bytes_approx_gb": 7.22, "licence": "Apache-2.0", "released": "2026",
+     "sha256": "3712b9bd32cae83a22f67ee7a4466d8d7a4f21646ac8a07d19bf9418e8767a70",
+     "thinking": "opt-in via a <|think|> token in the system prompt; the provider never emits it"}
+  ]
+}

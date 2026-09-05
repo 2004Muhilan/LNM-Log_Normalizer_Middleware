@@ -92,10 +92,11 @@ def enumerate_candidates(class_uid: int, token_class: str, samples: list[str], m
             excluded = "values exceed the 0-65535 port range"
         elif t == "timestamp_t" and not _epoch_window(samples):
             excluded = "values fall in no single epoch_auto precision window (s/ms/us/ns, 2000-2100)"
-        elif leaf.get("enum") and token_class in ("integer",) and any(s not in leaf["enum"] for s in samples):
+        elif leaf.get("enum") and any(s not in leaf["enum"] for s in samples):
+            # integer enums (action_id) and string enums (http_request.http_method) alike: the sample
+            # values must all be members. (P3 excluded every enumerated attribute for non-integer slots,
+            # which wrongly refuted http_method for a GET/CONNECT slot — found by the P4 provider tests.)
             excluded = "values are outside the attribute's enum"
-        elif leaf.get("enum") and token_class not in ("integer",):
-            excluded = "enumerated integer attribute; the slot is not integer-valued"
         candidates.append({"attribute": leaf["path"], "type": t, "basis": basis if not excluded else f"excluded: {excluded}"})
         if not excluded:
             survivors.append(leaf["path"])

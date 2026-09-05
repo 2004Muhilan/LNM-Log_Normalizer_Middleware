@@ -16,7 +16,9 @@ development environment is WSL2 (Ubuntu). See `ulpf-implementation-plan.md` for 
 | `acceptance/` | Per-class acceptance policy data (engine is P3) |
 | `corpus/` | Corpus catalogue, licence verdict, fetch/inspection tools (fixture content is cached locally, never committed) |
 | `drafts/sufficiency/` | Hand-drafted vendor specs for the DSL sufficiency check, plus the checker and its notes |
-| `docs/` | Phase reports |
+| `models/` | `manifest.json` pins every model (source, sha256); `cache/` is git-ignored — weights never enter git or a build context |
+| `spike/` | P4 spike: ground-truth cases (`cases/`) and measured results per machine (`results/<machine>/`) |
+| `docs/` | Phase reports, the demo-laptop runbook |
 | `scripts/` | WSL bootstrap and check scripts |
 
 ## Test fixtures are not vendored — deliberately
@@ -54,6 +56,19 @@ python -m ulpf_learn certificates --session /tmp/s      # the ambiguity certific
 python -m ulpf_learn respond --session /tmp/s --discriminator device_logformat_configuration --input "logformat squid %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt"
 python -m ulpf_learn promote --session /tmp/s --out /tmp/pack --pack-id squid-native-emitted
 python -m ulpf_learn review --session /tmp/s            # interactive form of the same loop
+```
+
+Model provider (P4). Weights are fetched into the git-ignored cache and digest-verified; the
+learning-plane image bundles one verified model; `llama-server` is one CUDA build for `sm_75` and
+`sm_120` (see `docs/demo-laptop-runbook.md` for the demo laptop):
+
+```bash
+bash scripts/fetch-models.sh                         # ~27 GB into models/cache, sha256-verified
+bash scripts/build-llama-image.sh                    # ulpf-llama: llama-server, CUDA 12.8, sm_75+sm_120
+bash scripts/p4-spike.sh desktop-5060ti gpu          # measure every model on THIS machine -> spike/results/<label>/
+bash scripts/p4-check.sh                             # P4 exit: suites incl. op-coverage matrix, invariant 2, fixture path unchanged
+python -m ulpf_learn onboard --provider model --model-id qwen3.5-4b-q4_k_m --server http://127.0.0.1:8080 --mode whole ...
+DOCKER_BUILDKIT=1 docker build -f learning/Dockerfile --target learning --build-arg MODEL=qwen3.5-4b-q4_k_m --build-context models=models/cache -t ulpf-learning:qwen3.5-4b .
 ```
 
 Runtime CLI (after `go build -o runtime/bin/ulpf-runtime ./cmd/ulpf-runtime` in `runtime/`):

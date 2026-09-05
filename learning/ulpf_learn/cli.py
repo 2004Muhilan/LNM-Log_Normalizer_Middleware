@@ -53,6 +53,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="ulpf_learn")
     sub = ap.add_subparsers(dest="cmd", required=True)
     o = sub.add_parser("onboard"); o.add_argument("--samples", required=True); o.add_argument("--source-id", required=True); o.add_argument("--operator", required=True); o.add_argument("--session", required=True); o.add_argument("--fixture"); o.add_argument("--vendor", default="squid")
+    o.add_argument("--provider", choices=["fixture", "model"], default="fixture", help="fixture (default; the P3 path, unchanged) or model (P4: llama-server)")
+    o.add_argument("--model-id", help="manifest id; the weights digest is verified before any call"); o.add_argument("--server", default="http://127.0.0.1:8080")
+    o.add_argument("--mode", choices=["whole", "per-slot"], default="whole"); o.add_argument("--backend", default="unknown", help="recorded in provenance, e.g. 'cuda ngl=all' or 'cpu'")
     for name in ("status", "certificates", "review"):
         p = sub.add_parser(name); p.add_argument("--session", required=True)
     r = sub.add_parser("respond"); r.add_argument("--session", required=True); r.add_argument("--discriminator", required=True); r.add_argument("--input", required=True)
@@ -64,6 +67,14 @@ def main(argv=None) -> int:
         from .provider import FixtureProvider
         s = Session(Path(a.session))
         prov = FixtureProvider(Path(a.fixture)) if a.fixture else None
+        if a.provider == "model":
+            from .model.client import LlamaClient
+            from .model.provider import ModelProvider, verified_model_hash
+            if not a.model_id:
+                ap.error("--model-id is required with --provider model")
+            client = LlamaClient(a.server)
+            client.wait_ready(60)
+            prov = ModelProvider(client, a.model_id, verified_model_hash(a.model_id), mode=a.mode, backend=a.backend)
         s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor)
         show_status(s)
         return 0

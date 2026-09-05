@@ -1,0 +1,23 @@
+{
+  "id": "fortigate-traffic",
+  "event_class_uid": 4001,
+  "source": {"kind": "draft", "spec": "drafts/sufficiency/fortigate-traffic.json", "corpus": ["corpus/cache/beats-fortinet-firewall/traffic.log"], "payload": "fortigate", "vendor": "fortinet-fortigate"},
+  "note": "FortiGate traffic KV. Team-authored ground truth from the FortiOS log reference. date/time need compose_datetime (unused until P6) so eventtime carries the event time; sentbyte/rcvdbyte are from the device's perspective.",
+  "truth": {
+    "date": [null, "time"], "time": [null, "time"], "tz": [null], "eventtime": ["time"], "devname": ["device.name", "device.hostname"], "devid": ["device.uid"],
+    "logid": ["metadata.event_code", null], "type": ["metadata.log_name", null], "subtype": ["activity_name", null], "level": ["severity", null], "vd": [null],
+    "srcip": ["src_endpoint.ip"], "srcport": ["src_endpoint.port"], "srcintf": ["src_endpoint.interface_name"], "srcintfrole": [null], "srcmac": ["src_endpoint.mac"],
+    "mastersrcmac": [null], "srcserver": [null], "srcuuid": ["src_endpoint.uid", null], "srccountry": ["src_endpoint.location.country"],
+    "dstip": ["dst_endpoint.ip"], "dstport": ["dst_endpoint.port"], "dstintf": ["dst_endpoint.interface_name"], "dstintfrole": [null], "dstuuid": ["dst_endpoint.uid", null],
+    "dstcountry": ["dst_endpoint.location.country"], "sessionid": ["connection_info.uid", "connection_info.session.uid"], "proto": ["connection_info.protocol_num"],
+    "action": ["action"], "utmaction": [null], "utmref": [null], "policyid": ["firewall_rule.uid"], "policyname": ["firewall_rule.name"], "policytype": ["firewall_rule.type", null],
+    "poluuid": ["firewall_rule.uid", null], "service": ["app_name", null], "trandisp": [null], "transip": [null], "transport": [null],
+    "duration": ["duration"], "sentbyte": ["traffic.bytes_out"], "rcvdbyte": ["traffic.bytes_in"], "sentpkt": ["traffic.packets_out"], "rcvdpkt": ["traffic.packets_in"],
+    "sentdelta": [null], "rcvddelta": [null], "lanin": [null], "lanout": [null], "wanin": [null], "wanout": [null],
+    "app": ["app_name"], "appid": [null], "appcat": [null], "apprisk": [null], "applist": [null], "appact": [null],
+    "countapp": [null], "countav": [null], "countdlp": [null], "countips": [null], "countweb": [null], "crscore": [null], "craction": [null], "crlevel": [null],
+    "user": ["src_endpoint.owner.name", "actor.user.name"], "group": [null], "authserver": [null], "identifier": [null],
+    "devtype": [null], "devcategory": [null], "osname": ["src_endpoint.os.name", null], "vwlid": [null], "vwlquality": [null]
+  },
+  "expected_certificates": {"srcip": "endpoint_orientation", "sentbyte": "volume_direction", "eventtime": "temporal_role"}
+}

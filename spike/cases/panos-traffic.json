@@ -1,0 +1,25 @@
+{
+  "id": "panos-traffic",
+  "event_class_uid": 4001,
+  "source": {"kind": "draft", "spec": "drafts/sufficiency/panos-traffic.json", "corpus": ["corpus/cache/beats-panw-panos/traffic.log"], "payload": "panos", "vendor": "paloalto-panos"},
+  "note": "PAN-OS TRAFFIC CSV. Team-authored ground truth from the PAN-OS syslog field reference. Cells that are empty in every sample line produce no slot and are not scored. receive_time is the management-plane receive time (logged_time), generated_time the event time.",
+  "truth": {
+    "receive_time": ["metadata.logged_time", null], "serial_number": ["device.uid"], "type": ["metadata.log_name", null], "subtype": ["activity_name", null],
+    "generated_time": ["time"], "src_ip": ["src_endpoint.ip"], "dst_ip": ["dst_endpoint.ip"], "nat_src_ip": [null], "nat_dst_ip": [null],
+    "rule_name": ["firewall_rule.name"], "src_user": ["src_endpoint.owner.name", "actor.user.name", null], "dst_user": ["dst_endpoint.owner.name", null],
+    "application": ["app_name"], "virtual_system": [null], "src_zone": ["src_endpoint.zone"], "dst_zone": ["dst_endpoint.zone"],
+    "inbound_interface": ["src_endpoint.interface_name"], "outbound_interface": ["dst_endpoint.interface_name"], "log_action": [null],
+    "session_id": ["connection_info.uid", "connection_info.session.uid"], "repeat_count": ["count"],
+    "src_port": ["src_endpoint.port"], "dst_port": ["dst_endpoint.port"], "nat_src_port": [null], "nat_dst_port": [null], "flags": [null],
+    "protocol": ["connection_info.protocol_name"], "action": ["action"],
+    "bytes": ["traffic.bytes"], "bytes_sent": ["traffic.bytes_out"], "bytes_received": ["traffic.bytes_in"], "packets": ["traffic.packets"],
+    "start_time": ["start_time"], "elapsed_time": ["duration"], "category": [null], "sequence_number": [null], "action_flags": [null],
+    "src_country": ["src_endpoint.location.country"], "dst_country": ["dst_endpoint.location.country"],
+    "packets_sent": ["traffic.packets_out"], "packets_received": ["traffic.packets_in"], "session_end_reason": [null],
+    "dg_hierarchy_level_1": [null], "dg_hierarchy_level_2": [null], "dg_hierarchy_level_3": [null], "dg_hierarchy_level_4": [null],
+    "virtual_system_name": [null], "device_name": ["device.name", "device.hostname"], "action_source": [null],
+    "src_vm_uuid": [null], "dst_vm_uuid": [null], "tunnel_id_imsi": [null], "monitor_tag_imei": [null], "parent_session_id": [null],
+    "parent_start_time": [null], "tunnel_type": [null], "sctp_association_id": [null], "sctp_chunks": [null], "sctp_chunks_sent": [null], "sctp_chunks_received": [null]
+  },
+  "expected_certificates": {"src_ip": "endpoint_orientation", "bytes_sent": "volume_direction", "generated_time": "temporal_role"}
+}

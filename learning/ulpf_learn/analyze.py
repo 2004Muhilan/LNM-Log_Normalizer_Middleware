@@ -169,6 +169,19 @@ def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analy
             c["request"]["text"] = text
         request = {"discriminator_id": selected, "sufficiency_group": ambiguous[0]["request"]["sufficiency_group"], "certificates": [c["certificate_id"] for c in ambiguous],
                    "resolves": all_fields, "text": text, "alternatives": ambiguous[0]["request"]["alternatives"]}
+    if request is None and unevidenced and pending_fields:
+        # A request with no certificate (raised at the P3 boundary, decided in P4): when nothing is
+        # ambiguous but mandatory fields rest on the provider alone, the session must not sit blocked
+        # with nothing to ask. The ask is the same free-tier evidence a certificate would select —
+        # configuration or vendor documentation — over every pending field; it carries no certificate
+        # because there is no competing set to certify. It is a request kind, not a certificate kind.
+        mand = [u for u in unevidenced if u["attribute"] in mandatory]
+        if mand:
+            disc = "device_logformat_configuration" if configurable_format else "vendor_schema_field_order"
+            text = (f"{len(unevidenced)} field(s) rest on the {plan.proposed_by} proposal alone ({len(mand)} mandatory); no field is ambiguous, "
+                    f"but a proposal is not evidence (invariant 4). " + lib.request_text(disc, vendor="the device", product="", resolves=", ".join(pending_fields), slot_index=""))
+            request = {"discriminator_id": disc, "sufficiency_group": f"sg_{_slug(plan.source_id)}_evidence", "certificates": [],
+                       "resolves": pending_fields, "text": text, "alternatives": [], "kind": "unevidenced_mandatory"}
     for c in certs:
         c.pop("_class", None)
     return Analysis(certs, request, unevidenced)

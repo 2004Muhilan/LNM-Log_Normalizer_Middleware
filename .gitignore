@@ -15,3 +15,6 @@ __pycache__/
 .pytest_cache/
 runtime/bin/
 *.tmp
+
+# model weights: never in git; manifest committed, cache fetched and digest-verified
+models/cache/

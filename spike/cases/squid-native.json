@@ -1,0 +1,11 @@
+{
+  "id": "squid-native",
+  "event_class_uid": 4002,
+  "source": {"kind": "golden", "samples": "contracts/golden/squid-native/samples/access.log", "vendor": "squid"},
+  "note": "The worked trace's source. Ground truth is the Squid logformat (device configuration), as resolved in P3. pos_8 is the constant '-' user column (unmapped); pos_4 and pos_9 are '/'-joined compounds. A list holding null accepts 'unmapped' as correct.",
+  "truth": {
+    "pos_1": ["time"], "pos_2": ["duration"], "pos_3": ["src_endpoint.ip"], "pos_4": ["compound"], "pos_5": ["traffic.bytes_out"],
+    "pos_6": ["http_request.http_method"], "pos_7": ["http_request.url.url_string"], "pos_8": [null], "pos_9": ["compound"], "pos_10": ["http_response.content_type"]
+  },
+  "expected_certificates": {"pos_1": "temporal_role", "pos_3": "endpoint_orientation", "pos_5": "volume_direction"}
+}

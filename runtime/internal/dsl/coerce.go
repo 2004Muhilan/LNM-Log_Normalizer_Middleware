@@ -142,6 +142,17 @@ const (
 	epochWindowEnd   = 4102444800 // 2100-01-01T00:00:00Z
 )
 
+// toMillis converts an epoch value in units of 1/unitsPerSecond seconds to milliseconds without
+// overflowing: n*1000/div overflowed int64 for nanosecond epochs (1.7e18 * 1000 > 9.2e18), turning a
+// 2024 FortiGate eventtime into 573947194 ms. Found by the P4 op-coverage matrix against the reference
+// executor; the P2 replay tests parsed those values but never compared the coerced result.
+func toMillis(n, unitsPerSecond int64) int64 {
+	if unitsPerSecond <= 1000 {
+		return n * (1000 / unitsPerSecond)
+	}
+	return n / (unitsPerSecond / 1000)
+}
+
 // parseTimestamp returns epoch milliseconds and, for epoch_auto, the selected precision.
 func parseTimestamp(f spec.TSFormat, val string, env Env) (int64, string, error) {
 	switch f.Kind {
@@ -150,11 +161,7 @@ func parseTimestamp(f spec.TSFormat, val string, env Env) (int64, string, error)
 		if err != nil {
 			return 0, "", err
 		}
-		div := map[string]int64{"epoch_s": 1, "epoch_ms": 1000, "epoch_us": 1000000, "epoch_ns": 1000000000}[f.Kind]
-		if div == 1 {
-			return n * 1000, "", nil
-		}
-		return n * 1000 / div, "", nil
+		return toMillis(n, map[string]int64{"epoch_s": 1, "epoch_ms": 1000, "epoch_us": 1000000, "epoch_ns": 1000000000}[f.Kind]), "", nil
 	case "epoch_s_frac":
 		fl, err := strconv.ParseFloat(val, 64)
 		if err != nil {
@@ -179,7 +186,7 @@ func parseTimestamp(f spec.TSFormat, val string, env Env) (int64, string, error)
 					return 0, "", fmt.Errorf("epoch_auto: value matches more than one precision")
 				}
 				sel = p.name
-				ms = n * 1000 / p.mult
+				ms = toMillis(n, p.mult)
 			}
 		}
 		if sel == "" {

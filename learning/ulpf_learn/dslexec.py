@@ -292,7 +292,20 @@ def decode_bytes(encoding: str, raw: bytes) -> bytes:
     if encoding == "hex":
         return binascii.unhexlify(raw)
     if encoding == "url":
-        return urllib.parse.unquote(raw.decode("utf-8", "surrogateescape")).encode("utf-8", "surrogateescape")
+        # strict percent-decoding, as the engine (Go url.PathUnescape): every '%' must start a %XX hex
+        # escape; '+' is not a space. urllib.parse.unquote silently kept a bad escape — found by the P4
+        # op-coverage matrix.
+        out, i = bytearray(), 0
+        while i < len(raw):
+            if raw[i] == 0x25:
+                if i + 3 > len(raw) or not all(c in b"0123456789abcdefABCDEF" for c in raw[i + 1:i + 3]):
+                    raise ValueError(f"invalid URL escape {raw[i:i + 3]!r}")
+                out.append(int(raw[i + 1:i + 3], 16))
+                i += 3
+                continue
+            out.append(raw[i])
+            i += 1
+        return bytes(out)
     if encoding == "json-string":
         return json.loads('"' + raw.decode("utf-8") + '"').encode("utf-8")
     if encoding == "c-escape":
@@ -435,11 +448,13 @@ class Program:
                 rx = re2.compile(("^(?:" + raw["pattern"] + ")").encode())
             except Exception as ex:  # noqa: BLE001
                 raise CompileError(f"{path}: regex does not compile under RE2: {ex}") from None
-            groups = set(rx.groupindex)
-            if groups != set(raw["captures"]):
+            # google-re2 reports group names as bytes for a bytes pattern; captures are str (found by the
+            # P4 drafts adapter — the first time a regex op ran through this executor under test)
+            names = {(k.decode() if isinstance(k, bytes) else k): v for k, v in rx.groupindex.items()}
+            if set(names) != set(raw["captures"]):
                 raise CompileError(f"{path}: named groups != captures")
             caps = {k: self._cell(v, depth + 1) for k, v in raw["captures"].items()}
-            return Node("regex", {"re": rx, "pattern": raw["pattern"], "captures": caps, "index": {v: k for k, v in rx.groupindex.items()}})
+            return Node("regex", {"re": rx, "pattern": raw["pattern"], "captures": caps, "index": {v: k for k, v in names.items()}})
         if op == "csv":
             return Node("csv", {"delim": raw["delimiter"].encode()[0], "quote": raw["quote"].encode()[0] if raw["quote"] else None,
                                 "escape": raw["escape"], "fields": [self._csvcell(f, depth + 1) for f in raw["fields"]],

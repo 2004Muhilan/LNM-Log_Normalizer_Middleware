@@ -57,6 +57,8 @@ class SlotObservation:
     samples: list[str]
     constant: str | None = None     # set when every sample has the same token
     has_slash: bool = False
+    name: str | None = None         # vendor field name when the structure carries one (kv keys, documented
+                                    # csv columns); induction from bare positional text leaves it None
 
 
 @dataclass

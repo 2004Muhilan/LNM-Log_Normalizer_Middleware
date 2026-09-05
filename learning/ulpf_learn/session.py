@@ -73,18 +73,13 @@ class Session:
                                   "slots": [asdict(s) for s in structure.slots], "routing_sketch": structure.routing_sketch()}
         self.log("induced", arity=structure.arity, families_seen=1 + len(structure.other_arities))
         provider = provider or FixtureProvider(DEFAULT_FIXTURE)
+        if hasattr(provider, "set_samples"):
+            provider.set_samples(lines)   # the prompt shows the onboarding samples — and only those
+        t_prop = time.time()
         prop = provider.propose(structure)
-        self.log("proposed", provider=provider.name, event_class=prop.event_class_uid)
-        slots = []
-        by_idx = {p.slot_index: p for p in prop.slots}
-        for obs in structure.slots:
-            sp = by_idx.get(obs.index)
-            part = Part(f"pos_{obs.index + 1}", obs.token_class, "semantic", None, None, [], sp.unmapped_name if sp else None,
-                        list(sp.candidates) if sp else [], prop.proposed_by)
-            if sp and sp.candidates:
-                part.mappings = [Mapping(sp.candidates[0], {"category": "model_proposal"}, None, False)]
-            slots.append(Slot(obs.index, obs.token_class, [part], None, obs.samples))
-        self.plan = Plan(source_id, prop.event_class_uid, prop.event_class_name, slots, [], [], None, "unresolved", prop.proposed_by, prop.model_hash)
+        self.log("proposed", provider=provider.name, event_class=prop.event_class_uid, seconds=round(time.time() - t_prop, 3))
+        self.state["proposal_provenance"] = prop.notes.get("provenance") if isinstance(prop.notes, dict) else None
+        self.plan = plan_from_proposal(structure, prop, source_id)
         self.state["proposal"] = {"provider": provider.name, "event_class_uid": prop.event_class_uid,
                                   "slots": [{"slot": p.slot_index + 1, "candidates": p.candidates, "note": p.note} for p in prop.slots]}
         self.analyze_and_evaluate()
@@ -215,6 +210,22 @@ class Session:
     def _samples(self) -> list[bytes]:
         raw = Path(self.state["samples_path"]).read_bytes()
         return [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
+
+
+def plan_from_proposal(structure, prop, source_id: str) -> Plan:
+    """The working plan from an induced structure and a provider's proposal: one part per slot, the
+    rank-1 candidate mapped with `model_proposal` provenance (never sufficient on its own — invariant 4),
+    the full ranking kept for the analyzer. Slot names come from the structure when it has them."""
+    slots = []
+    by_idx = {p.slot_index: p for p in prop.slots}
+    for obs in structure.slots:
+        sp = by_idx.get(obs.index)
+        part = Part(obs.name or f"pos_{obs.index + 1}", obs.token_class, "semantic", None, None, [], sp.unmapped_name if sp else None,
+                    list(sp.candidates) if sp else [], prop.proposed_by)
+        if sp and sp.candidates:
+            part.mappings = [Mapping(sp.candidates[0], {"category": "model_proposal"}, None, False)]
+        slots.append(Slot(obs.index, obs.token_class, [part], None, obs.samples))
+    return Plan(source_id, prop.event_class_uid, prop.event_class_name, slots, [], [], None, "unresolved", prop.proposed_by, prop.model_hash)
 
 
 def _plan_to_json(p: Plan) -> dict:

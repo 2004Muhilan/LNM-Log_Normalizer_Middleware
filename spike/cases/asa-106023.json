@@ -1,0 +1,13 @@
+{
+  "id": "asa-106023",
+  "event_class_uid": 4001,
+  "source": {"kind": "draft", "spec": "drafts/sufficiency/asa-106023.json", "corpus": ["corpus/cache/beats-cisco-asa/asa.log"], "payload": "asa:106023", "vendor": "cisco-asa"},
+  "note": "Cisco ASA ACL deny. ICMP type/code and the ACL hash pair have no network_activity attribute; the access-group name is the firewall rule.",
+  "truth": {
+    "msg_id": ["metadata.event_code", null], "proto": ["connection_info.protocol_name"], "src_annotation": [null], "dst_annotation": [null],
+    "src_if": ["src_endpoint.interface_name"], "src_host": ["src_endpoint.ip", "src_endpoint.hostname"], "src_port": ["src_endpoint.port"],
+    "dst_if": ["dst_endpoint.interface_name"], "dst_host": ["dst_endpoint.ip", "dst_endpoint.hostname"], "dst_port": ["dst_endpoint.port"],
+    "icmp_type": [null], "icmp_code": [null], "acl": ["firewall_rule.name"], "acl_hash_1": [null], "acl_hash_2": [null]
+  },
+  "expected_certificates": {"src_host": "endpoint_orientation"}
+}
