@@ -263,7 +263,7 @@ behaviour under token-level constraint; determinism under greedy decoding.
 | **Qwen3.5-9B / 4B / 2B / 0.8B** | Apache 2.0 | 2 Mar 2026 | Newest dense ≤ 9B (Qwen3.6/3.8 open weights start at 27B); natively vision-language with the projector in a **separate `mmproj` GGUF** — text-only inference loads only the text GGUF; reasoning off by default in this series; GGUFs from lmstudio-community/unsloth/bartowski (9B Q4_K_M 5.63 GB, Q8_0 9.53 GB; 4B Q4_K_M 2.74 GB, Q8_0 4.48 GB); **MTP GGUFs exist** (9B Q4_K_M 5.87 GB); hybrid Gated-DeltaNet attention — recent llama.cpp support, and recurrent state interacts with prompt caching (determinism check must cover it) | **primary**, with 4B and 2B as in-family comparators |
 | **IBM Granite 4.1 8B / 3B** | Apache 2.0 | 29 Apr 2026 | Dense decoder-only, **no reasoning mode at all**, built for instruction following and structured JSON/tool output, 512K context, GGUFs published; the design closest to "constrained labelling, predictable output" | **cross-family comparator** — add to the spike |
 | Ministral 3 8B / 3B | Apache 2.0 | 2 Dec 2025 | Official Mistral GGUFs; older than the two above | reserve |
-| Gemma 4 | Apache 2.0 (changed from Gemma Terms) | 2026 | The licence objection no longer applies; sizes seen are 26B-A4B and 31B, nothing confirmed ≤ 9B dense | not in band; revisit only if a small dense variant exists |
+| **Gemma 4 12B** | Apache 2.0 (changed from Gemma Terms) | 2026 | The licence objection no longer applies; 12B dense is slightly above the band; official GGUFs incl. Google's QAT Q4_0 (~7–8 GB at Q4); thinking is opt-in via a `<|think|>` token in the system prompt, so it is off unless we add it; no blocker found | **cross-family comparator, Q4 only, comparison not candidate** — admitted above band by decision |
 | Llama 3.x, Phi-4, Qwen3-4B-2507 | community / MIT / Apache | 2024–mid 2025 | Licence (Llama) or recency (all) | rejected |
 
 *Judgement.* For this task — label 6–15 slots with OCSF attributes given token classes and sample
@@ -271,8 +271,8 @@ values, emit a closed-op-set JSON spec — 9B is likely more than enough and 4B 
 statement is that we do not know, and the spike is where we find out. Two corrections to the framing:
 (1) compare **at equal footprint** as well as within the family — 9B-Q4_K_M (5.6 GB) versus 4B-Q8_0
 (4.5 GB) is the fair question "is a bigger model at lower precision better than a smaller one at high
-precision for labelling", and 2B-Q8_0 (~2.3 GB) is the floor; (2) add one **cross-family**
-comparator (Granite 4.1 8B) because Qwen and Granite differ in exactly the dimension that matters
+precision for labelling", and 2B-Q8_0 (~2.3 GB) is the floor; (2) add **cross-family**
+comparators (Granite 4.1 8B; Gemma 4 12B at Q4, above band, for comparison only) because Qwen and Granite differ in exactly the dimension that matters
 here — Granite is non-reasoning by design. Metrics, in order: (a) **type-compatible rate** — rank-1 ∈
 validator survivors per slot — the only "schema validity" that is not already 100% by construction;
 (b) **agreement with ground truth** on Squid (the logformat) and the nine sufficiency drafts;
