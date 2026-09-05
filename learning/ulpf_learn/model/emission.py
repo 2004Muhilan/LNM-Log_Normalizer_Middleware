@@ -38,8 +38,8 @@ def class_attributes(class_uid: int, max_depth: int = 2) -> list[str]:
     for leaf in table["leaf_paths"]:
         if leaf.get("is_array") or leaf["path"].count(".") > max_depth:
             continue
-        if leaf.get("type") in (None, "object_t", "json_t"):
-            continue
+        if leaf.get("type") in (None, "object", "object_t", "json_t"):
+            continue   # objects (http_request.url) are not labels; the 4B picked one for the URL slot until this filter existed
         out.append(leaf["path"])
     return out
 

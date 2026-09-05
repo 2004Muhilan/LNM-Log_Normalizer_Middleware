@@ -217,7 +217,8 @@ def test_enumerator_timestamp_windows_follow_epoch_auto():
     assert "time" in enumerate_candidates(4002, "integer", ["1734567890123"]).survivors       # milliseconds
     assert "time" in enumerate_candidates(4002, "float", ["1734567890.123"]).survivors        # fractional seconds
     assert "time" not in enumerate_candidates(4002, "integer", ["1893", "331004"]).survivors  # a counter is in no window
-    assert "time" not in enumerate_candidates(4002, "integer", ["1734567890", "1734567890123"]).survivors  # mixed precisions: never guess
+    assert "time" in enumerate_candidates(4002, "integer", ["1734567890", "1734567890123456789"]).survivors  # mixed precisions per value, as epoch_auto selects (FortiGate)
+    assert "time" not in enumerate_candidates(4002, "integer", ["1734567890", "42"]).survivors  # one value in no window: not a timestamp column
 
 
 def _dump(doc) -> Path:

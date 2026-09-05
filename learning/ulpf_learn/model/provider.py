@@ -131,7 +131,9 @@ class ModelProvider(Provider):
             feedback, pending = "", set(range(structure.arity))
             for it in range(self.max_iterations):
                 tr.iterations = it + 1
-                doc = self._ask(system, prompt.user_label(structure, self.lines, feedback), schema, tr, 64 + 48 * structure.arity)
+                # budget: models pretty-print and add alternatives (the 9B needed ~1.1k tokens for 10 slots);
+                # a truncated answer is a wasted iteration (one seen in the desktop spike), never a wrong label
+                doc = self._ask(system, prompt.user_label(structure, self.lines, feedback), schema, tr, 256 + 120 * structure.arity)
                 if doc is None:
                     feedback = "The answer was not valid JSON for the schema."
                     tr.refuted_by_iteration.append(sorted(pending))

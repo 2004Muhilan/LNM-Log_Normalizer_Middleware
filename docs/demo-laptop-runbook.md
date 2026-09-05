@@ -7,11 +7,13 @@ can run, in the order the problems bite. Nothing here is optional; each step has
 ## 0. What the two machines share
 
 One `ulpf-llama` image (`learning/Dockerfile`, target `llama`) built once with
-`CMAKE_CUDA_ARCHITECTURES=75-real;120-real`, CUDA 12.8.1. CUDA 13 dropped Maxwell/Pascal/Volta but
-keeps Turing (`sm_75` is now the oldest supported architecture), so either toolkit could serve both
-cards; 12.8 was chosen because it asks less of the host driver (see §1). The same image runs on the
-RTX 5060 Ti (`sm_120`), on the GTX 1650 (`sm_75`), and with no GPU at all (`--device none`, CPU).
-**No rebuild between machines.** The image is exported once (`docker save ulpf-llama | zstd`) and
+`CMAKE_CUDA_ARCHITECTURES=75-real;120-real`, CUDA 12.8.1, and **`GGML_BACKEND_DL`** (backends are
+shared libraries loaded at run time). CUDA 13 dropped Maxwell/Pascal/Volta but keeps Turing (`sm_75` is
+now the oldest supported architecture), so either toolkit could serve both cards; 12.8 was chosen because
+it asks less of the host driver (see §1). The same image runs on the RTX 5060 Ti (`sm_120`), on the GTX
+1650 (`sm_75`), and **on a host with no NVIDIA driver at all** (CPU backend only — verified: the first
+build, statically linked against CUDA, needed `libcuda.so.1` even for `--device none` and would have failed
+on a GPU-less machine; the dynamic-backend build was the fix). **No rebuild between machines.** The image is exported once (`docker save ulpf-llama | zstd`) and
 loaded on the laptop; the weights come from `models/cache/` (fetched by `scripts/fetch-models.sh` or
 copied) and are digest-verified before any use.
 

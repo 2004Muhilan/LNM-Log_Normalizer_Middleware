@@ -1,0 +1,356 @@
+{
+ "machine": "desktop-5060ti",
+ "machine_info": {
+  "hostname": "Muhilan",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "cpu": "AMD Ryzen 7 2700X Eight-Core Processor",
+  "ram_gb": 23.4,
+  "gpu": "NVIDIA GeForce RTX 5060 Ti",
+  "vram_mb": 16311,
+  "driver": "595.79"
+ },
+ "model_id": "qwen3.5-9b-q4_k_m",
+ "model_hash": "sha256:03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+ "backend": "cuda ngl=auto",
+ "offload": {
+  "layers_on_gpu": 33,
+  "layers_total": 33,
+  "model_buffers_mib": {
+   "CUDA0": 4861.28,
+   "CUDA_Host": 0.0,
+   "CPU_Mapped": 545.62
+  },
+  "kv_buffers_mib": {
+   "CUDA0": 512.0
+  },
+  "device": "NVIDIA GeForce RTX 5060 Ti",
+  "projected_device_mib": 5527,
+  "free_device_mib_at_start": 15108,
+  "vram_used_delta_mib": 5675,
+  "fits_in_vram": true
+ },
+ "case": "asa-302013",
+ "mode": "per-slot",
+ "event_class_uid": 4001,
+ "lines": 12,
+ "slots": 14,
+ "wall_ms": [
+  27914.76157699799,
+  28165.77915200469
+ ],
+ "wall_s_first": 27.9,
+ "prompt_tokens": 21192,
+ "predicted_tokens": 496,
+ "iterations": 1,
+ "calls": 15,
+ "refuted_by_iteration": [],
+ "abandoned": [],
+ "schema_invalid": 0,
+ "think_leak": 0,
+ "class_answer": "network_activity",
+ "repeat": 2,
+ "byte_identical": true,
+ "distinct_outputs": 1,
+ "provenance": {
+  "provider": "model",
+  "model_id": "qwen3.5-9b-q4_k_m",
+  "model_hash": "sha256:03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+  "llama_cpp": {
+   "build_info": "b1-6a1a922",
+   "model_path": "/models/Qwen3.5-9B-Q4_K_M.gguf",
+   "n_ctx": null
+  },
+  "decoding": {
+   "temperature": 0.0,
+   "top_k": 1,
+   "top_p": 1.0,
+   "min_p": 0.0,
+   "seed": 0,
+   "cache_prompt": false,
+   "repeat_penalty": 1.0,
+   "presence_penalty": 0.0,
+   "frequency_penalty": 0.0
+  },
+  "backend": "cuda ngl=auto",
+  "mode": "per-slot",
+  "max_iterations": 3,
+  "prompt_template_hash": "sha256:200b491effc2b4d34538672d79f32f629298978228198fb27440f94ff5aefca2",
+  "grammar_hashes": {
+   "class": "sha256:4b92b66d7b7325e9387db3bdf4daf84e694cadb82b994d6b61dade15bd814fdf",
+   "slots": {
+    "1": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "2": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "3": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "4": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "5": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "6": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "7": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "8": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "9": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "10": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "11": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "12": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "13": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "14": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6"
+   }
+  },
+  "trace": {
+   "model_id": "qwen3.5-9b-q4_k_m",
+   "mode": "per-slot",
+   "iterations": 1,
+   "calls": 15,
+   "prompt_tokens": 21192,
+   "predicted_tokens": 496,
+   "wall_ms": 28165.77915200469,
+   "refuted_by_iteration": [],
+   "abandoned": [],
+   "schema_invalid": 0,
+   "think_leak": 0,
+   "class_answer": "network_activity"
+  }
+ },
+ "judgement": {
+  "event_class_correct": true,
+  "event_class_proposed": 4001,
+  "slots": 14,
+  "labelled": 12,
+  "type_compatible_rate": 1.0,
+  "scored": 14,
+  "agreement": 0.5714285714285714,
+  "over_mapped": 4,
+  "out_of_class_rate": 0.0,
+  "in_class_truth_slots": 6,
+  "certificates": 10,
+  "certificate_shape": {
+   "src_host": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   },
+   "src_port": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   }
+  },
+  "shape_preserved": true,
+  "request": true,
+  "rows": [
+   {
+    "slot": 1,
+    "field": "msg_id",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "metadata.event_code",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 2,
+    "field": "direction",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "connection_info.direction"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 3,
+    "field": "proto",
+    "class": "word",
+    "proposal": [
+     "osint.name"
+    ],
+    "label": "osint.name",
+    "truth": [
+     "connection_info.protocol_name"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 4,
+    "field": "conn_id",
+    "class": "integer",
+    "proposal": [
+     "connection_info.uid"
+    ],
+    "label": "connection_info.uid",
+    "truth": [
+     "connection_info.uid",
+     "connection_info.session.uid"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 5,
+    "field": "src_if",
+    "class": "word",
+    "proposal": [
+     "src_endpoint.interface_name"
+    ],
+    "label": "src_endpoint.interface_name",
+    "truth": [
+     "src_endpoint.interface_name"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 6,
+    "field": "src_host",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip",
+     "dst_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     "src_endpoint.ip",
+     "src_endpoint.hostname"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 7,
+    "field": "src_port",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port",
+     "dst_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     "src_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 8,
+    "field": "src_mapped_host",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip",
+     "dst_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 9,
+    "field": "src_mapped_port",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port",
+     "dst_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 10,
+    "field": "dst_if",
+    "class": "word",
+    "proposal": [
+     "dst_endpoint.interface_name",
+     "src_endpoint.interface_name"
+    ],
+    "label": "dst_endpoint.interface_name",
+    "truth": [
+     "dst_endpoint.interface_name"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 11,
+    "field": "dst_host",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     "dst_endpoint.ip",
+     "dst_endpoint.hostname"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 12,
+    "field": "dst_port",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.port"
+    ],
+    "label": "dst_endpoint.port",
+    "truth": [
+     "dst_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 13,
+    "field": "dst_mapped_host",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 14,
+    "field": "dst_mapped_port",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.port"
+    ],
+    "label": "dst_endpoint.port",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   }
+  ]
+ },
+ "raw_outputs": [
+  "{\n  \"event_class\": \"network_activity\"\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"osint.name\",\n  \"alternatives\": [\n    \"osint.name\",\n    \"osint.name\"\n  ]\n}",
+  "{\n  \"label\": \"connection_info.uid\",\n  \"alternatives\": [\n    \"connection_info.uid\",\n    \"connection_info.uid\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.interface_name\",\n  \"alternatives\": [\n    \"src_endpoint.interface_name\",\n    \"src_endpoint.interface_name\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.ip\",\n  \"alternatives\": [\n    \"dst_endpoint.ip\",\n    \"src_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.ip\",\n  \"alternatives\": [\n    \"dst_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.interface_name\",\n  \"alternatives\": [\n    \"src_endpoint.interface_name\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.ip\",\n  \"alternatives\": [\n    \"dst_endpoint.ip\",\n    \"dst_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\",\n    \"dst_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.ip\",\n  \"alternatives\": [\n    \"dst_endpoint.ip\",\n    \"dst_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\",\n    \"dst_endpoint.port\"\n  ]\n}"
+ ],
+ "llama_server_log_tail": "...\n1.23.422.487 D sched_reserve: max_nodes = 20480\n1.23.442.786 D sched_reserve: reserving full memory module\n1.23.442.866 D sched_reserve: worst-case: n_tokens = 512, n_seqs = 1, n_outputs = 1\n1.23.442.869 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n1.23.444.228 I resolve_fused_ops: Flash Attention enabled\n1.23.444.247 I resolve_fused_ops: resolving fused DeepSeek V4 HC support:\n1.23.444.308 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n1.23.445.572 I resolve_fused_ops: fused DeepSeek V4 HC pre enabled\n1.23.445.619 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n1.23.446.629 I resolve_fused_ops: fused DeepSeek V4 HC comb enabled\n1.23.446.663 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n1.23.447.613 I resolve_fused_ops: fused DeepSeek V4 HC post enabled\n1.23.447.644 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n1.23.513.036 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n1.23.515.011 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n1.23.516.913 I sched_reserve:      CUDA0 compute buffer size =   104.02 MiB\n1.23.516.949 I sched_reserve:  CUDA_Host compute buffer size =    32.02 MiB\n1.23.516.950 I sched_reserve: graph nodes  = 1831\n1.23.516.950 I sched_reserve: graph splits = 2\n1.23.516.951 I sched_reserve: reserve took 94.46 ms, sched copies = 1\n1.23.517.105 I cmn          init: llama threadpool init, n_threads = 8\n1.23.517.127 D attach_threadpool: call\n1.23.517.130 D set_adapters_lora: adapters = (nil)\n1.23.517.131 D adapters_lora_are_same: adapters = (nil)\n1.23.650.590 I cmn  common_conte: the context does not support partial sequence removal\n1.23.658.118 I srv    load_model: speculative decoding will use checkpoints\n1.23.658.163 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 16384, kv_unified = 'false'\n1.23.658.184 I spec common_specu: no implementations specified for speculative decoding\n1.23.658.186 I slot   load_model: id  0 | task -1 | new slot, n_ctx = 16384\n1.23.658.187 D slot        reset: id  0 | task -1 | \n1.23.658.351 I srv    load_model: prompt cache is enabled, size limit: 8192 MiB\n1.23.658.406 I srv    load_model: use `--cache-ram 0` to disable the prompt cache\n1.23.658.414 I srv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391\n1.23.658.415 I srv    load_model: context checkpoints enabled, max = 32, min spacing = 8192\n1.23.658.439 I srv          init: idle slots will be saved to prompt cache upon starting a new task\n1.23.658.440 D srv          init: __TEST_TAG_CACHE_IDLE_SLOTS_ENABLED__\n1.23.665.233 D Using specialized template: Qwen3-Coder\n1.23.668.094 I srv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n<think>\n'\n1.23.668.219 D Using specialized template: Qwen3-Coder\n1.23.669.490 I srv          init: init: chat template, thinking = 1\n1.23.669.547 I srv          init: preserve_reasoning kwarg: not supported by template\n1.23.669.562 I srv  llama_server: model loaded\n1.23.669.566 I srv  llama_server: listening on http://0.0.0.0:8080\n1.23.669.567 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release\n1.23.669.568 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508\n1.23.669.946 D que    start_loop: processing new tasks\n1.23.669.977 D que    start_loop: update slots\n1.23.669.979 I srv  update_slots: all slots are idle\n1.23.669.979 D que    start_loop: waiting for new tasks\n1.25.273.080 D srv          stop: all tasks already finished, no need to cancel\n"
+}

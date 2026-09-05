@@ -2,7 +2,7 @@
   "policy_version": "1.0.0",
   "note": "Per-event-class acceptance policy DATA (architecture v0.7 §3.3). The engine is learning/ulpf_learn/acceptance.py (P3). Classes 4001 and 4002 follow the architecture table and the worked trace; 3002 and 2004 remain drafts until a source of those classes is onboarded (P6).",
   "enumeration": {
-    "note": "Candidate enumerator policy (P3): runs over the complete pinned class table; scalar leaves only; leaf depth at most 2 dots (admits src_endpoint.ip and http_request.url.url_string); type-family compatibility plus value-domain checks (port range, epoch window, integer enum membership). Structural determination requires exactly one survivor.",
+    "note": "Candidate enumerator policy (P3, widened P4): runs over the complete pinned class table; scalar leaves only; leaf depth at most 2 dots (admits src_endpoint.ip and http_request.url.url_string); type-family compatibility plus value-domain checks: port range; epoch_auto's four disjoint 2000-2100 windows for numeric samples (P3 boundary); enum membership for every enumerated attribute, string enums included (P4: http_request.http_method is a string enum); text and word tokens accept timestamp_t and datetime_t as well as string_t because textual timestamps are text/word cells the DSL coerces (P4); integer and float tokens accept string_t because OCSF ids and codes are strings (P4); ip/mac/url stay strict. Structural determination requires exactly one survivor.",
     "scalars_only": true,
     "max_depth": 2
   },

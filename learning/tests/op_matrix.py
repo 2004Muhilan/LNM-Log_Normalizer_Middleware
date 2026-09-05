@@ -156,5 +156,5 @@ for cls, ok, bad in [("uuid", "123e4567-e89b-12d3-a456-426614174000", "123e4567-
 
 # ---------------------------------------------------------------- null values: spec-level default, cell override, opt-out; both schema versions
 vec("null-values", spec("m-nulls", ws_positional([cell("a", "ipv4"), cell("b", "integer", null_values=["N/A"]), cell("c", "word", null_values=[]), cell("d", "integer", coerce=coerce("int"))]), null_values=["-"]),
-    ["- N/A - 5", "10.0.0.1 7 x -", "1.2.3.4 - x 1"], ["- - - 5", "10.0.0.1 N/A y notint"])
+    ["- N/A - 5", "10.0.0.1 7 x -"], ["- - - 5", "10.0.0.1 N/A y notint", "1.2.3.4 - x 1"])  # b's override replaces the spec default: '-' is not a null there
 vec("v1-0-0-plain", spec("m-v100", ws_positional([cell("a", "word"), cell("b", "integer", coerce=coerce("int"))]), version="1.0.0"), ["x 1"], ["x y"])

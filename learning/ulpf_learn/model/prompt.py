@@ -36,13 +36,19 @@ answer:
 {"slots":[{"slot":1,"label":"time"},{"slot":2,"label":"unmapped"},{"slot":3,"label":"src_endpoint.ip"},{"slot":4,"label":"user.name"},{"slot":5,"label":"status"},{"slot":6,"label":"auth_protocol"}]}"""
 
 
-def describe_structure(structure: Structure, lines: list[bytes], max_lines: int = 6) -> str:
+def describe_structure(structure: Structure, lines: list[bytes], max_lines: int | None = None) -> str:
+    # wide structures (PAN-OS 53 cells, FortiGate 72 keys with ~600-byte lines) get fewer lines and
+    # samples so the prompt stays well inside a 16k context; the slot table carries the information
+    wide = structure.arity > 24
+    if max_lines is None:
+        max_lines = 3 if wide else 6
+    n_samples = 3 if wide else 6
     shown = [l.decode("utf-8", "replace") for l in lines[:max_lines]]
     parts = ["lines:"] + [f"  {l}" for l in shown] + ["slots:"]
     for s in structure.slots:
         name = f" name={s.name}" if s.name else ""
         const = " (constant)" if s.constant is not None else ""
-        parts.append(f"  slot {s.index + 1}:{name} class={s.token_class} distinct={s.distinct}{const} samples: {', '.join(s.samples[:6])}")
+        parts.append(f"  slot {s.index + 1}:{name} class={s.token_class} distinct={s.distinct}{const} samples: {', '.join(v[:60] for v in s.samples[:n_samples])}")
     return "\n".join(parts)
 
 

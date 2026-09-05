@@ -40,7 +40,7 @@ from ulpf_learn.session import plan_from_proposal  # noqa: E402
 
 CASES = ROOT / "spike" / "cases"
 RESULTS = ROOT / "spike" / "results"
-CONTAINER = "ulpf-spike-llama"
+CONTAINER = "ulpf-spike-llama"  # per-port suffix added in Server so two spikes (e.g. GPU and CPU) can run side by side
 
 
 # ---------------------------------------------------------------- machine
@@ -69,19 +69,23 @@ def machine_info() -> dict:
 
 # ---------------------------------------------------------------- server
 class Server:
-    def __init__(self, model: dict, cache: Path, gpu: bool, ngl: str, port: int = 8080, image: str = "ulpf-llama", ctx: int = 8192):
+    def __init__(self, model: dict, cache: Path, gpu: bool, ngl: str, port: int = 8080, image: str = "ulpf-llama", ctx: int = 16384):
         self.model, self.cache, self.gpu, self.ngl, self.port, self.image, self.ctx = model, cache, gpu, ngl, port, image, ctx
         self.log = ""
+        self.name = f"{CONTAINER}-{port}"
 
     def start(self) -> "Server":
-        subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
-        cmd = ["docker", "run", "-d", "--name", CONTAINER, "-p", f"{self.port}:8080", "-v", f"{self.cache}:/models:ro"]
+        subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
+        cmd = ["docker", "run", "-d", "--name", self.name, "-p", f"{self.port}:8080", "-v", f"{self.cache}:/models:ro"]
         if self.gpu:
             cmd += ["--gpus", "all"]
+        # --verbose: the load summary (offloaded N/M layers, buffer sizes, fit projection) is only logged
+        # at that level in this build; the log is captured once at readiness, before any generation.
         cmd += [self.image, "-m", f"/models/{self.model['file']}", "--parallel", "1", "--ctx-size", str(self.ctx), "--seed", "0",
-                "--n-gpu-layers", (self.ngl if self.gpu else "0"), "--jinja", "--no-warmup"]
+                "--n-gpu-layers", (self.ngl if self.gpu else "0"), "--jinja", "--no-warmup", "--verbose"]
         if not self.gpu:
             cmd += ["--device", "none"]
+        self.vram_before = vram_used_mib()
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError(r.stderr)
@@ -90,12 +94,13 @@ class Server:
     def wait(self, client: LlamaClient, seconds: float = 1800) -> None:
         t0 = time.time()
         while time.time() - t0 < seconds:
-            st = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", CONTAINER], capture_output=True, text=True).stdout.strip()
+            st = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", self.name], capture_output=True, text=True).stdout.strip()
             if st != "true":
                 raise RuntimeError("server container exited:\n" + self.logs()[-3000:])
             try:
                 if client._get("/health").get("status") == "ok":
                     self.log = self.logs()
+                    self.vram_after = vram_used_mib()
                     return
             except Exception:  # noqa: BLE001
                 pass
@@ -103,10 +108,11 @@ class Server:
         raise RuntimeError("server not ready in time:\n" + self.logs()[-3000:])
 
     def logs(self) -> str:
-        return subprocess.run(["docker", "logs", CONTAINER], capture_output=True, text=True).stdout + subprocess.run(["docker", "logs", CONTAINER], capture_output=True, text=True).stderr
+        r = subprocess.run(["docker", "logs", self.name], capture_output=True, text=True)
+        return r.stdout + r.stderr
 
     def stop(self) -> None:
-        subprocess.run(["docker", "rm", "-f", CONTAINER], capture_output=True)
+        subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
 
     def offload(self) -> dict:
         """What llama.cpp actually did: layers offloaded, device buffer sizes, KV placement."""
@@ -115,9 +121,21 @@ class Server:
         bufs = {m.group(1): float(m.group(2)) for m in re.finditer(r"(\w+) model buffer size\s*=\s*([\d.]+) MiB", log)}
         kv = {m.group(1): float(m.group(2)) for m in re.finditer(r"(\w+) KV buffer size\s*=\s*([\d.]+) MiB", log)}
         dev = re.search(r"using device (\w+) \(([^)]+)\)", log)
+        proj = re.search(r"projected to use (\d+) MiB of device memory vs\. (\d+) MiB of free", log)
+        vb, va = getattr(self, "vram_before", None), getattr(self, "vram_after", None)
         return {"layers_on_gpu": int(off.group(1)) if off else 0, "layers_total": int(off.group(2)) if off else None,
                 "model_buffers_mib": bufs, "kv_buffers_mib": kv, "device": dev.group(2) if dev else ("cpu" if not self.gpu else "unknown"),
+                "projected_device_mib": int(proj.group(1)) if proj else None, "free_device_mib_at_start": int(proj.group(2)) if proj else None,
+                "vram_used_delta_mib": (va - vb) if (va is not None and vb is not None) else None,
                 "fits_in_vram": bool(off) and off.group(1) == off.group(2)}
+
+
+def vram_used_mib() -> int | None:
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=20)
+        return int(float(out.stdout.strip().splitlines()[0])) if out.returncode == 0 and out.stdout.strip() else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
 
 
 # ---------------------------------------------------------------- cases
@@ -217,6 +235,12 @@ def judge(case: dict, structure, prop, lib: Library) -> dict:
 
 
 # ---------------------------------------------------------------- run
+def _run_record(tr) -> dict:
+    return {"raw_outputs": tr.raw_outputs, "wall_ms": tr.wall_ms, "prompt_tokens": tr.prompt_tokens, "predicted_tokens": tr.predicted_tokens,
+            "iterations": tr.iterations, "calls": tr.calls, "refuted_by_iteration": tr.refuted_by_iteration, "abandoned": tr.abandoned,
+            "schema_invalid": tr.schema_invalid, "think_leak": tr.think_leak, "class_answer": tr.class_answer}
+
+
 def run(a) -> None:
     man = weights.load(ROOT / "models" / "manifest.json")
     cache = Path(a.cache)
@@ -229,23 +253,31 @@ def run(a) -> None:
         client = LlamaClient(a.server or f"http://127.0.0.1:{a.port}")
         srv = None
         if not a.server:
-            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image).start()
+            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx).start()
             srv.wait(client)
         backend = "cpu" if not a.gpu else f"cuda ngl={a.ngl}"
         off = srv.offload() if srv else {}
         print(f"== {mid} on {a.machine} [{backend}] offload={off.get('layers_on_gpu')}/{off.get('layers_total')} fits={off.get('fits_in_vram')}", flush=True)
         for mode in a.modes:
             for cid in a.cases:
+                out = RESULTS / a.machine / f"{mid}__{'cpu' if not a.gpu else 'gpu'}__{cid}__{mode}.json"
+                if a.resume and out.exists() and "error" not in json.loads(out.read_text(encoding="utf-8")):
+                    print(f"  {cid:18s} {mode:8s} (resume: kept existing result)", flush=True)
+                    continue
                 case, structure, lines = load_case(cid, a.limit_lines)
                 prov = ModelProvider(client, mid, digest, mode=mode, max_iterations=a.max_iterations, backend=backend)
                 prov.set_samples(lines)
                 runs = []
-                for rep in range(a.repeat):
-                    prop = prov.propose(structure)
-                    tr = prov.last_trace
-                    runs.append({"raw_outputs": tr.raw_outputs, "wall_ms": tr.wall_ms, "prompt_tokens": tr.prompt_tokens, "predicted_tokens": tr.predicted_tokens,
-                                 "iterations": tr.iterations, "calls": tr.calls, "refuted_by_iteration": tr.refuted_by_iteration, "abandoned": tr.abandoned,
-                                 "schema_invalid": tr.schema_invalid, "think_leak": tr.think_leak, "class_answer": tr.class_answer})
+                try:
+                    for rep in range(a.repeat):
+                        prop = prov.propose(structure)
+                        tr = prov.last_trace
+                        runs.append(_run_record(tr))
+                except Exception as e:  # noqa: BLE001 — one case must not end the run; the error is the result
+                    out.write_text(json.dumps({"machine": a.machine, "machine_info": mi, "model_id": mid, "model_hash": digest, "backend": backend, "offload": off,
+                                               "case": cid, "mode": mode, "error": f"{type(e).__name__}: {str(e)[:1500]}"}, indent=1) + "\n", encoding="utf-8")
+                    print(f"  {cid:18s} {mode:8s} ERROR {type(e).__name__}: {str(e)[:200]}", flush=True)
+                    continue
                 first = runs[0]
                 j = judge(case, structure, prop, lib)  # judged on the last run; byte-identity below says whether runs differ
                 distinct = len({json.dumps(r["raw_outputs"]) for r in runs})
@@ -259,7 +291,6 @@ def run(a) -> None:
                     "provenance": prov.provenance(), "judgement": j, "raw_outputs": first["raw_outputs"],
                     "llama_server_log_tail": (srv.log[-4000:] if srv else ""),
                 }
-                out = RESULTS / a.machine / f"{mid}__{'cpu' if not a.gpu else 'gpu'}__{cid}__{mode}.json"
                 out.write_text(json.dumps(rec, indent=1, default=str) + "\n", encoding="utf-8")
                 print(f"  {cid:18s} {mode:8s} wall={rec['wall_s_first']:7.1f}s it={rec['iterations']} class_ok={j['event_class_correct']} "
                       f"typeok={j['type_compatible_rate']} agree={j['agreement'] and round(j['agreement'], 2)} shape={j['shape_preserved']} "
@@ -281,7 +312,7 @@ def grammar(a) -> None:
         client = LlamaClient(a.server or f"http://127.0.0.1:{a.port}")
         srv = None
         if not a.server:
-            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image).start()
+            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx).start()
             srv.wait(client)
         res = {"model_id": mid, "dropped_keywords": {k: len(v) for k, v in dropped.items()}, "dropped_pointers": dropped}
         for name, sch in (("class", emission.class_schema()), ("proposal-4002-10", emission.proposal_schema(4002, 10)),
@@ -295,10 +326,160 @@ def grammar(a) -> None:
             srv.stop()
 
 
+WHOLESPEC_SYSTEM = """You write parser specifications for log lines in a declarative JSON DSL. The DSL's closed op set is: literal, regex, csv, kv, positional, quoted, optional, repeated, decode, coerce. Answer with one JSON document only, exactly following the schema you are given. Positional formats use {"op":"positional","delimiter":{"whitespace_run":true},"leading_delimiter":"reject","trailing_delimiter":"reject","tail":null,"slots":[...]} with one cell per whitespace-separated token: {"field":"<name>","kind":"semantic","class":"<integer|float|ipv4|url|word|text>"}. Regexes are RE2 with (?P<name>...) groups listed in captures. Every byte of the line must be consumed."""
+
+
+def wholespec(a) -> None:
+    """The plan's literal P4 deliverable, measured as an experiment: the model emits a parser spec for
+    the sample lines under the projected parser-spec grammar. The output is then validated against the
+    FULL contract (the conditionals the grammar could not express), compiled by the reference executor,
+    and run over the samples. Reported: grammar compiled?, contract-valid?, compiles?, lines parsed."""
+    import jsonschema
+    from ulpf_contracts import validate_document
+    from ulpf_learn import dslexec
+    from ulpf_learn.model import prompt as pr
+
+    man = weights.load(ROOT / "models" / "manifest.json")
+    cache = Path(a.cache)
+    schema = json.loads((ROOT / "contracts" / "parser-spec.schema.json").read_text(encoding="utf-8"))
+    projected, _ = emission.project_for_grammar(schema)
+    for mid in a.models:
+        m = weights.entry(man, mid)
+        digest = "sha256:" + weights.verify(cache / m["file"], m)
+        client = LlamaClient(a.server or f"http://127.0.0.1:{a.port}")
+        srv = None
+        if not a.server:
+            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx).start()
+            srv.wait(client)
+        for cid in a.cases:
+            case, structure, lines = load_case(cid, a.limit_lines)
+            user = pr.describe_structure(structure, lines) + f"\n\nWrite the parser spec (schema_version \"1.1.0\", spec_id \"{cid}-model\", regex_dialect \"re2\", bounds max_event_bytes 8192 max_fields 64 max_nesting 4 max_repeat 16) that parses every line above."
+            rec = {"machine": a.machine, "model_id": mid, "model_hash": digest, "case": cid, "grammar_compiles": None, "contract_valid": None, "compiles": None, "parsed": None, "lines": len(lines)}
+            t0 = time.perf_counter()
+            try:
+                c = client.chat(WHOLESPEC_SYSTEM, user, projected, max_tokens=3000)
+                rec["grammar_compiles"] = True
+                rec["wall_s"] = round((time.perf_counter() - t0), 1)
+                rec["predicted_tokens"] = c.predicted_tokens
+                rec["finish_reason"] = c.finish_reason
+                rec["output"] = c.text[:6000]
+                try:
+                    doc = json.loads(c.text)
+                    jsonschema.validate(doc, projected)
+                    rec["projected_valid"] = True
+                    errs = validate_document("parser-spec", doc)
+                    rec["contract_valid"] = errs == []
+                    rec["contract_errors"] = errs[:8]
+                    try:
+                        prog = dslexec.compile_spec(json.dumps(doc).encode())
+                        rec["compiles"] = True
+                        rec["parsed"] = sum(1 for l in lines if prog.parse(l)["status"] == "ok")
+                    except Exception as e:  # noqa: BLE001
+                        rec["compiles"] = False
+                        rec["compile_error"] = str(e)[:400]
+                except (json.JSONDecodeError, jsonschema.ValidationError) as e:
+                    rec["projected_valid"] = False
+                    rec["error"] = str(e)[:400]
+            except Exception as e:  # noqa: BLE001
+                rec["grammar_compiles"] = False
+                rec["error"] = str(e)[:800]
+            print(f"  {mid} {cid}: grammar={rec['grammar_compiles']} contract_valid={rec['contract_valid']} compiles={rec['compiles']} parsed={rec['parsed']}/{len(lines)} wall={rec.get('wall_s')}s", flush=True)
+            (RESULTS / a.machine).mkdir(parents=True, exist_ok=True)
+            (RESULTS / a.machine / f"wholespec__{mid}__{cid}.json").write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
+        if srv:
+            srv.stop()
+
+
+def cases(a) -> None:
+    """Dry run without a model: load every case, show the structure the provider would see, and check
+    the ground truth — every truth field must be a slot, every truth attribute must exist in the pinned
+    class table, every expected-certificate field must be a slot."""
+    from ulpf_learn.enumerate_ import load_table
+    bad = 0
+    for cid in a.cases:
+        case, structure, lines = load_case(cid, a.limit_lines)
+        leaves = {l["path"] for l in load_table(case["event_class_uid"])["leaf_paths"]}
+        names = [s.name or f"pos_{s.index + 1}" for s in structure.slots]
+        print(f"== {cid}: {len(lines)} lines, {structure.arity} slots, class {case['event_class_uid']}")
+        for s in structure.slots[:80]:
+            print(f"   slot {s.index + 1:2d} {(s.name or f'pos_{s.index + 1}'):22s} {s.token_class:8s} distinct={s.distinct:3d} {', '.join(s.samples[:3])[:70]}")
+        for f, acc in case["truth"].items():
+            for at in acc:
+                if at not in (None, "compound") and at not in leaves:
+                    print(f"   TRUTH ERROR: {f}: {at} is not in the pinned {case['event_class_uid']} table"); bad += 1
+        unscored = [n for n in names if n not in case["truth"]]
+        if unscored:
+            print(f"   slots without ground truth (unscored): {unscored}")
+        for f in case.get("expected_certificates", {}):
+            if f not in names:
+                print(f"   EXPECTED-CERT ERROR: {f} is not a slot"); bad += 1
+    print("ground truth:", "ok" if not bad else f"{bad} problems")
+
+
+def aggregate(a) -> None:
+    """Per (machine, model, backend, mode): means over cases, plus slot-level totals for the anchored
+    rule's residual (in-class truth slots vs out-of-class rank-1) and certificate-shape hits."""
+    from collections import defaultdict
+    acc = defaultdict(lambda: {"n": 0, "agree": [], "wall": [], "iters": [], "shape_hit": 0, "shape_n": 0, "ooc": 0, "inclass": 0, "abandoned": 0, "slots": 0, "class_ok": 0, "labelled": 0, "typeok": 0, "ident": 0, "leak": 0, "over": 0, "scored": 0, "correct": 0})
+    for p in sorted(Path(a.results).rglob("*__*.json")):
+        if p.name.startswith(("grammar__", "wholespec__")):
+            continue
+        r = json.loads(p.read_text(encoding="utf-8"))
+        if "error" in r:
+            continue
+        j = r["judgement"]
+        k = (r["machine"], r["model_id"], r["backend"].split()[0], r["mode"])
+        d = acc[k]
+        d["n"] += 1
+        d["agree"].append(j["agreement"] or 0.0)
+        d["wall"].append(r["wall_s_first"])
+        d["iters"].append(r["iterations"])
+        for v in j["certificate_shape"].values():
+            d["shape_n"] += 1
+            d["shape_hit"] += v["got"] == v["expected"]
+        d["inclass"] += j["in_class_truth_slots"]
+        d["ooc"] += sum(1 for row in j["rows"] if row.get("out_of_class"))
+        d["abandoned"] += len(r["abandoned"])
+        d["slots"] += j["slots"]
+        d["class_ok"] += j["event_class_correct"]
+        d["labelled"] += j["labelled"]
+        d["typeok"] += sum(1 for row in j["rows"] if row.get("type_compatible"))
+        d["ident"] += r["byte_identical"]
+        d["leak"] += r["think_leak"]
+        d["over"] += j["over_mapped"]
+        d["scored"] += j["scored"]
+        d["correct"] += sum(1 for row in j["rows"] if row.get("correct"))
+    print("| machine | model | backend | mode | cases | class ok | agreement (slot-weighted) | mean agreement | type-compat (labelled) | over-mapped | cert shape hits | out-of-class / in-class-truth | abandoned slots | mean iters | mean wall s | byte-identical | think leaks |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for k in sorted(acc):
+        d = acc[k]
+        print(f"| {k[0]} | {k[1]} | {k[2]} | {k[3]} | {d['n']} | {d['class_ok']}/{d['n']} | {d['correct']}/{d['scored']} = {d['correct'] / max(1, d['scored']):.2f} | "
+              f"{sum(d['agree']) / d['n']:.2f} | {d['typeok']}/{d['labelled']} | {d['over']} | {d['shape_hit']}/{d['shape_n']} | {d['ooc']}/{d['inclass']} = {d['ooc'] / max(1, d['inclass']):.2f} | "
+              f"{d['abandoned']} | {sum(d['iters']) / d['n']:.1f} | {sum(d['wall']) / d['n']:.0f} | {d['ident']}/{d['n']} | {d['leak']} |")
+
+
+def slots_matrix(a) -> None:
+    """For one case: per slot, what each model labelled (rank-1 or flag) in one mode — where the models agree and where they all miss."""
+    rows = {}
+    models = []
+    for p in sorted(Path(a.results).rglob(f"*__{a.backend}__{a.case}__{a.mode}.json")):
+        r = json.loads(p.read_text(encoding="utf-8"))
+        if "error" in r:
+            continue
+        models.append(r["model_id"])
+        for row in r["judgement"]["rows"]:
+            rows.setdefault(row["field"], {"truth": row["truth"], "class": row["class"]})[r["model_id"]] = ("✓ " if row.get("correct") else ("· " if row.get("correct") is None else "✗ ")) + str(row["label"])
+    print("| field | class | truth | " + " | ".join(m.replace("qwen3.5-", "q").replace("granite-4.1-", "gr").replace("gemma-4-", "ge") for m in models) + " |")
+    print("|---|---|---|" + "---|" * len(models))
+    for f, d in rows.items():
+        truth = "|".join("null" if t is None else t for t in (d["truth"] or [])) or "(unscored)"
+        print(f"| {f} | {d['class']} | {truth} | " + " | ".join(d.get(m, "-") for m in models) + " |")
+
+
 def summarize(a) -> None:
     rows = []
     for p in sorted(Path(a.results).rglob("*__*.json")):
-        if p.name.startswith("grammar__"):
+        if p.name.startswith(("grammar__", "wholespec__")):
             continue
         r = json.loads(p.read_text(encoding="utf-8"))
         j = r["judgement"]
@@ -316,7 +497,7 @@ def summarize(a) -> None:
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "grammar"):
+    for name in ("run", "grammar", "wholespec"):
         p = sub.add_parser(name)
         p.add_argument("--models", nargs="+", required=True)
         p.add_argument("--cases", nargs="+", default=[c.stem for c in sorted(CASES.glob("*.json"))])
@@ -332,10 +513,22 @@ def main(argv=None):
         p.add_argument("--port", type=int, default=8080)
         p.add_argument("--image", default="ulpf-llama")
         p.add_argument("--cache", default=str(ROOT / "models" / "cache"))
+        p.add_argument("--ctx", type=int, default=16384, help="llama-server context size (KV cache grows with it; lower on a 4 GB card if needed)")
+        p.add_argument("--resume", action="store_true", help="skip configurations whose result file already exists without an error")
     s = sub.add_parser("summarize")
     s.add_argument("--results", default=str(RESULTS))
+    c = sub.add_parser("cases")
+    c.add_argument("--cases", nargs="+", default=[c.stem for c in sorted(CASES.glob("*.json"))])
+    c.add_argument("--limit-lines", type=int, default=12)
+    g = sub.add_parser("aggregate")
+    g.add_argument("--results", default=str(RESULTS))
+    m = sub.add_parser("slots")
+    m.add_argument("--results", default=str(RESULTS))
+    m.add_argument("--case", required=True)
+    m.add_argument("--mode", default="whole")
+    m.add_argument("--backend", default="gpu")
     a = ap.parse_args(argv)
-    {"run": run, "grammar": grammar, "summarize": summarize}[a.cmd](a)
+    {"run": run, "grammar": grammar, "wholespec": wholespec, "summarize": summarize, "cases": cases, "aggregate": aggregate, "slots": slots_matrix}[a.cmd](a)
 
 
 if __name__ == "__main__":

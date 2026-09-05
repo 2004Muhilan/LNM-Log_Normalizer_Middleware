@@ -21,18 +21,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends git cmake build
 WORKDIR /src
 RUN git clone --depth 1 --branch ${LLAMA_TAG} https://github.com/ggml-org/llama.cpp.git . \
  && git rev-parse HEAD > /llama-commit
+# GGML_BACKEND_DL: backends are shared libraries loaded at run time, so the same binary runs on a host
+# with a CUDA driver (loads libggml-cuda) and on one without (CPU only). Without it the CUDA-linked
+# binary needs libcuda.so.1 even for --device none (found by the P4 start check). CPU_ALL_VARIANTS picks
+# the CPU kernel variant for the host at run time (the two machines have different CPUs).
 RUN cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" -DGGML_NATIVE=OFF \
-      -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DBUILD_SHARED_LIBS=OFF \
+      -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DBUILD_SHARED_LIBS=ON \
+      -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
       -DCMAKE_BUILD_TYPE=Release \
  && cmake --build build --config Release -j"$(nproc)" --target llama-server llama-cli
-RUN mkdir -p /out && cp build/bin/llama-server build/bin/llama-cli /out/
+RUN mkdir -p /out && cp build/bin/llama-server build/bin/llama-cli /out/ \
+ && find build -name "*.so*" -exec cp -P {} /out/ \; && ls /out
 
 # llama-server alone (used by the spike; the learning image below builds on the same binaries)
 FROM docker.io/nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS llama
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 COPY --from=llama-build /out/ /app/
 COPY --from=llama-build /llama-commit /app/llama-commit
-ENV LLAMA_ARG_HOST=0.0.0.0
+ENV LLAMA_ARG_HOST=0.0.0.0 LD_LIBRARY_PATH=/app GGML_BACKEND_PATH=/app
 ENTRYPOINT ["/app/llama-server"]
 
 # Learning plane + one bundled model. MODEL is a manifest id; the GGUF is read from the `models`
@@ -53,5 +59,5 @@ COPY learning learning
 COPY models/manifest.json models/manifest.json
 RUN --mount=type=bind,from=models,target=/models-in \
     /venv/bin/python learning/tools/models.py install --manifest models/manifest.json --cache /models-in --dest /ulpf/models/cache --id "${MODEL}"
-ENV PATH="/venv/bin:/app:${PATH}" ULPF_ROOT=/ulpf ULPF_MODEL_ID=${MODEL}
+ENV PATH="/venv/bin:/app:${PATH}" ULPF_ROOT=/ulpf ULPF_MODEL_ID=${MODEL} LD_LIBRARY_PATH=/app GGML_BACKEND_PATH=/app
 ENTRYPOINT ["/venv/bin/python", "learning/tools/models.py", "serve", "--manifest", "models/manifest.json", "--cache", "/ulpf/models/cache"]

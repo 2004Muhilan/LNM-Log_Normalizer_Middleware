@@ -1,0 +1,17 @@
+{
+ "machine": "desktop-5060ti",
+ "model_id": "qwen3.5-4b-q4_k_m",
+ "model_hash": "sha256:00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+ "case": "squid-native",
+ "grammar_compiles": true,
+ "contract_valid": true,
+ "compiles": true,
+ "parsed": 6,
+ "lines": 6,
+ "wall_s": 8.9,
+ "predicted_tokens": 484,
+ "finish_reason": "stop",
+ "output": "{\n  \"schema_version\": \"1.1.0\",\n  \"spec_id\": \"squid-native-model\",\n  \"regex_dialect\": \"re2\",\n  \"bounds\": {\n    \"max_event_bytes\": 8192,\n    \"max_fields\": 64,\n    \"max_nesting\": 4,\n    \"max_repeat\": 16\n  },\n  \"root\": {\n    \"op\": \"positional\",\n    \"delimiter\": {\n      \"whitespace_run\": true\n    },\n    \"slots\": [\n      {\n        \"field\": \"slot_1\",\n        \"kind\": \"semantic\",\n        \"class\": \"float\"\n      },\n      {\n        \"field\": \"slot_2\",\n        \"kind\": \"semantic\",\n        \"class\": \"integer\"\n      },\n      {\n        \"field\": \"slot_3\",\n        \"kind\": \"semantic\",\n        \"class\": \"ipv4\"\n      },\n      {\n        \"field\": \"slot_4\",\n        \"kind\": \"semantic\",\n        \"class\": \"text\"\n      },\n      {\n        \"field\": \"slot_5\",\n        \"kind\": \"semantic\",\n        \"class\": \"integer\"\n      },\n      {\n        \"field\": \"slot_6\",\n        \"kind\": \"semantic\",\n        \"class\": \"word\"\n      },\n      {\n        \"field\": \"slot_7\",\n        \"kind\": \"semantic\",\n        \"class\": \"url\"\n      },\n      {\n        \"field\": \"slot_8\",\n        \"kind\": \"semantic\",\n        \"class\": \"word\"\n      },\n      {\n        \"field\": \"slot_9\",\n        \"kind\": \"semantic\",\n        \"class\": \"text\"\n      },\n      {\n        \"field\": \"slot_10\",\n        \"kind\": \"semantic\",\n        \"class\": \"text\"\n      }\n    ],\n    \"leading_delimiter\": \"reject\",\n    \"trailing_delimiter\": \"reject\",\n    \"tail\": null\n  }\n}",
+ "projected_valid": true,
+ "contract_errors": []
+}

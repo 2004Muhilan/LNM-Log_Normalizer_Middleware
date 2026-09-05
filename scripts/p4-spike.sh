@@ -15,5 +15,5 @@ flag="--gpu"; [ "$mode" = "cpu" ] && flag="--cpu"
 MODELS="${MODELS:-qwen3.5-9b-q4_k_m qwen3.5-4b-q4_k_m qwen3.5-4b-q8_0 qwen3.5-2b-q4_k_m granite-4.1-8b-q4_k_m gemma-4-12b-q4_0}"
 python learning/tools/models.py verify $(for m in $MODELS; do echo --id "$m"; done) || exit 1
 # shellcheck disable=SC2086
-python learning/tools/spike.py run --machine "$label" $flag --models $MODELS --repeat "${REPEAT:-2}" "$@"
+python learning/tools/spike.py run --machine "$label" $flag --models $MODELS --repeat "${REPEAT:-2}" --resume "$@"
 python learning/tools/spike.py summarize

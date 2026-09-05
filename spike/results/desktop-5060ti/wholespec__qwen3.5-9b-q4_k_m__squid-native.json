@@ -1,0 +1,17 @@
+{
+ "machine": "desktop-5060ti",
+ "model_id": "qwen3.5-9b-q4_k_m",
+ "model_hash": "sha256:03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+ "case": "squid-native",
+ "grammar_compiles": true,
+ "contract_valid": true,
+ "compiles": true,
+ "parsed": 6,
+ "lines": 6,
+ "wall_s": 13.6,
+ "predicted_tokens": 472,
+ "finish_reason": "stop",
+ "output": "{\n  \"schema_version\": \"1.1.0\",\n  \"spec_id\": \"squid-native-model\",\n  \"regex_dialect\": \"re2\",\n  \"bounds\": {\n    \"max_event_bytes\": 8192,\n    \"max_fields\": 64,\n    \"max_nesting\": 4,\n    \"max_repeat\": 16\n  },\n  \"root\": {\n    \"op\": \"positional\",\n    \"delimiter\": {\n      \"whitespace_run\": true\n    },\n    \"slots\": [\n      {\n        \"field\": \"timestamp\",\n        \"kind\": \"semantic\",\n        \"class\": \"float\"\n      },\n      {\n        \"field\": \"request_length\",\n        \"kind\": \"semantic\",\n        \"class\": \"integer\"\n      },\n      {\n        \"field\": \"client_ip\",\n        \"kind\": \"semantic\",\n        \"class\": \"ipv4\"\n      },\n      {\n        \"field\": \"request_status\",\n        \"kind\": \"semantic\",\n        \"class\": \"text\"\n      },\n      {\n        \"field\": \"response_length\",\n        \"kind\": \"semantic\",\n        \"class\": \"integer\"\n      },\n      {\n        \"field\": \"request_method\",\n        \"kind\": \"semantic\",\n        \"class\": \"word\"\n      },\n      {\n        \"field\": \"request_url\",\n        \"kind\": \"semantic\",\n        \"class\": \"url\"\n      },\n      {\n        \"field\": \"request_protocol\",\n        \"kind\": \"semantic\",\n        \"class\": \"text\"\n      },\n      {\n        \"field\": \"parent_ip\",\n        \"kind\": \"semantic\",\n        \"class\": \"text\"\n      },\n      {\n        \"field\": \"parent_protocol\",\n        \"kind\": \"semantic\",\n        \"class\": \"text\"\n      }\n    ],\n    \"leading_delimiter\": \"reject\",\n    \"trailing_delimiter\": \"reject\",\n    \"tail\": null\n  }\n}",
+ "projected_valid": true,
+ "contract_errors": []
+}

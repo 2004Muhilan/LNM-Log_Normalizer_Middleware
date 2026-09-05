@@ -1,0 +1,114 @@
+{
+ "model_id": "qwen3.5-4b-q4_k_m",
+ "dropped_keywords": {
+  "description": 36,
+  "uniqueItems": 3,
+  "if": 7,
+  "then": 8,
+  "format": 1,
+  "not": 5,
+  "propertyNames": 2,
+  "default": 1
+ },
+ "dropped_pointers": {
+  "description": [
+   "",
+   "/properties/schema_version",
+   "/properties",
+   "/properties/null_values",
+   "/$defs/field_path",
+   "/$defs/token_class",
+   "/$defs/timestamp_format/properties/kind",
+   "/$defs/timestamp_format/properties/pattern",
+   "/$defs/timestamp_format/properties/assume_year",
+   "/$defs/timestamp_format/properties/timezone",
+   "/$defs/coerce",
+   "/$defs/coerce/properties/formats",
+   "/$defs/coerce/properties/on_failure",
+   "/$defs/decode",
+   "/$defs/cell",
+   "/$defs/cell/properties/null_values",
+   "/$defs/delimiter/oneOf/0",
+   "/$defs/step",
+   "/$defs/op_literal",
+   "/$defs/op_regex",
+   "/$defs/op_regex/properties/captures",
+   "/$defs/csv_cell/oneOf/1",
+   "/$defs/op_csv",
+   "/$defs/op_csv/properties/extra_fields",
+   "/$defs/op_csv/properties/missing_fields",
+   "/$defs/op_kv",
+   "/$defs/op_kv/properties/key_pattern",
+   "/$defs/op_kv/properties/order",
+   "/$defs/op_kv/properties/allow_bare_keys",
+   "/$defs/slot/oneOf/0",
+   "/$defs/slot/oneOf/1",
+   "/$defs/slot/oneOf/2",
+   "/$defs/op_positional",
+   "/$defs/op_quoted",
+   "/$defs/op_optional",
+   "/$defs/op_repeated"
+  ],
+  "uniqueItems": [
+   "/properties/null_values",
+   "/$defs/coerce/properties/values",
+   "/$defs/cell/properties/null_values"
+  ],
+  "if": [
+   "/$defs/timestamp_format/allOf/0",
+   "/$defs/timestamp_format/allOf/1",
+   "/$defs/coerce/allOf/0",
+   "/$defs/coerce/allOf/1",
+   "/$defs/coerce/allOf/2",
+   "/$defs/coerce/allOf/3",
+   "/$defs/cell/allOf/0"
+  ],
+  "then": [
+   "/$defs/timestamp_format/allOf/0",
+   "/$defs/timestamp_format/allOf/1",
+   "/$defs/coerce/allOf/0",
+   "/$defs/coerce/allOf/1",
+   "/$defs/coerce/allOf/2",
+   "/$defs/coerce/allOf/3",
+   "/$defs/decode/properties",
+   "/$defs/cell/allOf/0"
+  ],
+  "format": [
+   "/$defs/coerce/properties"
+  ],
+  "not": [
+   "/$defs/coerce/allOf/2/if",
+   "/$defs/coerce/allOf/2/then",
+   "/$defs/coerce/allOf/3/if",
+   "/$defs/coerce/allOf/3/then",
+   "/$defs/cell/allOf/0/then"
+  ],
+  "propertyNames": [
+   "/$defs/op_regex/properties/captures",
+   "/$defs/op_kv/properties/keys"
+  ],
+  "default": [
+   "/$defs/op_kv/properties/allow_bare_keys"
+  ]
+ },
+ "class": {
+  "compiles": true,
+  "error": ""
+ },
+ "proposal-4002-10": {
+  "compiles": true,
+  "error": ""
+ },
+ "slot-3": {
+  "compiles": true,
+  "error": ""
+ },
+ "parser-spec-projected": {
+  "compiles": true,
+  "error": ""
+ },
+ "parser-spec-raw": {
+  "compiles": false,
+  "error": "/v1/chat/completions: HTTP 400: {\"error\":{\"code\":400,\"message\":\"Failed to initialize samplers: failed to parse grammar\",\"type\":\"invalid_request_error\"}}"
+ }
+}

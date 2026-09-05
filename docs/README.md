@@ -9,6 +9,9 @@ once the code has moved on.
 | [P1 — contracts, corpus, and the dual-stack harness](p1-report.md) | accepted; boundary decisions verified (addendum) | 2026-09-05 |
 | [P2 — runtime vertical slice on a hand-authored pack](p2-report.md) | accepted; boundary items settled (spec.go verified, usability definition) — §7 | 2026-09-05 |
 | [P3 — learning plane, deterministic half: certificates without a model](p3-report.md) | accepted; boundary items settled (library-decided ambiguity implemented; model and serving runtime decided) — §6 | 2026-09-05 |
+| [P4 — model integration: the model proposes, the machinery decides](p4-report.md) | exit criteria met on the development desktop; **demo-laptop measurements outstanding** (see [the runbook](demo-laptop-runbook.md)); awaiting verification | 2026-09-06 |
+
+Also here: [Demo laptop runbook](demo-laptop-runbook.md) — what must be true on the GTX 1650 laptop before the P4 spike can run there (driver, `.wslconfig` memory, GPU in Docker, offload knob, CPU floor).
 
 ## Convention
 

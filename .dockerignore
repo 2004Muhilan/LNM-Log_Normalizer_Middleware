@@ -1,0 +1,10 @@
+# Build context is the repository root. Weights and caches never enter a build context: the learning
+# image takes weights from a separate bind-mounted build context (--build-context models=models/cache).
+models/cache/
+corpus/cache/
+ocsf/cache/
+runtime/bin/
+.git/
+**/__pycache__/
+**/.pytest_cache/
+spike/results/

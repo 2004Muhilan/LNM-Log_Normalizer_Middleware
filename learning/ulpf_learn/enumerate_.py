@@ -18,8 +18,12 @@ PINNED = ROOT / "ocsf" / "pinned"
 
 # token class -> OCSF type families that accept it
 ACCEPTS = {
-    "integer": {"integer_t", "long_t", "port_t", "timestamp_t"},
-    "float": {"float_t", "timestamp_t"},  # an epoch with a fractional part is float-shaped
+    # numeric tokens also accept string_t: OCSF ids and codes are strings (connection_info.uid, device.uid
+    # for a numeric serial, metadata.event_code) and a number in a log is legitimately one of them; the
+    # typed families (ip, mac, url) stay strict. P4 spike: the 9B's correct `connection_info.uid` on an
+    # ASA connection id was refuted under the P3 rule.
+    "integer": {"integer_t", "long_t", "port_t", "timestamp_t", "string_t"},
+    "float": {"float_t", "timestamp_t", "string_t"},  # an epoch with a fractional part is float-shaped
     "ipv4": {"ip_t"},
     "ipv6": {"ip_t"},
     "ip": {"ip_t"},
@@ -28,8 +32,12 @@ ACCEPTS = {
     "hostname": {"hostname_t", "string_t"},
     "uuid": {"string_t", "resource_uid_t"},
     "hex": {"string_t"},
-    "word": {"string_t"},
-    "text": {"string_t"},
+    # a textual timestamp ("2018/11/30 16:09:07", "2021-05-26T16:27:07Z") is a text or word token that
+    # the DSL coerces to a timestamp, so timestamp_t (and its datetime_t string twin) must survive for
+    # these classes — otherwise the correct label `time` on a PAN-OS/FortiGate timestamp cell is refuted
+    # as type-incompatible (found by the P4 spike dry run). Windowing applies only to numeric samples.
+    "word": {"string_t", "timestamp_t", "datetime_t"},
+    "text": {"string_t", "timestamp_t", "datetime_t"},
 }
 
 
@@ -60,10 +68,11 @@ _EPOCH_WINDOWS = [(946684800 * 10 ** k, 4102444800 * 10 ** k) for k in (0, 3, 6,
 
 
 def _epoch_window(samples: list[str]) -> bool:
-    """True when every numeric sample falls in the SAME epoch_auto window — the same rule the runtime's
-    `epoch_auto` coercion applies, so a timestamp_t survivor is one the coercion could actually accept.
-    (P3 as shipped checked milliseconds only, and only integer-shaped samples; an epoch in seconds had
-    no timestamp_t survivor and a fractional epoch skipped the check. Fixed at the P3->P4 boundary.)"""
+    """True when every numeric sample falls in SOME epoch_auto window — per value, exactly as the runtime's
+    `epoch_auto` coercion selects precision, so a timestamp_t survivor is one the coercion could actually
+    accept. FortiGate's `eventtime` mixes seconds (FortiOS < 6.2) and nanoseconds (6.2+) in one file; the
+    P4 spike showed the correct label `time` refuted for three models when this demanded one common window.
+    (P3 as shipped checked milliseconds only, and only integer-shaped samples.)"""
     values = []
     for s in samples:
         try:
@@ -72,7 +81,7 @@ def _epoch_window(samples: list[str]) -> bool:
             return False
     if not values:
         return True
-    return any(all(lo <= v < hi for v in values) for lo, hi in _EPOCH_WINDOWS)
+    return all(any(lo <= v < hi for lo, hi in _EPOCH_WINDOWS) for v in values)
 
 
 def enumerate_candidates(class_uid: int, token_class: str, samples: list[str], max_depth: int = 2) -> Enumeration:
@@ -90,7 +99,7 @@ def enumerate_candidates(class_uid: int, token_class: str, samples: list[str], m
             excluded = "array attribute; the slot holds a scalar"
         elif t == "port_t" and any(not (0 <= int(s) <= 65535) for s in samples if s.lstrip("-").isdigit()):
             excluded = "values exceed the 0-65535 port range"
-        elif t == "timestamp_t" and not _epoch_window(samples):
+        elif t == "timestamp_t" and token_class in ("integer", "float") and not _epoch_window(samples):
             excluded = "values fall in no single epoch_auto precision window (s/ms/us/ns, 2000-2100)"
         elif leaf.get("enum") and any(s not in leaf["enum"] for s in samples):
             # integer enums (action_id) and string enums (http_request.http_method) alike: the sample

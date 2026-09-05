@@ -26,7 +26,11 @@ def structure_from_spec(spec_bytes: bytes, lines: list[bytes], max_samples: int 
                 continue
             path = sp["path"]
             values.setdefault(path, []).append(sp["value"])
-            c = sp.get("class") or classify(sp["value"])
+            # the OBSERVED class, as induction would compute it — not the cell's declared class. The
+            # declared class is the parser's widest acceptable shape (ASA hosts are `text` because names
+            # can appear); the enumerator must judge what the samples actually are (IPs here), or the
+            # correct label is refuted as type-incompatible (P4 spike, 9B on asa-302013).
+            c = classify(sp["value"])
             classes[path] = join_class(classes[path], c) if path in classes else c
     if not kept:
         raise ValueError("no sample line parses under the spec")

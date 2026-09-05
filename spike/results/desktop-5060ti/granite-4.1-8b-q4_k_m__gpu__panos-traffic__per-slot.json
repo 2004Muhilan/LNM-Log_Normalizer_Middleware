@@ -1,0 +1,908 @@
+{
+ "machine": "desktop-5060ti",
+ "machine_info": {
+  "hostname": "Muhilan",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "cpu": "AMD Ryzen 7 2700X Eight-Core Processor",
+  "ram_gb": 23.4,
+  "gpu": "NVIDIA GeForce RTX 5060 Ti",
+  "vram_mb": 16311,
+  "driver": "595.79"
+ },
+ "model_id": "granite-4.1-8b-q4_k_m",
+ "model_hash": "sha256:ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
+ "backend": "cuda ngl=auto",
+ "offload": {
+  "layers_on_gpu": 41,
+  "layers_total": 41,
+  "model_buffers_mib": {
+   "CUDA0": 4876.27,
+   "CUDA_Host": 0.0,
+   "CPU_Mapped": 220.5
+  },
+  "kv_buffers_mib": {
+   "CUDA0": 2560.0
+  },
+  "device": "NVIDIA GeForce RTX 5060 Ti",
+  "projected_device_mib": 7551,
+  "free_device_mib_at_start": 15160,
+  "vram_used_delta_mib": 7698,
+  "fits_in_vram": true
+ },
+ "case": "panos-traffic",
+ "mode": "per-slot",
+ "event_class_uid": 4001,
+ "lines": 12,
+ "slots": 53,
+ "wall_ms": [
+  89055.41542099672,
+  89101.35643799731
+ ],
+ "wall_s_first": 89.1,
+ "prompt_tokens": 129661,
+ "predicted_tokens": 1149,
+ "iterations": 1,
+ "calls": 54,
+ "refuted_by_iteration": [],
+ "abandoned": [],
+ "schema_invalid": 0,
+ "think_leak": 0,
+ "class_answer": "network_activity",
+ "repeat": 2,
+ "byte_identical": true,
+ "distinct_outputs": 1,
+ "provenance": {
+  "provider": "model",
+  "model_id": "granite-4.1-8b-q4_k_m",
+  "model_hash": "sha256:ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
+  "llama_cpp": {
+   "build_info": "b1-6a1a922",
+   "model_path": "/models/granite-4.1-8b-Q4_K_M.gguf",
+   "n_ctx": null
+  },
+  "decoding": {
+   "temperature": 0.0,
+   "top_k": 1,
+   "top_p": 1.0,
+   "min_p": 0.0,
+   "seed": 0,
+   "cache_prompt": false,
+   "repeat_penalty": 1.0,
+   "presence_penalty": 0.0,
+   "frequency_penalty": 0.0
+  },
+  "backend": "cuda ngl=auto",
+  "mode": "per-slot",
+  "max_iterations": 3,
+  "prompt_template_hash": "sha256:200b491effc2b4d34538672d79f32f629298978228198fb27440f94ff5aefca2",
+  "grammar_hashes": {
+   "class": "sha256:4b92b66d7b7325e9387db3bdf4daf84e694cadb82b994d6b61dade15bd814fdf",
+   "slots": {
+    "1": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "2": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "3": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "4": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "5": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "6": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "7": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "8": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "9": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "10": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "11": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "12": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "13": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "14": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "15": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "16": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "17": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "18": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "19": "sha256:dc300cc06e820fb78fe03e3539c42851a3bc1b27e487a3f1cd75698304c2c2dd",
+    "20": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "21": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "22": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "23": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "24": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "25": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "26": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "27": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "28": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "29": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "30": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "31": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "32": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "33": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "34": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "35": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "36": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "37": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "38": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "39": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "40": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "41": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "42": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "43": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "44": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "45": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "46": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "47": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "48": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "49": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "50": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "51": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "52": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "53": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce"
+   }
+  },
+  "trace": {
+   "model_id": "granite-4.1-8b-q4_k_m",
+   "mode": "per-slot",
+   "iterations": 1,
+   "calls": 54,
+   "prompt_tokens": 129661,
+   "predicted_tokens": 1149,
+   "wall_ms": 89101.35643799731,
+   "refuted_by_iteration": [],
+   "abandoned": [],
+   "schema_invalid": 0,
+   "think_leak": 0,
+   "class_answer": "network_activity"
+  }
+ },
+ "judgement": {
+  "event_class_correct": true,
+  "event_class_proposed": 4001,
+  "slots": 53,
+  "labelled": 23,
+  "type_compatible_rate": 1.0,
+  "scored": 53,
+  "agreement": 0.4716981132075472,
+  "over_mapped": 7,
+  "out_of_class_rate": 0.15,
+  "in_class_truth_slots": 20,
+  "certificates": 19,
+  "certificate_shape": {
+   "src_ip": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   },
+   "bytes_sent": {
+    "expected": "volume_direction",
+    "got": "endpoint_orientation"
+   },
+   "generated_time": {
+    "expected": "temporal_role",
+    "got": null
+   }
+  },
+  "shape_preserved": false,
+  "request": true,
+  "rows": [
+   {
+    "slot": 1,
+    "field": "receive_time",
+    "class": "text",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     "metadata.logged_time",
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 2,
+    "field": "serial_number",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "device.uid"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 3,
+    "field": "type",
+    "class": "word",
+    "proposal": [
+     "action",
+     "category_name",
+     "dst_endpoint.name"
+    ],
+    "label": "action",
+    "truth": [
+     "metadata.log_name",
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 4,
+    "field": "subtype",
+    "class": "word",
+    "proposal": [
+     "end_time"
+    ],
+    "label": "end_time",
+    "truth": [
+     "activity_name",
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 5,
+    "field": "generated_time",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "time"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 6,
+    "field": "src_ip",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     "src_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 7,
+    "field": "dst_ip",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     "dst_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 8,
+    "field": "nat_src_ip",
+    "class": "ipv4",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 9,
+    "field": "nat_dst_ip",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 10,
+    "field": "rule_name",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 11,
+    "field": "application",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "app_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 12,
+    "field": "virtual_system",
+    "class": "word",
+    "proposal": [
+     "device.name"
+    ],
+    "label": "device.name",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 13,
+    "field": "src_zone",
+    "class": "word",
+    "proposal": [
+     "src_endpoint.zone"
+    ],
+    "label": "src_endpoint.zone",
+    "truth": [
+     "src_endpoint.zone"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 14,
+    "field": "dst_zone",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "dst_endpoint.zone"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 15,
+    "field": "inbound_interface",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.interface_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 16,
+    "field": "outbound_interface",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "dst_endpoint.interface_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 17,
+    "field": "log_action",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 18,
+    "field": "session_id",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "connection_info.uid",
+     "connection_info.session.uid"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 19,
+    "field": "repeat_count",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "count"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 20,
+    "field": "src_port",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     "src_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 21,
+    "field": "dst_port",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.port"
+    ],
+    "label": "dst_endpoint.port",
+    "truth": [
+     "dst_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 22,
+    "field": "nat_src_port",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 23,
+    "field": "nat_dst_port",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.port"
+    ],
+    "label": "dst_endpoint.port",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 24,
+    "field": "flags",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 25,
+    "field": "protocol",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "connection_info.protocol_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 26,
+    "field": "action",
+    "class": "word",
+    "proposal": [
+     "action"
+    ],
+    "label": "action",
+    "truth": [
+     "action"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 27,
+    "field": "bytes",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "traffic.bytes"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 28,
+    "field": "bytes_sent",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port",
+     "dst_endpoint.port",
+     "dst_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     "traffic.bytes_out"
+    ],
+    "type_compatible": true,
+    "correct": false,
+    "out_of_class": true
+   },
+   {
+    "slot": 29,
+    "field": "bytes_received",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "traffic.bytes_in"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 30,
+    "field": "packets",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "traffic.packets"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 31,
+    "field": "start_time",
+    "class": "text",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     "start_time"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 32,
+    "field": "elapsed_time",
+    "class": "integer",
+    "proposal": [
+     "duration",
+     "timezone_offset"
+    ],
+    "label": "duration",
+    "truth": [
+     "duration"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 33,
+    "field": "category",
+    "class": "word",
+    "proposal": [
+     "category_name"
+    ],
+    "label": "category_name",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 34,
+    "field": "sequence_number",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 35,
+    "field": "action_flags",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 36,
+    "field": "src_country",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.location.country"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 37,
+    "field": "dst_country",
+    "class": "text",
+    "proposal": [
+     "dst_endpoint.location.country"
+    ],
+    "label": "dst_endpoint.location.country",
+    "truth": [
+     "dst_endpoint.location.country"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 38,
+    "field": "packets_sent",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port",
+     "dst_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     "traffic.packets_out"
+    ],
+    "type_compatible": true,
+    "correct": false,
+    "out_of_class": true
+   },
+   {
+    "slot": 39,
+    "field": "packets_received",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port",
+     "dst_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     "traffic.packets_in"
+    ],
+    "type_compatible": true,
+    "correct": false,
+    "out_of_class": true
+   },
+   {
+    "slot": 40,
+    "field": "session_end_reason",
+    "class": "word",
+    "proposal": [
+     "connection_info.session.credential_uid"
+    ],
+    "label": "connection_info.session.credential_uid",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 41,
+    "field": "dg_hierarchy_level_1",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 42,
+    "field": "dg_hierarchy_level_2",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 43,
+    "field": "dg_hierarchy_level_3",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 44,
+    "field": "dg_hierarchy_level_4",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 45,
+    "field": "device_name",
+    "class": "word",
+    "proposal": [
+     "device.name"
+    ],
+    "label": "device.name",
+    "truth": [
+     "device.name",
+     "device.hostname"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 46,
+    "field": "action_source",
+    "class": "word",
+    "proposal": [
+     "action"
+    ],
+    "label": "action",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 47,
+    "field": "tunnel_id_imsi",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 48,
+    "field": "parent_session_id",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 49,
+    "field": "tunnel_type",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 50,
+    "field": "sctp_association_id",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 51,
+    "field": "sctp_chunks",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 52,
+    "field": "sctp_chunks_sent",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 53,
+    "field": "sctp_chunks_received",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.svc_name",
+     "dst_endpoint.svc_name",
+     "app_name"
+    ],
+    "label": "src_endpoint.svc_name",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   }
+  ]
+ },
+ "raw_outputs": [
+  "{\n  \"event_class\": \"network_activity\"\n}",
+  "{\n  \"label\": \"time\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"action\",\n  \"alternatives\": [\n    \"category_name\",\n    \"dst_endpoint.name\"\n  ]\n}",
+  "{\n  \"label\": \"end_time\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"src_endpoint.ip\",\n  \"alternatives\": [\n    \"src_endpoint.ip\",\n    \"src_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.ip\",\n  \"alternatives\": [\n    \"dst_endpoint.ip\",\n    \"dst_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"dst_endpoint.ip\",\n  \"alternatives\": [\n    \"dst_endpoint.ip\",\n    \"dst_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"device.name\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"src_endpoint.zone\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"src_endpoint.port\",\n  \"alternatives\": [\n    \"src_endpoint.port\",\n    \"src_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.port\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"dst_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\",\n    \"dst_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"action\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"src_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\",\n    \"dst_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"time\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"duration\",\n  \"alternatives\": [\n    \"duration\",\n    \"timezone_offset\"\n  ]\n}",
+  "{\n  \"label\": \"category_name\",\n  \"alternatives\": [\n    \"category_name\",\n    \"category_name\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"dst_endpoint.location.country\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"src_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\",\n    \"src_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.port\",\n  \"alternatives\": [\n    \"dst_endpoint.port\",\n    \"src_endpoint.port\"\n  ]\n}",
+  "{\n  \"label\": \"connection_info.session.credential_uid\",\n  \"alternatives\": [\n    \"connection_info.session.credential_uid\",\n    \"connection_info.session.credential_uid\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"device.name\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"action\",\n  \"alternatives\": [\n    \"action\",\n    \"action\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"src_endpoint.svc_name\",\n  \"alternatives\": [\n    \"dst_endpoint.svc_name\",\n    \"app_name\"\n  ]\n}"
+ ],
+ "llama_server_log_tail": "959 D func_args_separator: ''\n0.39.711.960 D func_close: ''\n0.39.711.960 D call_id_prefix: ''\n0.39.711.960 D call_id_suffix: ''\n0.39.711.960 D call_id_pos: 'NONE'\n0.39.711.960 D args_start: ''\n0.39.711.960 D args_end: ''\n0.39.711.960 D arg_name_prefix: ''\n0.39.711.960 D arg_name_suffix: ''\n0.39.711.961 D arg_value_prefix: ''\n0.39.711.961 D arg_value_suffix: ''\n0.39.711.961 D name_field: 'name'\n0.39.711.961 D args_field: 'arguments'\n0.39.711.961 D id_field: ''\n0.39.711.961 D gen_id_field: ''\n0.39.711.962 D parameter_order: 'name, arguments'\n0.39.711.962 D \u001b[1m\u001b[38;5;126m=== Differential analysis complete ===\n\u001b[0m0.39.713.115 D common_chat_templates_apply_jinja: generated parser:\nSequence(Literal(<|start_of_role|>assistant<|end_of_role|>), Epsilon, Tag(content, Until()), End)\n\nparser generation prompt: <|start_of_role|>assistant<|end_of_role|>\n0.39.713.166 I srv          init: init: chat template, example_format: '<|start_of_role|>system<|end_of_role|>You are a helpful assistant<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Hello<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Hi there<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>How are you?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>'\n0.39.713.213 D common_chat_templates_apply_jinja: using differential autoparser\n0.39.713.236 D \u001b[1m\u001b[38;5;126m=== Starting differential analysis ===\n\u001b[0m0.39.713.236 D \u001b[1m\u001b[38;5;214mPhase 1: Reasoning analysis\n\u001b[0m0.39.714.548 D \u001b[1m\u001b[38;5;214mPhase 2: Content analysis\n\u001b[0m0.39.715.909 D \u001b[1m\u001b[38;5;214mPhase 3: Tool call analysis\n\u001b[0m0.39.718.032 D \n--- Reasoning & Content Structure ---\n0.39.718.057 D user_msg_start: <|start_of_role|>user<|end_of_role|>\n0.39.718.057 D assistant_msg_start: <|start_of_role|>assistant<|end_of_role|>\n0.39.718.058 D reasoning_mode: NONE\n0.39.718.058 D reasoning_start: ''\n0.39.718.058 D reasoning_end: ''\n0.39.718.059 D content_mode: PLAIN\n0.39.718.059 D content_start: ''\n0.39.718.059 D content_end: ''\n0.39.718.059 D \n--- Tool Call Structure ---\n0.39.718.060 D tool_mode: JSON_NATIVE\n0.39.718.060 D supports_tools: true\n0.39.718.060 D supports_parallel_calls: true\n0.39.718.060 D tool_section_start: ''\n0.39.718.060 D tool_section_end: ''\n0.39.718.060 D per_call_start: '<tool_call>\n'\n0.39.718.060 D per_call_end: '</tool_call>'\n0.39.718.061 D func_name_prefix: ''\n0.39.718.061 D func_name_suffix: ''\n0.39.718.061 D func_args_separator: ''\n0.39.718.061 D func_close: ''\n0.39.718.061 D call_id_prefix: ''\n0.39.718.061 D call_id_suffix: ''\n0.39.718.062 D call_id_pos: 'NONE'\n0.39.718.062 D args_start: ''\n0.39.718.062 D args_end: ''\n0.39.718.062 D arg_name_prefix: ''\n0.39.718.062 D arg_name_suffix: ''\n0.39.718.062 D arg_value_prefix: ''\n0.39.718.062 D arg_value_suffix: ''\n0.39.718.062 D name_field: 'name'\n0.39.718.062 D args_field: 'arguments'\n0.39.718.062 D id_field: ''\n0.39.718.062 D gen_id_field: ''\n0.39.718.063 D parameter_order: 'name, arguments'\n0.39.718.063 D \u001b[1m\u001b[38;5;126m=== Differential analysis complete ===\n\u001b[0m0.39.718.482 D common_chat_templates_apply_jinja: generated parser:\nSequence(Literal(<|start_of_role|>assistant<|end_of_role|>), Epsilon, Tag(content, Until()), End)\n\nparser generation prompt: <|start_of_role|>assistant<|end_of_role|>\n0.39.718.511 I srv          init: init: chat template, thinking = 0\n0.39.718.516 I srv          init: preserve_reasoning kwarg: not supported by template\n0.39.718.525 I srv  llama_server: model loaded\n0.39.718.527 I srv  llama_server: listening on http://0.0.0.0:8080\n0.39.718.528 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release\n0.39.718.528 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508\n0.39.718.966 D que    start_loop: processing new tasks\n0.39.718.989 D que    start_loop: update slots\n0.39.718.991 I srv  update_slots: all slots are idle\n0.39.718.991 D que    start_loop: waiting for new tasks\n0.40.954.317 D srv          stop: all tasks already finished, no need to cancel\n"
+}

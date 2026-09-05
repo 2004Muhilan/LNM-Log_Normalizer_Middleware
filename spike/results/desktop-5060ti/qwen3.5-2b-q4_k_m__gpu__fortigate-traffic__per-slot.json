@@ -1,0 +1,1144 @@
+{
+ "machine": "desktop-5060ti",
+ "machine_info": {
+  "hostname": "Muhilan",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "cpu": "AMD Ryzen 7 2700X Eight-Core Processor",
+  "ram_gb": 23.4,
+  "gpu": "NVIDIA GeForce RTX 5060 Ti",
+  "vram_mb": 16311,
+  "driver": "595.79"
+ },
+ "model_id": "qwen3.5-2b-q4_k_m",
+ "model_hash": "sha256:aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+ "backend": "cuda ngl=auto",
+ "offload": {
+  "layers_on_gpu": 25,
+  "layers_total": 25,
+  "model_buffers_mib": {
+   "CUDA0": 1211.05,
+   "CUDA_Host": 0.0,
+   "CPU_Mapped": 397.85
+  },
+  "kv_buffers_mib": {
+   "CUDA0": 192.0
+  },
+  "device": "NVIDIA GeForce RTX 5060 Ti",
+  "projected_device_mib": 1482,
+  "free_device_mib_at_start": 15140,
+  "vram_used_delta_mib": 1629,
+  "fits_in_vram": true
+ },
+ "case": "fortigate-traffic",
+ "mode": "per-slot",
+ "event_class_uid": 4001,
+ "lines": 12,
+ "slots": 72,
+ "wall_ms": [
+  189780.41395099717,
+  191775.3998630069
+ ],
+ "wall_s_first": 189.8,
+ "prompt_tokens": 251941,
+ "predicted_tokens": 1793,
+ "iterations": 1,
+ "calls": 73,
+ "refuted_by_iteration": [],
+ "abandoned": [],
+ "schema_invalid": 0,
+ "think_leak": 0,
+ "class_answer": "network_activity",
+ "repeat": 2,
+ "byte_identical": true,
+ "distinct_outputs": 1,
+ "provenance": {
+  "provider": "model",
+  "model_id": "qwen3.5-2b-q4_k_m",
+  "model_hash": "sha256:aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+  "llama_cpp": {
+   "build_info": "b1-6a1a922",
+   "model_path": "/models/Qwen3.5-2B-Q4_K_M.gguf",
+   "n_ctx": null
+  },
+  "decoding": {
+   "temperature": 0.0,
+   "top_k": 1,
+   "top_p": 1.0,
+   "min_p": 0.0,
+   "seed": 0,
+   "cache_prompt": false,
+   "repeat_penalty": 1.0,
+   "presence_penalty": 0.0,
+   "frequency_penalty": 0.0
+  },
+  "backend": "cuda ngl=auto",
+  "mode": "per-slot",
+  "max_iterations": 3,
+  "prompt_template_hash": "sha256:200b491effc2b4d34538672d79f32f629298978228198fb27440f94ff5aefca2",
+  "grammar_hashes": {
+   "class": "sha256:4b92b66d7b7325e9387db3bdf4daf84e694cadb82b994d6b61dade15bd814fdf",
+   "slots": {
+    "1": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "2": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "3": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "4": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "5": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "6": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "7": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "8": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "9": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "10": "sha256:d5a6f96800c93414496f2644baae7254b510d966582d18942c117271102f4c0e",
+    "11": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "12": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "13": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "14": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "15": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "16": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "17": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "18": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "19": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "20": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "21": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "22": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "23": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "24": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "25": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "26": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "27": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "28": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "29": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "30": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "31": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "32": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "33": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "34": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "35": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "36": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "37": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "38": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "39": "sha256:558574c31b22fc270739406c76442df00dde4e7649a8da4c10938a34302d84f2",
+    "40": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "41": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "42": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "43": "sha256:99eac3ae6d8f2189c65e2c3e3d98a92a01b94369afa131cacd45ea6ad96946b9",
+    "44": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "45": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "46": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "47": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "48": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "49": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "50": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "51": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "52": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "53": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "54": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "55": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "56": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "57": "sha256:7c3d63eaf65d98d5e1204346ddc61d540113dc94105896ffbd686169e9faabf6",
+    "58": "sha256:2f3ab5798cbeaef22c41b2e2f21c5151bdc4cb1997e64a9ec3c604051197a89b",
+    "59": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "60": "sha256:0dfb7b0d498b70619af3a0130ec6afda6a438f353d06bcacd8e2e2c7874dbaab",
+    "61": "sha256:0dfb7b0d498b70619af3a0130ec6afda6a438f353d06bcacd8e2e2c7874dbaab",
+    "62": "sha256:0dfb7b0d498b70619af3a0130ec6afda6a438f353d06bcacd8e2e2c7874dbaab",
+    "63": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "64": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "65": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "66": "sha256:0dfb7b0d498b70619af3a0130ec6afda6a438f353d06bcacd8e2e2c7874dbaab",
+    "67": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "68": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "69": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "70": "sha256:61c299b730c96314b9ceedd6eb412cb421f801afe9535e6edb85f507f363dbce",
+    "71": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367",
+    "72": "sha256:9c751690d58474c8819be6dcae4a48a90ead37fa9ce740934e4268eab1b4f367"
+   }
+  },
+  "trace": {
+   "model_id": "qwen3.5-2b-q4_k_m",
+   "mode": "per-slot",
+   "iterations": 1,
+   "calls": 73,
+   "prompt_tokens": 251941,
+   "predicted_tokens": 1793,
+   "wall_ms": 191775.3998630069,
+   "refuted_by_iteration": [],
+   "abandoned": [],
+   "schema_invalid": 0,
+   "think_leak": 0,
+   "class_answer": "network_activity"
+  }
+ },
+ "judgement": {
+  "event_class_correct": true,
+  "event_class_proposed": 4001,
+  "slots": 72,
+  "labelled": 18,
+  "type_compatible_rate": 1.0,
+  "scored": 72,
+  "agreement": 0.6111111111111112,
+  "over_mapped": 7,
+  "out_of_class_rate": 0.047619047619047616,
+  "in_class_truth_slots": 21,
+  "certificates": 15,
+  "certificate_shape": {
+   "srcip": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   },
+   "sentbyte": {
+    "expected": "volume_direction",
+    "got": "volume_direction"
+   },
+   "eventtime": {
+    "expected": "temporal_role",
+    "got": null
+   }
+  },
+  "shape_preserved": false,
+  "request": true,
+  "rows": [
+   {
+    "slot": 1,
+    "field": "date",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null,
+     "time"
+    ],
+    "correct": true
+   },
+   {
+    "slot": 2,
+    "field": "time",
+    "class": "word",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     null,
+     "time"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 3,
+    "field": "devname",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "device.name",
+     "device.hostname"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 4,
+    "field": "devid",
+    "class": "word",
+    "proposal": [
+     "device.name"
+    ],
+    "label": "device.name",
+    "truth": [
+     "device.uid"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 5,
+    "field": "logid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "metadata.event_code",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 6,
+    "field": "type",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "metadata.log_name",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 7,
+    "field": "subtype",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "activity_name",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 8,
+    "field": "level",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "severity",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 9,
+    "field": "vd",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 10,
+    "field": "eventtime",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "time"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 11,
+    "field": "srcip",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     "src_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 12,
+    "field": "srcport",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.name"
+    ],
+    "label": "src_endpoint.name",
+    "truth": [
+     "src_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 13,
+    "field": "srcintf",
+    "class": "word",
+    "proposal": [
+     "src_endpoint.interface_name"
+    ],
+    "label": "src_endpoint.interface_name",
+    "truth": [
+     "src_endpoint.interface_name"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 14,
+    "field": "srcintfrole",
+    "class": "word",
+    "proposal": [
+     "src_endpoint.type"
+    ],
+    "label": "src_endpoint.type",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 15,
+    "field": "dstip",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     "dst_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 16,
+    "field": "dstport",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.type",
+     "dst_endpoint.port",
+     "dst_endpoint.name"
+    ],
+    "label": "dst_endpoint.type",
+    "truth": [
+     "dst_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 17,
+    "field": "dstintf",
+    "class": "word",
+    "proposal": [
+     "dst_endpoint.interface_name"
+    ],
+    "label": "dst_endpoint.interface_name",
+    "truth": [
+     "dst_endpoint.interface_name"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 18,
+    "field": "dstintfrole",
+    "class": "word",
+    "proposal": [
+     "dst_endpoint.type",
+     "dst_endpoint.name"
+    ],
+    "label": "dst_endpoint.type",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 19,
+    "field": "sessionid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "connection_info.uid",
+     "connection_info.session.uid"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 20,
+    "field": "proto",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "connection_info.protocol_num"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 21,
+    "field": "action",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "action"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 22,
+    "field": "policyid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.uid"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 23,
+    "field": "policytype",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.type",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 24,
+    "field": "service",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "app_name",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 25,
+    "field": "dstcountry",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "dst_endpoint.location.country"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 26,
+    "field": "srccountry",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.location.country"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 27,
+    "field": "trandisp",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 28,
+    "field": "duration",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "duration"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 29,
+    "field": "sentbyte",
+    "class": "integer",
+    "proposal": [
+     "traffic.bytes"
+    ],
+    "label": "traffic.bytes",
+    "truth": [
+     "traffic.bytes_out"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 30,
+    "field": "rcvdbyte",
+    "class": "integer",
+    "proposal": [
+     "traffic.bytes"
+    ],
+    "label": "traffic.bytes",
+    "truth": [
+     "traffic.bytes_in"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 31,
+    "field": "sentpkt",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "traffic.packets_out"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 32,
+    "field": "appcat",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 33,
+    "field": "crscore",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 34,
+    "field": "craction",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 35,
+    "field": "crlevel",
+    "class": "word",
+    "proposal": [
+     "severity"
+    ],
+    "label": "severity",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 36,
+    "field": "tz",
+    "class": "integer",
+    "proposal": [
+     "timezone_offset"
+    ],
+    "label": "timezone_offset",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 37,
+    "field": "poluuid",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.uid",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 38,
+    "field": "policyname",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 39,
+    "field": "transip",
+    "class": "ipv4",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 40,
+    "field": "transport",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 41,
+    "field": "applist",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 42,
+    "field": "rcvdpkt",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "traffic.packets_in"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 43,
+    "field": "vwlid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 44,
+    "field": "sentdelta",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 45,
+    "field": "rcvddelta",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 46,
+    "field": "identifier",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 47,
+    "field": "app",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "app_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 48,
+    "field": "user",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.owner.name",
+     "actor.user.name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 49,
+    "field": "authserver",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 50,
+    "field": "group",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 51,
+    "field": "appid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 52,
+    "field": "apprisk",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 53,
+    "field": "appact",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 54,
+    "field": "vwlquality",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 55,
+    "field": "wanin",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 56,
+    "field": "wanout",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 57,
+    "field": "lanin",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 58,
+    "field": "lanout",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 59,
+    "field": "utmaction",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 60,
+    "field": "countweb",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 61,
+    "field": "countapp",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 62,
+    "field": "countips",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 63,
+    "field": "utmref",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 64,
+    "field": "srcuuid",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.uid",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 65,
+    "field": "dstuuid",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "dst_endpoint.uid",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 66,
+    "field": "countav",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 67,
+    "field": "osname",
+    "class": "word",
+    "proposal": [
+     "osint.comment",
+     "osint.vendor_name",
+     "osint.vendor_name"
+    ],
+    "label": "osint.comment",
+    "truth": [
+     "src_endpoint.os.name",
+     null
+    ],
+    "type_compatible": true,
+    "correct": false,
+    "out_of_class": true
+   },
+   {
+    "slot": 68,
+    "field": "mastersrcmac",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 69,
+    "field": "srcmac",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.mac"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 70,
+    "field": "srcserver",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 71,
+    "field": "devtype",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 72,
+    "field": "devcategory",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   }
+  ]
+ },
+ "raw_outputs": [
+  "{\n  \"event_class\": \"network_activity\"\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"time\",\n  \"alternatives\": [\n    \"time\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"device.name\",\n  \"alternatives\": [\n    \"device.name\",\n    \"device.name\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"src_endpoint.ip\",\n  \"alternatives\": [\n    \"src_endpoint.ip\",\n    \"src_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.name\",\n  \"alternatives\": [\n    \"src_endpoint.name\",\n    \"src_endpoint.name\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.interface_name\",\n  \"alternatives\": [\n    \"src_endpoint.interface_name\",\n    \"src_endpoint.interface_name\"\n  ]\n}",
+  "{\n  \"label\": \"src_endpoint.type\",\n  \"alternatives\": [\n    \"src_endpoint.type\",\n    \"src_endpoint.type\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.ip\",\n  \"alternatives\": [\n    \"dst_endpoint.ip\",\n    \"dst_endpoint.ip\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.type\",\n  \"alternatives\": [\n    \"dst_endpoint.port\",\n    \"dst_endpoint.name\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.interface_name\",\n  \"alternatives\": [\n    \"dst_endpoint.interface_name\",\n    \"dst_endpoint.interface_name\"\n  ]\n}",
+  "{\n  \"label\": \"dst_endpoint.type\",\n  \"alternatives\": [\n    \"dst_endpoint.name\",\n    \"dst_endpoint.type\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": [\n    \"class_name\",\n    \"type_name\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"traffic.bytes\",\n  \"alternatives\": [\n    \"traffic.bytes\",\n    \"traffic.bytes\"\n  ]\n}",
+  "{\n  \"label\": \"traffic.bytes\",\n  \"alternatives\": [\n    \"traffic.bytes\",\n    \"traffic.bytes\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": [\n    \"app_name\",\n    \"device.name\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"severity\",\n  \"alternatives\": [\"severity\", \"severity\"]\n}",
+  "{\n  \"label\": \"timezone_offset\",\n  \"alternatives\": [\n    \"timezone_offset\",\n    \"timezone_offset\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"traffic.packets\",\n  \"alternatives\": [\n    \"traffic.packets\",\n    \"traffic.packets\"\n  ]\n}",
+  "{\n  \"label\": \"traffic.packets\",\n  \"alternatives\": [\n    \"traffic.packets\",\n    \"traffic.packets\"\n  ]\n}",
+  "{\n  \"label\": \"traffic.packets\",\n  \"alternatives\": [\n    \"traffic.packets\",\n    \"traffic.packets\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"osint.comment\",\n  \"alternatives\": [\n    \"osint.vendor_name\",\n    \"osint.vendor_name\"\n  ]\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}",
+  "{\n  \"label\": \"unmapped\",\n  \"alternatives\": []\n}"
+ ],
+ "llama_server_log_tail": "...\n0.16.560.318 D sched_reserve: max_nodes = 20480\n0.16.583.288 D sched_reserve: reserving full memory module\n0.16.583.351 D sched_reserve: worst-case: n_tokens = 512, n_seqs = 1, n_outputs = 1\n0.16.583.354 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.16.584.196 I resolve_fused_ops: Flash Attention enabled\n0.16.584.221 I resolve_fused_ops: resolving fused DeepSeek V4 HC support:\n0.16.584.222 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.16.584.794 I resolve_fused_ops: fused DeepSeek V4 HC pre enabled\n0.16.584.821 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.16.585.316 I resolve_fused_ops: fused DeepSeek V4 HC comb enabled\n0.16.585.344 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.16.585.937 I resolve_fused_ops: fused DeepSeek V4 HC post enabled\n0.16.585.962 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n0.16.633.563 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.16.634.716 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n0.16.635.871 I sched_reserve:      CUDA0 compute buffer size =    60.16 MiB\n0.16.635.903 I sched_reserve:  CUDA_Host compute buffer size =    24.02 MiB\n0.16.635.904 I sched_reserve: graph nodes  = 1375\n0.16.635.904 I sched_reserve: graph splits = 2\n0.16.635.905 I sched_reserve: reserve took 75.59 ms, sched copies = 1\n0.16.636.037 I cmn          init: llama threadpool init, n_threads = 8\n0.16.636.094 D attach_threadpool: call\n0.16.636.131 D set_adapters_lora: adapters = (nil)\n0.16.636.132 D adapters_lora_are_same: adapters = (nil)\n0.16.774.201 I cmn  common_conte: the context does not support partial sequence removal\n0.16.775.742 I srv    load_model: speculative decoding will use checkpoints\n0.16.775.772 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 16384, kv_unified = 'false'\n0.16.775.803 I spec common_specu: no implementations specified for speculative decoding\n0.16.775.807 I slot   load_model: id  0 | task -1 | new slot, n_ctx = 16384\n0.16.775.808 D slot        reset: id  0 | task -1 | \n0.16.776.008 I srv    load_model: prompt cache is enabled, size limit: 8192 MiB\n0.16.776.037 I srv    load_model: use `--cache-ram 0` to disable the prompt cache\n0.16.776.037 I srv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391\n0.16.776.038 I srv    load_model: context checkpoints enabled, max = 32, min spacing = 8192\n0.16.776.061 I srv          init: idle slots will be saved to prompt cache upon starting a new task\n0.16.776.061 D srv          init: __TEST_TAG_CACHE_IDLE_SLOTS_ENABLED__\n0.16.782.062 D Using specialized template: Qwen3-Coder\n0.16.784.285 I srv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n<think>\n'\n0.16.784.366 D Using specialized template: Qwen3-Coder\n0.16.785.257 I srv          init: init: chat template, thinking = 1\n0.16.785.302 I srv          init: preserve_reasoning kwarg: not supported by template\n0.16.785.361 I srv  llama_server: model loaded\n0.16.785.397 I srv  llama_server: listening on http://0.0.0.0:8080\n0.16.785.398 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release\n0.16.785.398 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508\n0.16.785.687 D que    start_loop: processing new tasks\n0.16.785.742 D que    start_loop: update slots\n0.16.785.746 I srv  update_slots: all slots are idle\n0.16.785.746 D que    start_loop: waiting for new tasks\n0.18.838.935 D srv          stop: all tasks already finished, no need to cancel\n"
+}
