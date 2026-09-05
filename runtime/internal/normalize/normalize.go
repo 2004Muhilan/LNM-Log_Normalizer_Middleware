@@ -26,13 +26,38 @@ type Context struct {
 	ProcessingTime time.Time
 }
 
-// Normalize returns the event and the list of mandatory OCSF attributes that ended up absent
-// (empty when the event is fully usable).
-func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, []string, error) {
+// Absent records a mapped mandatory attribute that has no value in this event, with its cause.
+// Mandatory is a mapping obligation, not a per-event presence requirement: absence is a fact about
+// the event, not a defect — but the two causes are different facts and are kept apart.
+type Absent struct {
+	Attribute string `json:"attribute"`
+	// structural: the source carried no span for the mapped field (empty cell, optional group that
+	// did not participate). uncoercible: a span exists but its value failed coercion and was
+	// downgraded to opaque (e.g. Squid's "-" for an upstream address).
+	Cause string `json:"cause"`
+}
+
+// Result is what Normalize produces besides the event itself.
+type Result struct {
+	Absent   []Absent // mapped mandatory attributes without a value, by cause
+	Unmapped []string // mandatory attributes the pack does not map at all — must be empty for a valid pack
+}
+
+// Normalize returns the event and the usability facts for it. The only absence that is an error is
+// `time`, which the envelope contract (and OCSF) require on every event.
+func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) {
 	vals := map[string]any{}    // path -> coerced value or string
 	strs := map[string]string{} // path -> string value
+	opaque := map[string]bool{} // paths whose span exists but carries no usable value
 	for _, s := range m.Spans {
+		if s.Kind == "opaque" {
+			opaque[s.Path] = true
+			continue
+		}
 		if s.Kind != "semantic" || s.Value == nil {
+			if s.Kind == "semantic" {
+				opaque[s.Path] = true // decode_status invalid
+			}
 			continue
 		}
 		strs[s.Path] = *s.Value
@@ -44,7 +69,9 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, []string, error
 	}
 	out := map[string]any{"class_uid": ctx.Family.EventClassUID}
 	present := map[string]bool{}
+	mapped := map[string]string{} // attribute -> path
 	for _, f := range ctx.Family.Mapping.Fields {
+		mapped[f.OCSFAttribute] = f.Path
 		v, ok := vals[f.Path]
 		if !ok && !(f.Transform != nil && f.Transform.Kind == "compose_datetime") {
 			continue
@@ -56,10 +83,19 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, []string, error
 		setPath(out, f.OCSFAttribute, v)
 		present[f.OCSFAttribute] = true
 	}
-	var missing []string
+	var res Result
 	for _, a := range ctx.Family.Mapping.Acceptance.MandatoryAttributes {
-		if !present[a] {
-			missing = append(missing, a)
+		if present[a] {
+			continue
+		}
+		path, isMapped := mapped[a]
+		switch {
+		case !isMapped:
+			res.Unmapped = append(res.Unmapped, a) // the acceptance gate should have blocked this pack
+		case opaque[path]:
+			res.Absent = append(res.Absent, Absent{Attribute: a, Cause: "uncoercible"})
+		default:
+			res.Absent = append(res.Absent, Absent{Attribute: a, Cause: "structural"})
 		}
 	}
 	unmapped := map[string]any{}
@@ -109,11 +145,14 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, []string, error
 			"framing_confidence":      ctx.Record.Framing.FramingConfidence,
 		},
 	}
+	if len(res.Absent) > 0 {
+		lineage["absent"] = res.Absent
+	}
 	out["_lineage"] = lineage
 	if _, ok := out["time"]; !ok {
-		return out, missing, fmt.Errorf("normalized event has no time")
+		return out, res, fmt.Errorf("normalized event has no time (required by OCSF and by the envelope contract)")
 	}
-	return out, missing, nil
+	return out, res, nil
 }
 
 func transform(t *pack.Transform, v any, strs map[string]string) (any, bool) {

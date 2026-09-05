@@ -36,12 +36,19 @@ type Options struct {
 	MaxEventBytes     int
 }
 
+// Stats. Usable counts emitted events whose every mandatory attribute is mapped by the pack —
+// present, or absent for a stated cause. An event is unusable only when a mandatory attribute is not
+// mapped at all, which a valid pack cannot produce (the acceptance gate blocks it), so
+// usable == emitted is the expected state; the informative numbers are the absence causes.
 type Stats struct {
-	Frames      int            `json:"frames"`
-	Emitted     int            `json:"emitted"`
-	Usable      int            `json:"usable"`
-	Quarantined int            `json:"quarantined"`
-	Reasons     map[string]int `json:"quarantine_reasons"`
+	Frames            int            `json:"frames"`
+	Emitted           int            `json:"emitted"`
+	Usable            int            `json:"usable"`
+	UnmappedMandatory int            `json:"unmapped_mandatory_events"`
+	AbsentStructural  int            `json:"events_with_structural_absence"`
+	AbsentUncoercible int            `json:"events_with_uncoercible_absence"`
+	Quarantined       int            `json:"quarantined"`
+	Reasons           map[string]int `json:"quarantine_reasons"`
 }
 
 type quarantined struct {
@@ -122,13 +129,26 @@ func Run(in io.Reader, o Options) (Stats, error) {
 			return nil
 		}
 		// 4. normalize
-		ev, missing, nerr := normalize.Normalize(m, normalize.Context{Pack: o.Pack, Family: d.Family, Record: rec, Signature: d.Signature, ProcessingTime: now()})
+		ev, res, nerr := normalize.Normalize(m, normalize.Context{Pack: o.Pack, Family: d.Family, Record: rec, Signature: d.Signature, ProcessingTime: now()})
 		if nerr != nil {
 			quarantine(rec, d.Signature, "normalize", nerr.Error())
 			return nil
 		}
-		if len(missing) == 0 {
+		if len(res.Unmapped) == 0 {
 			st.Usable++
+		} else {
+			st.UnmappedMandatory++
+		}
+		structural, uncoercible := false, false
+		for _, a := range res.Absent {
+			structural = structural || a.Cause == "structural"
+			uncoercible = uncoercible || a.Cause == "uncoercible"
+		}
+		if structural {
+			st.AbsentStructural++
+		}
+		if uncoercible {
+			st.AbsentUncoercible++
 		}
 		b, _ := json.Marshal(ev)
 		if _, err := out.Write(append(b, '\n')); err != nil {

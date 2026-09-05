@@ -145,6 +145,16 @@ state, and `normalization_version` (with `derived_from` for P8 corrections). The
 `golden/squid-native/normalized/line1.json` is produced by the pipeline itself under a fixed clock
 and sequential ids. `_lineage.schema_version` carries the contract version.
 
+**Usability and absence (P2 boundary decision).** *Mandatory* is a mapping obligation on the pack,
+not a per-event presence requirement. At runtime a mapped mandatory attribute is either present, or
+absent for a recorded cause in `_lineage.absent`: `structural` (the source carried no span for the
+field) or `uncoercible` (a span exists but its value failed coercion — Squid's `-` for an upstream
+address). Both leave the event **usable**. An event is unusable only when a mandatory attribute is not
+mapped at all, which the acceptance gate blocks before a pack can load, so `usable == emitted` is the
+expected steady state and the absence causes are the informative numbers. The single exception is
+`time`: OCSF and this envelope require it on every event, so its absence quarantines the event at the
+normalize stage rather than flagging it.
+
 ## Lessons from executing the drafts (P2)
 
 P1 validated the drafts and executed only their regexes; executing them through the compiler

@@ -122,7 +122,7 @@ type KV struct {
 	Keys              map[string]CsvCell `json:"keys"`
 	UnknownKeys       string             `json:"unknown_keys"`
 	Order             string             `json:"order"`
-	AllowBareKeys     bool               `json:"allow_bare_keys"`
+	AllowBareKeys     bool               `json:"allow_bare_keys,omitempty"`
 }
 
 // Slot is a token cell, a token-with-parse, or a direct step.

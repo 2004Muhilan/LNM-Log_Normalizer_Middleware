@@ -15,7 +15,7 @@ normalization → JSONL with the full lineage block.
 |---|---|
 | Engine reproduces the golden span maps for trace line 1 (promoted and candidate) **exactly** | pass — byte offsets, classes, coerced values, literal spans all equal |
 | Stage 13 output reproduced | `class_uid 4002`, `time 1734567890123`, `src_endpoint.ip 10.20.14.62`, `dst_endpoint.ip 93.184.216.34`, `activity_id 3`, `action_id 1`, lineage `offset 0 / length 124`, framing `raw_suffix "\n"` |
-| Six sample lines through the pipeline | 6 emitted, 0 quarantined, 4 usable (the two `HIER_NONE/-` lines have no destination address, so a mandatory attribute is absent — recorded, not guessed) |
+| Six sample lines through the pipeline | 6 emitted, 0 quarantined, 6 usable; 2 events flag `dst_endpoint.ip` absent (cause `uncoercible`: Squid's `-` upstream marker) — recorded in `_lineage.absent`, never guessed (definition settled at the boundary, §7.2) |
 | **Invariant 1** — adversarial specs rejected at compile | 13 cases: backreference, lookahead, unknown op, unlisted named group, nested named groups, duplicate field, nesting over bound, repeat over bound, opaque cell with class, unknown class, non-consuming root, field count over bound, unsupported strptime token |
 | **Invariant 3 kill-test** — process killed after the 3rd raw write, before parsing | evidence store reconstructs the ingested stream **byte-exactly** (`raw_prefix + raw + raw_suffix`, CRLF preserved on the line that had it), including the never-parsed third event |
 | **Invariant 6** (interim) — unknown signature | quarantined at the routing stage with a reason; no parser executed |
@@ -93,8 +93,9 @@ which is the behaviour the design wants, and the reason executing is the check t
 7. **Timezone**: with `timezone_confidence: unresolved` the runtime interprets `source`-zoned
    timestamps as UTC and records the unresolved state in `_lineage`; nothing pretends the offset is
    known.
-8. **Adopted, not written here:** `runtime/internal/spec/spec.go` was already present (untracked) when
-   P2 started. It is a faithful typed mirror of the contract and is used as-is.
+8. **Adopted after mechanical verification:** `runtime/internal/spec/spec.go` was already present
+   (untracked) when P2 started — an interrupted P1 run. Verified against the schema by
+   `mirror_test.go`; see §7.1.
 
 ## 5. What was tried and rejected
 
@@ -127,7 +128,81 @@ because the cache is not copied in; mount it read-only to include it), and `runt
 No model, no inference library and no network client are present in the runtime image (invariant 2,
 verified by construction: the binary's only dependency is the JSON Schema library).
 
-## 7. What the next phases inherit
+## 7. Boundary addendum — two items settled before P3
+
+### 7.1 `runtime/internal/spec/spec.go` — provenance and verification
+
+**Origin:** an interrupted P1 run (the user stopped a response mid-write and re-ran it); the partial
+write left the file untracked, and P2 found it in place. **Verified against the contract, not the
+story:** `runtime/internal/spec/mirror_test.go` walks `contracts/parser-spec.schema.json` with
+reflection and asserts, for the root object and every `$defs` object the mirror types (`bounds`,
+`timestamp_format`, `coerce`, `decode`, `cell`, and the ten `op_*` definitions), that the property
+sets are identical (nothing missing, nothing extra), that optionality matches (`required` ⇔ not
+`omitempty`, with pointer/slice/map fields allowed to be nullable), that enum-bearing properties are
+Go strings and integer/boolean properties are Go ints/bools, and that every schema object is closed.
+It also checks the `delimiter` alternatives against the `Delim` fields, that `step.oneOf` references
+exactly the ten mirrored ops, that the `slot` and `csv_cell` branch discriminators are exactly
+`field/token/step` and `field/parse` (and that the custom unmarshallers reject an unknown branch),
+and that `Parse` refuses an unknown `schema_version`. **Result: one discrepancy found and
+corrected, then pass.** Every property set matched (nothing missing, nothing extra) and every op was
+present, but `allow_bare_keys` — optional in the schema with default `false` — lacked `omitempty` in
+Go, so a marshalled spec would have carried an explicit `false` the schema never required. A
+by-hand comparison earlier in P2 had read it as correct; the reflection test did not. The tag is fixed
+and the test is kept, so contract–mirror drift is caught mechanically in every later phase rather than
+by reading. Nothing else in the file was wrong; the mirror is otherwise faithful and complete.
+
+### 7.2 "4 usable of 6" — the definition was wrong, and the runtime was collapsing two things
+
+**Verified before changing:** the pipeline computed `missing` from the output alone, so "mapped but
+absent" and "not mapped at all" were indistinguishable at runtime. "Not mapped at all" cannot reach a
+running pipeline: both validators reject a pack whose acceptance snapshot lists a mandatory attribute
+with no mapping (`negative/pack-mandatory-model-only` and the mandatory-coverage check), and the loader
+runs that validation. So the collapse hid nothing today, but it would have encoded the wrong metric.
+
+**Decision implemented:** mandatory is a mapping obligation. Three states, and the runtime now
+distinguishes them: mapped and present → usable; mapped and absent → **usable, flagged** in
+`_lineage.absent` with a cause; not mapped → unusable (`unmapped_mandatory_events`, expected 0).
+Golden samples: **6 emitted, 6 usable, 2 events with an absence**, and line 2 carries
+`{"attribute": "dst_endpoint.ip", "cause": "uncoercible"}` with no guessed `dst_endpoint`.
+
+**One refinement raised, not absorbed — the absence has two causes, and the Squid case is the
+second one.** The proposal described the `HIER_NONE/-` lines as "no span in the source". They are
+not: Squid emits `-`, a vendor null marker, so a span exists and becomes absent only because
+`coerce ip` fails and `on_failure: opaque` downgrades it. That is the same mechanical path a garbage
+value (`93.184.216.abc`) would take. The runtime therefore records the cause — `structural` (no span:
+empty cell, non-participating optional group) versus `uncoercible` (span present, value failed
+coercion) — and both count as usable per the decision, so the headline is unbiased while data-quality
+failures stay visible. To let a pack *declare* a vendor null marker instead of discovering it by
+coercion failure, the DSL would need a cell-level `null_values` list (e.g. `["-"]`) that yields a
+declared absence. That is a parser-spec contract change (optional property; a version bump under the
+freeze rules), so it is proposed here for P3, where the coverage engine will want the distinction
+between "vendor said none" and "value unusable", and not implemented now.
+
+**Exception to the rule, already enforced:** `time` is required by OCSF's base event and by the
+normalized-event contract; an event without it cannot be emitted and is quarantined at the normalize
+stage. The rule "mapped-but-absent is usable" applies to every other mandatory attribute.
+
+**Contract change at this boundary:** `_lineage.absent` (optional array of `{attribute, cause}`) added
+to `normalized-event.schema.json`, whose freeze takes effect at this exit; golden vectors regenerated
+(line 1 has no absence, so its vector is unchanged in content).
+
+### 7.3 Notes carried, not blockers
+
+- **Unresolved timezones and correlation.** Sources with `timezone_confidence: unresolved` have their
+  `source`-zoned timestamps interpreted as UTC, recorded in `_lineage`. Two such sources in different
+  actual zones misalign by whole hours; cross-source correlation (requirement 20) over unresolved
+  sources is therefore unreliable until the offset is declared or inferred. Known limitation from P2;
+  P6's multi-vendor routing is where it will first be visible.
+- **Replay counts are provisional until P7.** The ASA and PAN-OS figures (333/334, 301/301) rest on
+  test-scaffolding header stripping that P7's envelope unwrap replaces; quote them as P2 replay
+  results, not as final coverage.
+- **OCSF required base attributes.** The normalizer emits `class_uid`, `time`, `activity_id` and the
+  mapped attributes; OCSF also requires `category_uid`, `type_uid`, `severity_id` and `metadata` on
+  every event. These are derivable (`category_uid` from the class, `type_uid = class_uid*100 +
+  activity_id`) and belong to the deterministic validator's OCSF-conformance check in P3, which is
+  where output conformance is measured. Noted so P3 does not discover it.
+
+## 8. What the next phases inherit
 
 - **P3:** the differential test compares Python-predicted span maps and normalized events against
   the runtime's output; both contracts are frozen. `dsl.Program.Fields()` and `compile --spec` give

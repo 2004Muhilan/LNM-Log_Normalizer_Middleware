@@ -55,7 +55,21 @@
         "source_timezone": { "type": ["string", "null"] },
         "timezone_confidence": { "type": "string", "enum": ["declared", "inferred", "unresolved"] },
         "normalization_version": { "type": "integer", "minimum": 1, "description": "Corrections emit a new version with derived_from (invariant 8, P8); v1 is never rewritten." },
-        "derived_from": { "type": "integer", "minimum": 1 }
+        "derived_from": { "type": "integer", "minimum": 1 },
+        "absent": {
+          "type": "array",
+          "description": "Mapped mandatory attributes that have no value in this event, with the cause. Mandatory is a mapping obligation, not a per-event presence requirement: the event is usable; the absence is a recorded fact. 'structural' = the source carried no span for the field; 'uncoercible' = a span exists but its value failed coercion (e.g. a vendor null marker such as Squid's '-'). Omitted when empty.",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["attribute", "cause"],
+            "properties": {
+              "attribute": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*(\\.[a-z_][a-z0-9_]*)*$" },
+              "cause": { "type": "string", "enum": ["structural", "uncoercible"] }
+            }
+          }
+        }
       }
     }
   }
