@@ -5,7 +5,7 @@
 #   (b) the runtime container image's filesystem contains no weights, no inference library, no Python.
 # Exit 1 on any hit. Run after scripts/p2-check.sh has built runtime/bin/ulpf-runtime and the image.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 status=0
 # Inspect the SHIPPED build (CGO_ENABLED=0, trimpath — what runtime/Dockerfile produces), not the dev binary.

@@ -15,6 +15,8 @@ import hashlib
 import json
 import os
 import shutil
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -53,7 +55,12 @@ def verify(p: Path, m: dict) -> str:
     return d
 
 
-def fetch(cache: Path, m: dict) -> Path:
+def fetch(cache: Path, m: dict, attempts: int = 30) -> Path:
+    """Resumable, length-checked download. A closed connection is NOT completion: the expected size comes
+    from Content-Length (or Content-Range on resume) and a short read resumes with a Range request until
+    the file is complete or `attempts` is exhausted; only then is the digest compared. (Fix pass
+    2026-09-07: on a ~1 MB/s link the server closed the stream after 75 MB and the old code reported
+    a DIGEST MISMATCH for what was a short read.)"""
     cache.mkdir(parents=True, exist_ok=True)
     dest = cache / m["file"]
     url = f"https://huggingface.co/{m['repo']}/resolve/main/{m['file']}"
@@ -61,25 +68,51 @@ def fetch(cache: Path, m: dict) -> Path:
         print(f"{m['id']}: cached and verified", flush=True)
         return dest
     part = dest.with_suffix(dest.suffix + ".part")
+    total: int | None = None
+    for attempt in range(1, attempts + 1):
+        have = part.stat().st_size if part.exists() else 0
+        if total is not None and have >= total:
+            break
+        req = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
+        print(f"{m['id']}: fetching {url} (resume from {have}, attempt {attempt})", flush=True)
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r, open(part, "ab" if have else "wb") as f:
+                if have and r.status != 206:      # server ignored the range: start over
+                    f.seek(0)
+                    f.truncate()
+                    have = 0
+                cr = r.headers.get("Content-Range")   # "bytes a-b/total"
+                cl = r.headers.get("Content-Length")
+                if cr and "/" in cr and cr.rsplit("/", 1)[1].isdigit():
+                    total = int(cr.rsplit("/", 1)[1])
+                elif cl is not None and cl.isdigit():
+                    total = have + int(cl)
+                done = have
+                next_mark = done + (512 << 20)
+                while True:
+                    b = r.read(CHUNK)
+                    if not b:
+                        break
+                    f.write(b)
+                    done += len(b)
+                    if done >= next_mark:
+                        print(f"  {m['id']}: {done / 1e9:.2f} GB" + (f" of {total / 1e9:.2f}" if total else ""), flush=True)
+                        next_mark += 512 << 20
+        except (OSError, urllib.error.URLError) as e:   # includes timeouts and resets; resume on the next attempt
+            print(f"  {m['id']}: transfer interrupted ({e}); resuming", flush=True)
+            time.sleep(min(5 * attempt, 60))
+            continue
+        have = part.stat().st_size
+        if total is None:
+            break                                  # no length known: EOF is all we have; the digest decides
+        if have < total:
+            print(f"  {m['id']}: short read {have}/{total} bytes; resuming", flush=True)
+            time.sleep(min(2 * attempt, 30))
+            continue
+        break
     have = part.stat().st_size if part.exists() else 0
-    req = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
-    print(f"{m['id']}: fetching {url} (resume from {have})", flush=True)
-    with urllib.request.urlopen(req, timeout=120) as r, open(part, "ab" if have else "wb") as f:
-        if have and r.status != 206:
-            f.seek(0)
-            f.truncate()
-            have = 0
-        done = have
-        next_mark = done + (512 << 20)
-        while True:
-            b = r.read(CHUNK)
-            if not b:
-                break
-            f.write(b)
-            done += len(b)
-            if done >= next_mark:
-                print(f"  {m['id']}: {done / 1e9:.2f} GB", flush=True)
-                next_mark += 512 << 20
+    if total is not None and have < total:
+        raise SystemExit(f"INCOMPLETE after {attempts} attempts for {m['id']}: {have}/{total} bytes; re-run to resume")
     d = sha256_file(part)
     if d != m["sha256"]:
         raise SystemExit(f"DIGEST MISMATCH after download for {m['id']}: {d}; leaving .part for inspection")

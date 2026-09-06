@@ -5,7 +5,7 @@
 # clones and is re-signed here with the local key, so pack.json.sig is local and git-ignored.
 # Called by every scripts/pN-check.sh and by the clean-clone test after wsl-bootstrap.
 set -euo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 (cd runtime && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime && go build -o bin/ulpf-committer ./cmd/ulpf-committer && go build -o bin/ulpf-verify ./cmd/ulpf-verify)
 mkdir -p keys/dev keys/trust

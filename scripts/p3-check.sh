@@ -3,7 +3,7 @@
 # contract suites, the runtime suite, then the learning-plane suite (trace scenario, invariants 4/5,
 # cross-stack differential), then a scripted run of the review CLI.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0

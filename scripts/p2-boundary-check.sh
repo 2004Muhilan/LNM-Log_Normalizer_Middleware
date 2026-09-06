@@ -2,7 +2,7 @@
 # P2 boundary re-check without the container stages (they are unchanged): mirror test, runtime
 # suite, regenerated vectors, both contract suites.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0

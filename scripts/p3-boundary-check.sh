@@ -2,7 +2,7 @@
 # P3 boundary (contracts 1.1.0): rebuild pinned tables (category_uid), build runtime, regenerate
 # vectors, run both contract suites and the runtime suite.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0

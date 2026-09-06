@@ -2,7 +2,7 @@
 # Regenerate the P4 spike tables from spike/results (all machines): aggregate per model, the per-case
 # slot matrices, and the per-configuration summary. Usage: p4-spike-report.sh [case ...]
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 echo "## aggregate"; python learning/tools/spike.py aggregate
 for c in "${@:-squid-native}"; do

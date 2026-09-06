@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-off verification for the P1-boundary decisions (action_id, url leaves, epoch_auto window).
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 python - <<'EOF'
 import json, re, glob

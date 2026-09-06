@@ -6,7 +6,7 @@
 # Needs: Docker with the ulpf-llama image (scripts/build-llama-image.sh) and the weights in models/cache
 # (scripts/fetch-models.sh). Results land in spike/results/<machine-label>/ and are committed.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 label="${1:?machine label}"; shift

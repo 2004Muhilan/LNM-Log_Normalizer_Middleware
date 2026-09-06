@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # P1 exit checks: build golden vectors, run the Python suite, run the Go suite.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 status=0
 bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)

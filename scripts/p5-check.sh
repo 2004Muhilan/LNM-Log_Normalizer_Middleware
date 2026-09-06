@@ -5,7 +5,7 @@
 # (two containers, kernel immutable flag) and the external witness (fresh container verifies a bundle) —
 # and the fixture demo through a SIGNED pack.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0

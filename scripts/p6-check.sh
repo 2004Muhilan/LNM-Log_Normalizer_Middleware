@@ -6,7 +6,7 @@
 # cache is present, the four-vendor build: onboarding through the P3/P4 path, source packs, the mixed live stream
 # with the candidate-set distribution, ML emission, discovery ranking, agreement.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 go version
 python --version
 python -c 'import re2; print("re2 search ok:", re2.compile("a+b").search("xaab") is not None)'

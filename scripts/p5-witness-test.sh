@@ -4,7 +4,7 @@
 # bundle. Then the bundle is tampered (one raw byte) and must fail on the witness too.
 # Needs: Docker, keys/, a built runtime (scripts/p5-keygen.sh builds the binaries).
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 status=0
 W=$(mktemp -d)

@@ -5,7 +5,7 @@
 # switch, not a rewrite. The model path is exercised by scripts/p4-spike.sh (needs the image + weights)
 # and, when ULPF_MODEL_SERVER points at a running llama-server, by the smoke block at the end.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0

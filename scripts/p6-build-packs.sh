@@ -9,7 +9,7 @@
 # Corpus fixtures are read from corpus/cache (git-ignored, ELv2); the packs built here contain corpus
 # lines as samples and are therefore written under /tmp, never into the tree.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 W=${ULPF_P6_WORK:-/tmp/ulpf-p6}

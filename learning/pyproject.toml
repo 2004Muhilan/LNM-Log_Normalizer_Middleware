@@ -1,9 +1,9 @@
 [project]
 name = "ulpf-learning"
 version = "0.1.0"
-description = "ULPF learning plane (P1: contract validation only)"
+description = "ULPF learning plane"
 requires-python = ">=3.12"
-dependencies = ["jsonschema>=4.23", "google-re2>=1.1", "pyyaml>=6"]
+dependencies = ["jsonschema>=4.23", "google-re2>=1.1", "pyyaml>=6", "cryptography>=42"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

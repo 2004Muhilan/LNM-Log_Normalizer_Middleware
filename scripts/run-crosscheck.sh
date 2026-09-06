@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 python ocsf/tools/crosscheck_source.py
 echo "=== profiles/datetime.json ==="

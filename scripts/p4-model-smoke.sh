@@ -3,7 +3,7 @@
 # onboard (model proposes) -> certificates -> logformat -> promote -> verify-pack (Go, fail-closed).
 # Usage: p4-model-smoke.sh [manifest id] [gguf file] [gpu|cpu]
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 id="${1:-granite-4.1-8b-q4_k_m}"; f="${2:-granite-4.1-8b-Q4_K_M.gguf}"; mode="${3:-gpu}"
 gpu=(--gpus all); dev=()

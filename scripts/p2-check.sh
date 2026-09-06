@@ -3,7 +3,7 @@
 # run both contract suites, run the runtime tests (golden span maps, adversarial specs, framing,
 # evidence, kill-test, corpus replay), then build and test the container image.
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 status=0
 bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)

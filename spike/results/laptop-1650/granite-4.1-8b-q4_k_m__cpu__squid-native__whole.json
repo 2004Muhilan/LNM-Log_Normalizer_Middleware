@@ -1,0 +1,268 @@
+{
+ "machine": "laptop-1650",
+ "machine_info": {
+  "hostname": "MSI",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+  "ram_gb": 7.7,
+  "gpu": "NVIDIA GeForce GTX 1650",
+  "vram_mb": 4096,
+  "driver": "531.68"
+ },
+ "model_id": "granite-4.1-8b-q4_k_m",
+ "model_hash": "sha256:ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
+ "backend": "cpu",
+ "offload": {
+  "layers_on_gpu": 0,
+  "layers_total": null,
+  "model_buffers_mib": {
+   "CPU": 0.0,
+   "CPU_REPACK": 3667.5,
+   "CPU_Mapped": 5068.64
+  },
+  "kv_buffers_mib": {
+   "CPU": 2560.0
+  },
+  "device": "cpu",
+  "projected_device_mib": null,
+  "free_device_mib_at_start": null,
+  "vram_used_delta_mib": 38,
+  "fits_in_vram": false
+ },
+ "case": "squid-native",
+ "mode": "whole",
+ "event_class_uid": 4002,
+ "lines": 6,
+ "slots": 10,
+ "wall_ms": [
+  433755.8712300006
+ ],
+ "wall_s_first": 433.8,
+ "prompt_tokens": 3256,
+ "predicted_tokens": 387,
+ "iterations": 2,
+ "calls": 3,
+ "refuted_by_iteration": [
+  [
+   6
+  ],
+  []
+ ],
+ "abandoned": [],
+ "schema_invalid": 0,
+ "think_leak": 0,
+ "class_answer": "http_activity",
+ "repeat": 1,
+ "byte_identical": true,
+ "distinct_outputs": 1,
+ "provenance": {
+  "provider": "model",
+  "model_id": "granite-4.1-8b-q4_k_m",
+  "model_hash": "sha256:ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
+  "llama_cpp": {
+   "build_info": "b10820-74a7c897f",
+   "model_path": "/models/granite-4.1-8b-Q4_K_M.gguf",
+   "n_ctx": null
+  },
+  "decoding": {
+   "temperature": 0.0,
+   "top_k": 1,
+   "top_p": 1.0,
+   "min_p": 0.0,
+   "seed": 0,
+   "cache_prompt": false,
+   "repeat_penalty": 1.0,
+   "presence_penalty": 0.0,
+   "frequency_penalty": 0.0
+  },
+  "backend": "cpu",
+  "mode": "whole",
+  "max_iterations": 3,
+  "prompt_template_hash": "sha256:200b491effc2b4d34538672d79f32f629298978228198fb27440f94ff5aefca2",
+  "grammar_hashes": {
+   "class": "sha256:4b92b66d7b7325e9387db3bdf4daf84e694cadb82b994d6b61dade15bd814fdf",
+   "labels": "sha256:b3f1c0b8c127aac3cde151001f8813a12cc40f45155a990a9012be68a1e0c14e"
+  },
+  "trace": {
+   "model_id": "granite-4.1-8b-q4_k_m",
+   "mode": "whole",
+   "iterations": 2,
+   "calls": 3,
+   "prompt_tokens": 3256,
+   "predicted_tokens": 387,
+   "wall_ms": 433755.8712300006,
+   "refuted_by_iteration": [
+    [
+     6
+    ],
+    []
+   ],
+   "abandoned": [],
+   "schema_invalid": 0,
+   "think_leak": 0,
+   "class_answer": "http_activity"
+  }
+ },
+ "judgement": {
+  "event_class_correct": true,
+  "event_class_proposed": 4002,
+  "slots": 10,
+  "labelled": 5,
+  "type_compatible_rate": 1.0,
+  "scored": 10,
+  "agreement": 0.5,
+  "over_mapped": 0,
+  "out_of_class_rate": 0.0,
+  "in_class_truth_slots": 6,
+  "certificates": 2,
+  "certificate_shape": {
+   "pos_1": {
+    "expected": "temporal_role",
+    "got": "temporal_role"
+   },
+   "pos_3": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   },
+   "pos_5": {
+    "expected": "volume_direction",
+    "got": null
+   }
+  },
+  "shape_preserved": false,
+  "request": true,
+  "rows": [
+   {
+    "slot": 1,
+    "field": "pos_1",
+    "class": "float",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     "time"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 2,
+    "field": "pos_2",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "duration"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 3,
+    "field": "pos_3",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     "src_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 4,
+    "field": "pos_4",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "compound"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 5,
+    "field": "pos_5",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "traffic.bytes_out"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 6,
+    "field": "pos_6",
+    "class": "word",
+    "proposal": [
+     "http_request.version"
+    ],
+    "label": "http_request.version",
+    "truth": [
+     "http_request.http_method"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 7,
+    "field": "pos_7",
+    "class": "url",
+    "proposal": [
+     "http_request.url.url_string"
+    ],
+    "label": "http_request.url.url_string",
+    "truth": [
+     "http_request.url.url_string"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 8,
+    "field": "pos_8",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 9,
+    "field": "pos_9",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "compound"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 10,
+    "field": "pos_10",
+    "class": "text",
+    "proposal": [
+     "http_response.content_type"
+    ],
+    "label": "http_response.content_type",
+    "truth": [
+     "http_response.content_type"
+    ],
+    "type_compatible": true,
+    "correct": true
+   }
+  ]
+ },
+ "raw_outputs": [
+  "{\n  \"event_class\": \"http_activity\"\n}",
+  "{\n  \"slots\": [\n    {\"slot\": 1, \"label\": \"time\"},\n    {\"slot\": 2, \"label\": \"unmapped\"},\n    {\"slot\": 3, \"label\": \"src_endpoint.ip\"},\n    {\"slot\": 4, \"label\": \"unmapped\"},\n    {\"slot\": 5, \"label\": \"unmapped\"},\n    {\"slot\": 6, \"label\": \"http_request.version\"},\n    {\"slot\": 7, \"label\": \"http_request.url.path\"},\n    {\"slot\": 8, \"label\": \"unmapped\"},\n    {\"slot\": 9, \"label\": \"unmapped\"},\n    {\"slot\": 10, \"label\": \"http_response.content_type\"}\n  ]\n}",
+  "{\n  \"slots\": [\n    {\n      \"slot\": 1,\n      \"label\": \"time\"\n    },\n    {\n      \"slot\": 2,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 3,\n      \"label\": \"src_endpoint.ip\"\n    },\n    {\n      \"slot\": 4,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 5,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 6,\n      \"label\": \"http_request.http_method\"\n    },\n    {\n      \"slot\": 7,\n      \"label\": \"http_request.url.url_string\"\n    },\n    {\n      \"slot\": 8,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 9,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 10,\n      \"label\": \"http_response.content_type\"\n    }\n  ]\n}"
+ ],
+ "llama_server_log_tail": "901 D func_args_separator: ''\n0.47.516.901 D func_close: ''\n0.47.516.901 D call_id_prefix: ''\n0.47.516.901 D call_id_suffix: ''\n0.47.516.901 D call_id_pos: 'NONE'\n0.47.516.902 D args_start: ''\n0.47.516.902 D args_end: ''\n0.47.516.903 D arg_name_prefix: ''\n0.47.516.905 D arg_name_suffix: ''\n0.47.516.905 D arg_value_prefix: ''\n0.47.516.905 D arg_value_suffix: ''\n0.47.516.905 D name_field: 'name'\n0.47.516.905 D args_field: 'arguments'\n0.47.516.906 D id_field: ''\n0.47.516.907 D gen_id_field: ''\n0.47.516.908 D parameter_order: 'name, arguments'\n0.47.516.908 D \u001b[1m\u001b[38;5;126m=== Differential analysis complete ===\n\u001b[0m0.47.519.878 D common_chat_templates_apply_jinja: generated parser:\nSequence(Literal(<|start_of_role|>assistant<|end_of_role|>), Epsilon, Tag(content, Until()), End)\n\nparser generation prompt: <|start_of_role|>assistant<|end_of_role|>\n0.47.520.022 I srv          init: init: chat template, example_format: '<|start_of_role|>system<|end_of_role|>You are a helpful assistant<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Hello<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Hi there<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>How are you?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>'\n0.47.520.090 D common_chat_templates_apply_jinja: using differential autoparser\n0.47.520.113 D \u001b[1m\u001b[38;5;126m=== Starting differential analysis ===\n\u001b[0m0.47.520.113 D \u001b[1m\u001b[38;5;214mPhase 1: Reasoning analysis\n\u001b[0m0.47.521.870 D \u001b[1m\u001b[38;5;214mPhase 2: Content analysis\n\u001b[0m0.47.523.313 D \u001b[1m\u001b[38;5;214mPhase 3: Tool call analysis\n\u001b[0m0.47.525.466 D \n--- Reasoning & Content Structure ---\n0.47.525.487 D user_msg_start: <|start_of_role|>user<|end_of_role|>\n0.47.525.488 D assistant_msg_start: <|start_of_role|>assistant<|end_of_role|>\n0.47.525.490 D reasoning_mode: NONE\n0.47.525.490 D reasoning_start: ''\n0.47.525.490 D reasoning_end: ''\n0.47.525.491 D content_mode: PLAIN\n0.47.525.491 D content_start: ''\n0.47.525.492 D content_end: ''\n0.47.525.492 D \n--- Tool Call Structure ---\n0.47.525.493 D tool_mode: JSON_NATIVE\n0.47.525.493 D supports_tools: true\n0.47.525.493 D supports_parallel_calls: true\n0.47.525.499 D tool_section_start: ''\n0.47.525.499 D tool_section_end: ''\n0.47.525.499 D per_call_start: '<tool_call>\n'\n0.47.525.500 D per_call_end: '</tool_call>'\n0.47.525.500 D func_name_prefix: ''\n0.47.525.500 D func_name_suffix: ''\n0.47.525.500 D func_args_separator: ''\n0.47.525.501 D func_close: ''\n0.47.525.501 D call_id_prefix: ''\n0.47.525.501 D call_id_suffix: ''\n0.47.525.502 D call_id_pos: 'NONE'\n0.47.525.502 D args_start: ''\n0.47.525.502 D args_end: ''\n0.47.525.503 D arg_name_prefix: ''\n0.47.525.503 D arg_name_suffix: ''\n0.47.525.505 D arg_value_prefix: ''\n0.47.525.506 D arg_value_suffix: ''\n0.47.525.506 D name_field: 'name'\n0.47.525.506 D args_field: 'arguments'\n0.47.525.506 D id_field: ''\n0.47.525.507 D gen_id_field: ''\n0.47.525.508 D parameter_order: 'name, arguments'\n0.47.525.508 D \u001b[1m\u001b[38;5;126m=== Differential analysis complete ===\n\u001b[0m0.47.526.065 D common_chat_templates_apply_jinja: generated parser:\nSequence(Literal(<|start_of_role|>assistant<|end_of_role|>), Epsilon, Tag(content, Until()), End)\n\nparser generation prompt: <|start_of_role|>assistant<|end_of_role|>\n0.47.526.097 I srv          init: init: chat template, thinking = 0\n0.47.526.114 I srv          init: preserve_reasoning kwarg: not supported by template\n0.47.528.183 I srv  llama_server: model loaded\n0.47.528.227 I srv  llama_server: listening on http://0.0.0.0:8080\n0.47.528.228 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release\n0.47.528.228 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508\n0.47.528.524 D que    start_loop: processing new tasks\n0.47.528.550 D que    start_loop: update slots\n0.47.528.553 I srv  update_slots: all slots are idle\n0.47.528.554 D que    start_loop: waiting for new tasks\n0.49.193.044 D srv          stop: all tasks already finished, no need to cancel\n"
+}

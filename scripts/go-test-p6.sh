@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the runtime and run the Go suites touched by P6 (route DAG, pipeline, frame, pack, mlfeat).
 set -uo pipefail
-source "$HOME/.ulpf-env"
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/../runtime"
 gofmt -l ./internal ./cmd ./contracts
 go vet ./... || exit 1
