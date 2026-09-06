@@ -12,6 +12,7 @@ once the code has moved on.
 | [P4 — model integration: the model proposes, the machinery decides](p4-report.md) | accepted; model choice provisional (Granite 4.1 8B, pending the laptop run); **demo-laptop measurements outstanding** (see [the runbook](demo-laptop-runbook.md)) | 2026-09-06 |
 | [P5 — evidence log completion: Merkle commitment, the privilege boundary, signing, the witness](p5-report.md) | accepted; boundary items settled (`commit_mode` stamped, no private keys in git, signature before contract, root+CAP posture noted) — §5a | 2026-09-06 |
 | [P6 — multi-vendor routing: the DAG, families, propagation, ML emission](p6-report.md) | accepted; boundary items settled (parser-pack 1.3.0 approved, tiebreaker dropped, `ml-feature 1.0.0` frozen as the sixth contract, crosswalk review left to the team) — §5a | 2026-09-06 |
+| [P7 — transport, envelope and framing breadth; gap accounting](p7-report.md) | built; stopped for verification before P8 (boundary items open — §5) | 2026-09-07 |
 
 Also here: [Demo laptop runbook](demo-laptop-runbook.md) — what must be true on the GTX 1650 laptop before the P4 spike can run there (driver, `.wslconfig` memory, GPU in Docker, offload knob, CPU floor); revised 2026-09-06 with the first setup run on the actual laptop (driver 531.68 blocks CUDA 12.8; CPU floor 434 s for the Squid session; GPU figure still owed).
 

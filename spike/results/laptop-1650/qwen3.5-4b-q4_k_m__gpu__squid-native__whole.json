@@ -1,0 +1,292 @@
+{
+ "machine": "laptop-1650",
+ "machine_info": {
+  "hostname": "MSI",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+  "ram_gb": 7.7,
+  "gpu": "NVIDIA GeForce GTX 1650",
+  "vram_mb": 4096,
+  "driver": "616.64"
+ },
+ "model_id": "qwen3.5-4b-q4_k_m",
+ "model_hash": "sha256:00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+ "backend": "cuda ngl=auto",
+ "offload": {
+  "layers_on_gpu": 33,
+  "layers_total": 33,
+  "model_buffers_mib": {
+   "CUDA0": 1871.28,
+   "CUDA_Host": 0.0,
+   "CPU_Mapped": 1229.53
+  },
+  "kv_buffers_mib": {
+   "CUDA0": 192.0,
+   "CPU": 64.0
+  },
+  "device": "NVIDIA GeForce GTX 1650",
+  "projected_device_mib": 2981,
+  "free_device_mib_at_start": 3242,
+  "vram_used_delta_mib": 2262,
+  "fits_in_vram": true
+ },
+ "case": "squid-native",
+ "mode": "whole",
+ "event_class_uid": 4002,
+ "lines": 6,
+ "slots": 10,
+ "wall_ms": [
+  121030.97712699992,
+  120244.95917099966
+ ],
+ "wall_s_first": 121.0,
+ "prompt_tokens": 5762,
+ "predicted_tokens": 715,
+ "iterations": 3,
+ "calls": 4,
+ "refuted_by_iteration": [
+  [
+   3,
+   6
+  ],
+  [
+   3
+  ],
+  []
+ ],
+ "abandoned": [],
+ "schema_invalid": 0,
+ "think_leak": 0,
+ "class_answer": "http_activity",
+ "repeat": 2,
+ "byte_identical": true,
+ "distinct_outputs": 1,
+ "provenance": {
+  "provider": "model",
+  "model_id": "qwen3.5-4b-q4_k_m",
+  "model_hash": "sha256:00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+  "llama_cpp": {
+   "build_info": "b10820-74a7c897f",
+   "model_path": "/models/Qwen3.5-4B-Q4_K_M.gguf",
+   "n_ctx": null
+  },
+  "decoding": {
+   "temperature": 0.0,
+   "top_k": 1,
+   "top_p": 1.0,
+   "min_p": 0.0,
+   "seed": 0,
+   "cache_prompt": false,
+   "repeat_penalty": 1.0,
+   "presence_penalty": 0.0,
+   "frequency_penalty": 0.0
+  },
+  "backend": "cuda ngl=auto",
+  "mode": "whole",
+  "max_iterations": 3,
+  "prompt_template_hash": "sha256:200b491effc2b4d34538672d79f32f629298978228198fb27440f94ff5aefca2",
+  "grammar_hashes": {
+   "class": "sha256:4b92b66d7b7325e9387db3bdf4daf84e694cadb82b994d6b61dade15bd814fdf",
+   "labels": "sha256:b3f1c0b8c127aac3cde151001f8813a12cc40f45155a990a9012be68a1e0c14e"
+  },
+  "trace": {
+   "model_id": "qwen3.5-4b-q4_k_m",
+   "mode": "whole",
+   "iterations": 3,
+   "calls": 4,
+   "prompt_tokens": 5762,
+   "predicted_tokens": 715,
+   "wall_ms": 120244.95917099966,
+   "refuted_by_iteration": [
+    [
+     3,
+     6
+    ],
+    [
+     3
+    ],
+    []
+   ],
+   "abandoned": [],
+   "schema_invalid": 0,
+   "think_leak": 0,
+   "class_answer": "http_activity"
+  }
+ },
+ "judgement": {
+  "event_class_correct": true,
+  "event_class_proposed": 4002,
+  "slots": 10,
+  "labelled": 9,
+  "type_compatible_rate": 1.0,
+  "scored": 10,
+  "agreement": 0.5,
+  "over_mapped": 0,
+  "out_of_class_rate": 0.16666666666666666,
+  "in_class_truth_slots": 6,
+  "certificates": 3,
+  "certificate_shape": {
+   "pos_1": {
+    "expected": "temporal_role",
+    "got": "temporal_role"
+   },
+   "pos_3": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   },
+   "pos_5": {
+    "expected": "volume_direction",
+    "got": "request_response_role"
+   }
+  },
+  "shape_preserved": false,
+  "request": true,
+  "rows": [
+   {
+    "slot": 1,
+    "field": "pos_1",
+    "class": "float",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     "time"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 2,
+    "field": "pos_2",
+    "class": "integer",
+    "proposal": [
+     "http_status"
+    ],
+    "label": "http_status",
+    "truth": [
+     "duration"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 3,
+    "field": "pos_3",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     "src_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 4,
+    "field": "pos_4",
+    "class": "text",
+    "proposal": [
+     "activity_name"
+    ],
+    "label": "activity_name",
+    "truth": [
+     "compound"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 5,
+    "field": "pos_5",
+    "class": "integer",
+    "proposal": [
+     "http_response.length"
+    ],
+    "label": "http_response.length",
+    "truth": [
+     "traffic.bytes_out"
+    ],
+    "type_compatible": true,
+    "correct": false,
+    "out_of_class": true
+   },
+   {
+    "slot": 6,
+    "field": "pos_6",
+    "class": "word",
+    "proposal": [
+     "http_request.version"
+    ],
+    "label": "http_request.version",
+    "truth": [
+     "http_request.http_method"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 7,
+    "field": "pos_7",
+    "class": "url",
+    "proposal": [
+     "http_request.url.url_string"
+    ],
+    "label": "http_request.url.url_string",
+    "truth": [
+     "http_request.url.url_string"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 8,
+    "field": "pos_8",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 9,
+    "field": "pos_9",
+    "class": "text",
+    "proposal": [
+     "http_response.status"
+    ],
+    "label": "http_response.status",
+    "truth": [
+     "compound"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 10,
+    "field": "pos_10",
+    "class": "text",
+    "proposal": [
+     "http_response.content_type"
+    ],
+    "label": "http_response.content_type",
+    "truth": [
+     "http_response.content_type"
+    ],
+    "type_compatible": true,
+    "correct": true
+   }
+  ]
+ },
+ "raw_outputs": [
+  "{\n  \"event_class\": \"http_activity\"\n}",
+  "{\"slots\":[{\"slot\":1,\"label\":\"time\",\"alternatives\":[\"time\"]},{\"slot\":2,\"label\":\"http_status\",\"alternatives\":[\"http_status\"]},{\"slot\":3,\"label\":\"src_endpoint.ip\",\"alternatives\":[\"src_endpoint.ip\"]},{\"slot\":4,\"label\":\"http_status\",\"alternatives\":[\"http_status\"]},{\"slot\":5,\"label\":\"http_response.length\",\"alternatives\":[\"http_response.length\"]},{\"slot\":6,\"label\":\"http_request.version\",\"alternatives\":[\"http_request.version\"]},{\"slot\":7,\"label\":\"http_request.url.path\",\"alternatives\":[\"http_request.url.path\"]},{\"slot\":8,\"label\":\"unmapped\",\"alternatives\":[\"http_status\"]},{\"slot\":9,\"label\":\"http_response.status\",\"alternatives\":[\"http_response.status\"]},{\"slot\":10,\"label\":\"http_response.content_type\",\"alternatives\":[\"http_response.content_type\"]}]\n}",
+  "{\n  \"slots\": [\n    {\n      \"slot\": 1,\n      \"label\": \"time\"\n    },\n    {\n      \"slot\": 2,\n      \"label\": \"http_response.code\"\n    },\n    {\n      \"slot\": 3,\n      \"label\": \"src_endpoint.ip\"\n    },\n    {\n      \"slot\": 4,\n      \"label\": \"http_status\"\n    },\n    {\n      \"slot\": 5,\n      \"label\": \"http_response.content_type\"\n    },\n    {\n      \"slot\": 6,\n      \"label\": \"http_request.http_method\"\n    },\n    {\n      \"slot\": 7,\n      \"label\": \"http_request.url.url_string\"\n    },\n    {\n      \"slot\": 8,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 9,\n      \"label\": \"http_response.content_type\"\n    },\n    {\n      \"slot\": 10,\n      \"label\": \"http_response.content_type\"\n    }\n  ]\n}",
+  "{\n  \"slots\": [\n    {\n      \"slot\": 1,\n      \"label\": \"time\"\n    },\n    {\n      \"slot\": 2,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 3,\n      \"label\": \"src_endpoint.ip\"\n    },\n    {\n      \"slot\": 4,\n      \"label\": \"activity_name\"\n    },\n    {\n      \"slot\": 5,\n      \"label\": \"http_status\"\n    },\n    {\n      \"slot\": 6,\n      \"label\": \"http_request.version\"\n    },\n    {\n      \"slot\": 7,\n      \"label\": \"http_request.url.path\"\n    },\n    {\n      \"slot\": 8,\n      \"label\": \"unmapped\"\n    },\n    {\n      \"slot\": 9,\n      \"label\": \"http_request.version\"\n    },\n    {\n      \"slot\": 10,\n      \"label\": \"http_request.version\"\n    }\n  ]\n}"
+ ],
+ "llama_server_log_tail": "ve: max_nodes = 20480\n0.06.755.319 D sched_reserve: reserving full memory module\n0.06.755.353 D sched_reserve: worst-case: n_tokens = 512, n_seqs = 1, n_outputs = 1\n0.06.755.355 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.756.330 I resolve_fused_ops: Flash Attention enabled\n0.06.756.352 I resolve_fused_ops: resolving fused DeepSeek V4 HC support:\n0.06.756.354 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.757.093 I resolve_fused_ops: fused DeepSeek V4 HC pre enabled\n0.06.757.116 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.757.830 I resolve_fused_ops: fused DeepSeek V4 HC comb enabled\n0.06.757.853 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.758.586 I resolve_fused_ops: fused DeepSeek V4 HC post enabled\n0.06.758.611 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n0.06.784.714 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.786.935 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n0.06.788.717 I sched_reserve:      CUDA0 compute buffer size =   106.46 MiB\n0.06.788.744 I sched_reserve:  CUDA_Host compute buffer size =    29.11 MiB\n0.06.788.745 I sched_reserve: graph nodes  = 1831\n0.06.788.745 I sched_reserve: graph splits = 181 (with bs=512), 20 (with bs=1)\n0.06.788.747 I sched_reserve: reserve took 46.10 ms, sched copies = 1\n0.06.788.844 I cmn          init: llama threadpool init, n_threads = 6\n0.06.788.898 D attach_threadpool: call\n0.06.788.912 D set_adapters_lora: adapters = (nil)\n0.06.788.915 D adapters_lora_are_same: adapters = (nil)\n0.27.584.167 I cmn  common_conte: the context does not support partial sequence removal\n0.27.752.468 I srv    load_model: speculative decoding will use checkpoints\n0.27.752.591 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'\n0.27.752.718 I spec common_specu: no implementations specified for speculative decoding\n0.27.752.725 I slot   load_model: id  0 | task -1 | new slot, n_ctx = 8192\n0.27.752.735 D slot        reset: id  0 | task -1 | \n0.27.754.237 I srv    load_model: prompt cache is enabled, size limit: 8192 MiB\n0.27.754.257 I srv    load_model: use `--cache-ram 0` to disable the prompt cache\n0.27.754.257 I srv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391\n0.27.754.258 I srv    load_model: context checkpoints enabled, max = 32, min spacing = 8192\n0.27.754.291 I srv          init: idle slots will be saved to prompt cache upon starting a new task\n0.27.754.291 D srv          init: __TEST_TAG_CACHE_IDLE_SLOTS_ENABLED__\n0.27.763.419 D Using specialized template: Qwen3-Coder\n0.27.766.302 I srv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n<think>\n'\n0.27.766.374 D Using specialized template: Qwen3-Coder\n0.27.767.130 I srv          init: init: chat template, thinking = 1\n0.27.767.172 I srv          init: preserve_reasoning kwarg: not supported by template\n0.27.768.347 I srv  llama_server: model loaded\n0.27.768.375 I srv  llama_server: listening on http://0.0.0.0:8080\n0.27.768.376 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release\n0.27.768.376 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508\n0.27.768.551 D que    start_loop: processing new tasks\n0.27.768.573 D que    start_loop: update slots\n0.27.768.576 I srv  update_slots: all slots are idle\n0.27.768.576 D que    start_loop: waiting for new tasks\n0.29.036.013 D srv          stop: all tasks already finished, no need to cancel\n"
+}

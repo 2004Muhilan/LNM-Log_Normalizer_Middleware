@@ -335,6 +335,15 @@ func (rt *anchorRT) locate(payload []byte, s surface, env *frame.Envelope) (stri
 			return env.MsgID, env.MsgID != ""
 		case "proc_id":
 			return env.ProcID, env.ProcID != ""
+		// P7: CEF application-envelope header fields (kind cef)
+		case "signature_id":
+			return env.SignatureID, env.SignatureID != ""
+		case "device_vendor":
+			return env.DeviceVendor, env.DeviceVendor != ""
+		case "device_product":
+			return env.DeviceProduct, env.DeviceProduct != ""
+		case "name":
+			return env.Name, env.Name != ""
 		}
 	}
 	return "", false
@@ -345,10 +354,33 @@ func (rt *anchorRT) locate(payload []byte, s surface, env *frame.Envelope) (stri
 // Route narrows the onboarded families to the one that owns this event, or quarantines with the stage
 // and reason. payload is the unwrapped payload; env the envelope it arrived in (nil when none).
 func (r *Router) Route(payload []byte, env *frame.Envelope) Decision {
-	// L1
-	l1 := "raw"
+	var ch frame.Chain
 	if env != nil && env.Kind != "none" {
-		l1 = env.Kind
+		ch.Envelopes = []frame.Envelope{*env}
+	}
+	return r.RouteChain(payload, ch)
+}
+
+// RouteChain routes the innermost payload of a recursively unwrapped message (P7). L1 matches the
+// family's declared envelope against every envelope removed: a `raw` family has no requirement; a
+// syslog family (rfc3164/rfc5424) needs a syslog envelope somewhere in the chain (either RFC form —
+// relays rewrite 3164 as 5424, P6 decision); a `cef` family needs the CEF application envelope.
+// Anchors and envelope-sourced fields read the innermost envelope, the device's own header.
+func (r *Router) RouteChain(payload []byte, ch frame.Chain) Decision {
+	env := ch.Innermost()
+	kinds := ch.Kinds()
+	l1 := "raw"
+	if len(kinds) > 0 {
+		l1 = kinds[len(kinds)-1]
+	}
+	hasSyslog, hasCEF := false, false
+	for _, k := range kinds {
+		switch k {
+		case "rfc3164", "rfc5424":
+			hasSyslog = true
+		case "cef":
+			hasCEF = true
+		}
 	}
 	// L2
 	s := detectL2(payload)
@@ -357,8 +389,16 @@ func (r *Router) Route(payload []byte, env *frame.Envelope) Decision {
 		if f.l2 != s.l2 {
 			continue
 		}
-		if f.family.Routing.L1 != "raw" && l1 == "raw" {
-			continue // the family requires a transport envelope and none arrived
+		switch f.family.Routing.L1 {
+		case "raw":
+		case "cef":
+			if !hasCEF {
+				continue // the family requires a CEF header and none arrived
+			}
+		default:
+			if !hasSyslog {
+				continue // the family requires a transport envelope and none arrived
+			}
 		}
 		cands = append(cands, f)
 	}

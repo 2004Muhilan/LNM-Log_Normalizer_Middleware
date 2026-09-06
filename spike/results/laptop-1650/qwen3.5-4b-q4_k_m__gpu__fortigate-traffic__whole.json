@@ -1,0 +1,1143 @@
+{
+ "machine": "laptop-1650",
+ "machine_info": {
+  "hostname": "MSI",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+  "ram_gb": 7.7,
+  "gpu": "NVIDIA GeForce GTX 1650",
+  "vram_mb": 4096,
+  "driver": "616.64"
+ },
+ "model_id": "qwen3.5-4b-q4_k_m",
+ "model_hash": "sha256:00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+ "backend": "cuda ngl=auto",
+ "offload": {
+  "layers_on_gpu": 33,
+  "layers_total": 33,
+  "model_buffers_mib": {
+   "CUDA0": 1871.28,
+   "CUDA_Host": 0.0,
+   "CPU_Mapped": 1229.53
+  },
+  "kv_buffers_mib": {
+   "CUDA0": 192.0,
+   "CPU": 64.0
+  },
+  "device": "NVIDIA GeForce GTX 1650",
+  "projected_device_mib": 2981,
+  "free_device_mib_at_start": 3242,
+  "vram_used_delta_mib": 2262,
+  "fits_in_vram": true
+ },
+ "case": "fortigate-traffic",
+ "mode": "whole",
+ "event_class_uid": 4001,
+ "lines": 12,
+ "slots": 72,
+ "wall_ms": [
+  436351.92320700025,
+  435879.72355500003
+ ],
+ "wall_s_first": 436.4,
+ "prompt_tokens": 16232,
+ "predicted_tokens": 2795,
+ "iterations": 3,
+ "calls": 4,
+ "refuted_by_iteration": [
+  [
+   5,
+   6,
+   20,
+   23,
+   26,
+   31,
+   34,
+   35,
+   46,
+   58,
+   67,
+   68
+  ],
+  [
+   35,
+   67,
+   68
+  ],
+  [
+   35,
+   67,
+   68
+  ]
+ ],
+ "abandoned": [
+  35,
+  67,
+  68
+ ],
+ "schema_invalid": 0,
+ "think_leak": 0,
+ "class_answer": "network_activity",
+ "repeat": 2,
+ "byte_identical": true,
+ "distinct_outputs": 1,
+ "provenance": {
+  "provider": "model",
+  "model_id": "qwen3.5-4b-q4_k_m",
+  "model_hash": "sha256:00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+  "llama_cpp": {
+   "build_info": "b10820-74a7c897f",
+   "model_path": "/models/Qwen3.5-4B-Q4_K_M.gguf",
+   "n_ctx": null
+  },
+  "decoding": {
+   "temperature": 0.0,
+   "top_k": 1,
+   "top_p": 1.0,
+   "min_p": 0.0,
+   "seed": 0,
+   "cache_prompt": false,
+   "repeat_penalty": 1.0,
+   "presence_penalty": 0.0,
+   "frequency_penalty": 0.0
+  },
+  "backend": "cuda ngl=auto",
+  "mode": "whole",
+  "max_iterations": 3,
+  "prompt_template_hash": "sha256:200b491effc2b4d34538672d79f32f629298978228198fb27440f94ff5aefca2",
+  "grammar_hashes": {
+   "class": "sha256:4b92b66d7b7325e9387db3bdf4daf84e694cadb82b994d6b61dade15bd814fdf",
+   "labels": "sha256:44dcc0661a881ed7b746cb3d8cc4483da8ae56986985d0102ae9f3cfe265086b"
+  },
+  "trace": {
+   "model_id": "qwen3.5-4b-q4_k_m",
+   "mode": "whole",
+   "iterations": 3,
+   "calls": 4,
+   "prompt_tokens": 16232,
+   "predicted_tokens": 2795,
+   "wall_ms": 435879.72355500003,
+   "refuted_by_iteration": [
+    [
+     5,
+     6,
+     20,
+     23,
+     26,
+     31,
+     34,
+     35,
+     46,
+     58,
+     67,
+     68
+    ],
+    [
+     35,
+     67,
+     68
+    ],
+    [
+     35,
+     67,
+     68
+    ]
+   ],
+   "abandoned": [
+    35,
+    67,
+    68
+   ],
+   "schema_invalid": 0,
+   "think_leak": 0,
+   "class_answer": "network_activity"
+  }
+ },
+ "judgement": {
+  "event_class_correct": true,
+  "event_class_proposed": 4001,
+  "slots": 72,
+  "labelled": 47,
+  "type_compatible_rate": 1.0,
+  "scored": 72,
+  "agreement": 0.4861111111111111,
+  "over_mapped": 21,
+  "out_of_class_rate": 0.047619047619047616,
+  "in_class_truth_slots": 21,
+  "certificates": 35,
+  "certificate_shape": {
+   "srcip": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   },
+   "sentbyte": {
+    "expected": "volume_direction",
+    "got": "volume_direction"
+   },
+   "eventtime": {
+    "expected": "temporal_role",
+    "got": "temporal_role"
+   }
+  },
+  "shape_preserved": true,
+  "request": true,
+  "rows": [
+   {
+    "slot": 1,
+    "field": "date",
+    "class": "word",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     null,
+     "time"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 2,
+    "field": "time",
+    "class": "word",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     null,
+     "time"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 3,
+    "field": "devname",
+    "class": "word",
+    "proposal": [
+     "device.name"
+    ],
+    "label": "device.name",
+    "truth": [
+     "device.name",
+     "device.hostname"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 4,
+    "field": "devid",
+    "class": "word",
+    "proposal": [
+     "device.name"
+    ],
+    "label": "device.name",
+    "truth": [
+     "device.uid"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 5,
+    "field": "logid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "metadata.event_code",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 6,
+    "field": "type",
+    "class": "word",
+    "proposal": [
+     "activity_name"
+    ],
+    "label": "activity_name",
+    "truth": [
+     "metadata.log_name",
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 7,
+    "field": "subtype",
+    "class": "word",
+    "proposal": [
+     "activity_name"
+    ],
+    "label": "activity_name",
+    "truth": [
+     "activity_name",
+     null
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 8,
+    "field": "level",
+    "class": "word",
+    "proposal": [
+     "severity"
+    ],
+    "label": "severity",
+    "truth": [
+     "severity",
+     null
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 9,
+    "field": "vd",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 10,
+    "field": "eventtime",
+    "class": "integer",
+    "proposal": [
+     "time"
+    ],
+    "label": "time",
+    "truth": [
+     "time"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 11,
+    "field": "srcip",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     "src_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 12,
+    "field": "srcport",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     "src_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 13,
+    "field": "srcintf",
+    "class": "word",
+    "proposal": [
+     "src_endpoint.interface_name"
+    ],
+    "label": "src_endpoint.interface_name",
+    "truth": [
+     "src_endpoint.interface_name"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 14,
+    "field": "srcintfrole",
+    "class": "word",
+    "proposal": [
+     "src_endpoint.interface_name"
+    ],
+    "label": "src_endpoint.interface_name",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 15,
+    "field": "dstip",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     "dst_endpoint.ip"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 16,
+    "field": "dstport",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.port"
+    ],
+    "label": "dst_endpoint.port",
+    "truth": [
+     "dst_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 17,
+    "field": "dstintf",
+    "class": "word",
+    "proposal": [
+     "dst_endpoint.interface_name"
+    ],
+    "label": "dst_endpoint.interface_name",
+    "truth": [
+     "dst_endpoint.interface_name"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 18,
+    "field": "dstintfrole",
+    "class": "word",
+    "proposal": [
+     "dst_endpoint.interface_name"
+    ],
+    "label": "dst_endpoint.interface_name",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 19,
+    "field": "sessionid",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     "connection_info.uid",
+     "connection_info.session.uid"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 20,
+    "field": "proto",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     "connection_info.protocol_num"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 21,
+    "field": "action",
+    "class": "word",
+    "proposal": [
+     "actor.authorizations.decision"
+    ],
+    "label": "actor.authorizations.decision",
+    "truth": [
+     "action"
+    ],
+    "type_compatible": true,
+    "correct": false,
+    "out_of_class": true
+   },
+   {
+    "slot": 22,
+    "field": "policyid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.uid"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 23,
+    "field": "policytype",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.type",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 24,
+    "field": "service",
+    "class": "text",
+    "proposal": [
+     "actor.app_name"
+    ],
+    "label": "actor.app_name",
+    "truth": [
+     "app_name",
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 25,
+    "field": "dstcountry",
+    "class": "text",
+    "proposal": [
+     "dst_endpoint.location.country"
+    ],
+    "label": "dst_endpoint.location.country",
+    "truth": [
+     "dst_endpoint.location.country"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 26,
+    "field": "srccountry",
+    "class": "word",
+    "proposal": [
+     "src_endpoint.location.country"
+    ],
+    "label": "src_endpoint.location.country",
+    "truth": [
+     "src_endpoint.location.country"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 27,
+    "field": "trandisp",
+    "class": "word",
+    "proposal": [
+     "actor.process.cmd_line"
+    ],
+    "label": "actor.process.cmd_line",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 28,
+    "field": "duration",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     "duration"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 29,
+    "field": "sentbyte",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     "traffic.bytes_out"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 30,
+    "field": "rcvdbyte",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     "traffic.bytes_in"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 31,
+    "field": "sentpkt",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     "traffic.packets_out"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 32,
+    "field": "appcat",
+    "class": "word",
+    "proposal": [
+     "actor.app_name"
+    ],
+    "label": "actor.app_name",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 33,
+    "field": "crscore",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 34,
+    "field": "craction",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 35,
+    "field": "crlevel",
+    "class": "word",
+    "proposal": [
+     "actor.process.integrity"
+    ],
+    "label": "actor.process.integrity",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 36,
+    "field": "tz",
+    "class": "integer",
+    "proposal": [],
+    "label": null,
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 37,
+    "field": "poluuid",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.uid",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 38,
+    "field": "policyname",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "firewall_rule.name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 39,
+    "field": "transip",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 40,
+    "field": "transport",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 41,
+    "field": "applist",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 42,
+    "field": "rcvdpkt",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     "traffic.packets_in"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 43,
+    "field": "vwlid",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 44,
+    "field": "sentdelta",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 45,
+    "field": "rcvddelta",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 46,
+    "field": "identifier",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 47,
+    "field": "app",
+    "class": "text",
+    "proposal": [
+     "actor.app_name"
+    ],
+    "label": "actor.app_name",
+    "truth": [
+     "app_name"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 48,
+    "field": "user",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.owner.name",
+     "actor.user.name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 49,
+    "field": "authserver",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 50,
+    "field": "group",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 51,
+    "field": "appid",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 52,
+    "field": "apprisk",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 53,
+    "field": "appact",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 54,
+    "field": "vwlquality",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 55,
+    "field": "wanin",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 56,
+    "field": "wanout",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 57,
+    "field": "lanin",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 58,
+    "field": "lanout",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 59,
+    "field": "utmaction",
+    "class": "word",
+    "proposal": [
+     "actor.authorizations.decision"
+    ],
+    "label": "actor.authorizations.decision",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 60,
+    "field": "countweb",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 61,
+    "field": "countapp",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 62,
+    "field": "countips",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 63,
+    "field": "utmref",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 64,
+    "field": "srcuuid",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.uid",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 65,
+    "field": "dstuuid",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "dst_endpoint.uid",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 66,
+    "field": "countav",
+    "class": "integer",
+    "proposal": [
+     "traffic.packets"
+    ],
+    "label": "traffic.packets",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 67,
+    "field": "osname",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.os.name",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 68,
+    "field": "mastersrcmac",
+    "class": "word",
+    "proposal": [],
+    "label": null,
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 69,
+    "field": "srcmac",
+    "class": "word",
+    "proposal": [],
+    "label": null,
+    "truth": [
+     "src_endpoint.mac"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 70,
+    "field": "srcserver",
+    "class": "integer",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 71,
+    "field": "devtype",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 72,
+    "field": "devcategory",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   }
+  ]
+ },
+ "raw_outputs": [
+  "{\n  \"event_class\": \"network_activity\"\n}",
+  "{\"slots\":[{\"slot\":1,\"label\":\"time\"},{\"slot\":2,\"label\":\"time\"},{\"slot\":3,\"label\":\"device.name\"},{\"slot\":4,\"label\":\"device.name\"},{\"slot\":5,\"label\":\"unmapped\"},{\"slot\":6,\"label\":\"traffic.packets\"},{\"slot\":7,\"label\":\"traffic.packets\"},{\"slot\":8,\"label\":\"severity\"},{\"slot\":9,\"label\":\"unmapped\"},{\"slot\":10,\"label\":\"time\"},{\"slot\":11,\"label\":\"src_endpoint.ip\"},{\"slot\":12,\"label\":\"src_endpoint.port\"},{\"slot\":13,\"label\":\"src_endpoint.interface_name\"},{\"slot\":14,\"label\":\"src_endpoint.interface_name\"},{\"slot\":15,\"label\":\"dst_endpoint.ip\"},{\"slot\":16,\"label\":\"dst_endpoint.port\"},{\"slot\":17,\"label\":\"dst_endpoint.interface_name\"},{\"slot\":18,\"label\":\"dst_endpoint.interface_name\"},{\"slot\":19,\"label\":\"traffic.packets\"},{\"slot\":20,\"label\":\"traffic.packets\"},{\"slot\":21,\"label\":\"traffic.packets\"},{\"slot\":22,\"label\":\"unmapped\"},{\"slot\":23,\"label\":\"unmapped\"},{\"slot\":24,\"label\":\"traffic.packets\"},{\"slot\":25,\"label\":\"dst_endpoint.location.country\"},{\"slot\":26,\"label\":\"src_endpoint.location.country\"},{\"slot\":27,\"label\":\"traffic.packets\"},{\"slot\":28,\"label\":\"traffic.packets\"},{\"slot\":29,\"label\":\"traffic.packets\"},{\"slot\":30,\"label\":\"traffic.packets\"},{\"slot\":31,\"label\":\"traffic.packets\"},{\"slot\":32,\"label\":\"traffic.packets\"},{\"slot\":33,\"label\":\"traffic.packets\"},{\"slot\":34,\"label\":\"traffic.packets\"},{\"slot\":35,\"label\":\"traffic.packets\"},{\"slot\":36,\"label\":\"time\"},{\"slot\":37,\"label\":\"unmapped\"},{\"slot\":38,\"label\":\"unmapped\"},{\"slot\":39,\"label\":\"dst_endpoint.ip\"},{\"slot\":40,\"label\":\"traffic.packets\"},{\"slot\":41,\"label\":\"unmapped\"},{\"slot\":42,\"label\":\"traffic.packets\"},{\"slot\":43,\"label\":\"traffic.packets\"},{\"slot\":44,\"label\":\"traffic.packets\"},{\"slot\":45,\"label\":\"traffic.packets\"},{\"slot\":46,\"label\":\"unmapped\"},{\"slot\":47,\"label\":\"traffic.packets\"},{\"slot\":48,\"label\":\"unmapped\"},{\"slot\":49,\"label\":\"unmapped\"},{\"slot\":50,\"label\":\"unmapped\"},{\"slot\":51,\"label\":\"unmapped\"},{\"slot\":52,\"label\":\"unmapped\"},{\"slot\":53,\"label\":\"unmapped\"},{\"slot\":54,\"label\":\"unmapped\"},{\"slot\":55,\"label\":\"traffic.packets\"},{\"slot\":56,\"label\":\"traffic.packets\"},{\"slot\":57,\"label\":\"traffic.packets\"},{\"slot\":58,\"label\":\"traffic.packets\"},{\"slot\":59,\"label\":\"traffic.packets\"},{\"slot\":60,\"label\":\"traffic.packets\"},{\"slot\":61,\"label\":\"traffic.packets\"},{\"slot\":62,\"label\":\"traffic.packets\"},{\"slot\":63,\"label\":\"unmapped\"},{\"slot\":64,\"label\":\"unmapped\"},{\"slot\":65,\"label\":\"unmapped\"},{\"slot\":66,\"label\":\"traffic.packets\"},{\"slot\":67,\"label\":\"unmapped\"},{\"slot\":68,\"label\":\"src_endpoint.mac\"},{\"slot\":69,\"label\":\"src_endpoint.mac\"},{\"slot\":70,\"label\":\"unmapped\"},{\"slot\":71,\"label\":\"unmapped\"},{\"slot\":72,\"label\":\"unmapped\"}]}",
+  "{\"slots\":[{\"slot\":1,\"label\":\"time\"},{\"slot\":2,\"label\":\"unmapped\"},{\"slot\":3,\"label\":\"actor.idp.name\"},{\"slot\":4,\"label\":\"actor.idp.uid\"},{\"slot\":5,\"label\":\"actor.idp.uid\"},{\"slot\":6,\"label\":\"activity_name\"},{\"slot\":7,\"label\":\"activity_name\"},{\"slot\":8,\"label\":\"actor.authorizations.decision\"},{\"slot\":9,\"label\":\"actor.idp.name\"},{\"slot\":10,\"label\":\"actor.process.created_time\"},{\"slot\":11,\"label\":\"src_endpoint.ip\"},{\"slot\":12,\"label\":\"src_endpoint.port\"},{\"slot\":13,\"label\":\"src_endpoint.interface_name\"},{\"slot\":14,\"label\":\"src_endpoint.interface_name\"},{\"slot\":15,\"label\":\"dst_endpoint.ip\"},{\"slot\":16,\"label\":\"dst_endpoint.port\"},{\"slot\":17,\"label\":\"dst_endpoint.interface_name\"},{\"slot\":18,\"label\":\"dst_endpoint.interface_name\"},{\"slot\":19,\"label\":\"actor.idp.uid\"},{\"slot\":20,\"label\":\"actor.process.cmd_line\"},{\"slot\":21,\"label\":\"actor.authorizations.decision\"},{\"slot\":22,\"label\":\"actor.idp.uid\"},{\"slot\":23,\"label\":\"actor.idp.uid\"},{\"slot\":24,\"label\":\"actor.app_name\"},{\"slot\":25,\"label\":\"dst_endpoint.location.country\"},{\"slot\":26,\"label\":\"src_endpoint.location.country\"},{\"slot\":27,\"label\":\"actor.process.cmd_line\"},{\"slot\":28,\"label\":\"actor.process.created_time_dt\"},{\"slot\":29,\"label\":\"actor.process.integrity\"},{\"slot\":30,\"label\":\"actor.process.integrity\"},{\"slot\":31,\"label\":\"actor.process.integrity\"},{\"slot\":32,\"label\":\"actor.app_name\"},{\"slot\":33,\"label\":\"actor.process.integrity\"},{\"slot\":34,\"label\":\"actor.process.integrity\"},{\"slot\":35,\"label\":\"actor.process.integrity\"},{\"slot\":36,\"label\":\"actor.process.created_time_dt\"},{\"slot\":37,\"label\":\"actor.idp.uid\"},{\"slot\":38,\"label\":\"actor.idp.uid\"},{\"slot\":39,\"label\":\"dst_endpoint.ip\"},{\"slot\":40,\"label\":\"actor.process.cmd_line\"},{\"slot\":41,\"label\":\"actor.idp.uid\"},{\"slot\":42,\"label\":\"actor.process.integrity\"},{\"slot\":43,\"label\":\"actor.process.integrity\"},{\"slot\":44,\"label\":\"actor.process.integrity\"},{\"slot\":45,\"label\":\"actor.process.integrity\"},{\"slot\":46,\"label\":\"actor.idp.uid\"},{\"slot\":47,\"label\":\"actor.app_name\"},{\"slot\":48,\"label\":\"actor.idp.name\"},{\"slot\":49,\"label\":\"actor.idp.name\"},{\"slot\":50,\"label\":\"actor.idp.uid\"},{\"slot\":51,\"label\":\"actor.idp.uid\"},{\"slot\":52,\"label\":\"actor.process.integrity\"},{\"slot\":53,\"label\":\"actor.process.integrity\"},{\"slot\":54,\"label\":\"actor.process.integrity\"},{\"slot\":55,\"label\":\"actor.process.integrity\"},{\"slot\":56,\"label\":\"actor.process.integrity\"},{\"slot\":57,\"label\":\"actor.process.integrity\"},{\"slot\":58,\"label\":\"actor.process.integrity\"},{\"slot\":59,\"label\":\"actor.authorizations.decision\"},{\"slot\":60,\"label\":\"actor.process.integrity\"},{\"slot\":61,\"label\":\"actor.process.integrity\"},{\"slot\":62,\"label\":\"actor.process.integrity\"},{\"slot\":63,\"label\":\"actor.process.integrity\"},{\"slot\":64,\"label\":\"actor.idp.uid\"},{\"slot\":65,\"label\":\"dst_endpoint.ip\"},{\"slot\":66,\"label\":\"actor.process.integrity\"},{\"slot\":67,\"label\":\"actor.idp.name\"},{\"slot\":68,\"label\":\"src_endpoint.mac\"},{\"slot\":69,\"label\":\"src_endpoint.mac\"},{\"slot\":70,\"label\":\"actor.process.integrity\"},{\"slot\":71,\"label\":\"actor.idp.name\"},{\"slot\":72,\"label\":\"actor.idp.name\"}]}",
+  "{\n  \"slots\": [\n    {\"slot\": 1, \"label\": \"time\"},\n    {\"slot\": 2, \"label\": \"time\"},\n    {\"slot\": 3, \"label\": \"device.name\"},\n    {\"slot\": 4, \"label\": \"device.name\"},\n    {\"slot\": 5, \"label\": \"message\"},\n    {\"slot\": 6, \"label\": \"activity_name\"},\n    {\"slot\": 7, \"label\": \"activity_name\"},\n    {\"slot\": 8, \"label\": \"actor.authorizations.decision\"},\n    {\"slot\": 9, \"label\": \"actor.idp.name\"},\n    {\"slot\": 10, \"label\": \"time\"},\n    {\"slot\": 11, \"label\": \"src_endpoint.ip\"},\n    {\"slot\": 12, \"label\": \"src_endpoint.port\"},\n    {\"slot\": 13, \"label\": \"src_endpoint.interface_name\"},\n    {\"slot\": 14, \"label\": \"src_endpoint.interface_name\"},\n    {\"slot\": 15, \"label\": \"dst_endpoint.ip\"},\n    {\"slot\": 16, \"label\": \"dst_endpoint.port\"},\n    {\"slot\": 17, \"label\": \"dst_endpoint.interface_name\"},\n    {\"slot\": 18, \"label\": \"dst_endpoint.interface_name\"},\n    {\"slot\": 19, \"label\": \"message\"},\n    {\"slot\": 20, \"label\": \"activity_name\"},\n    {\"slot\": 21, \"label\": \"actor.authorizations.decision\"},\n    {\"slot\": 22, \"label\": \"message\"},\n    {\"slot\": 23, \"label\": \"message\"},\n    {\"slot\": 24, \"label\": \"activity_name\"},\n    {\"slot\": 25, \"label\": \"dst_endpoint.location.country\"},\n    {\"slot\": 26, \"label\": \"src_endpoint.location.country\"},\n    {\"slot\": 27, \"label\": \"message\"},\n    {\"slot\": 28, \"label\": \"duration\"},\n    {\"slot\": 29, \"label\": \"message\"},\n    {\"slot\": 30, \"label\": \"message\"},\n    {\"slot\": 31, \"label\": \"message\"},\n    {\"slot\": 32, \"label\": \"message\"},\n    {\"slot\": 33, \"label\": \"message\"},\n    {\"slot\": 34, \"label\": \"message\"},\n    {\"slot\": 35, \"label\": \"message\"},\n    {\"slot\": 36, \"label\": \"actor.process.created_time\"},\n    {\"slot\": 37, \"label\": \"message\"},\n    {\"slot\": 38, \"label\": \"message\"},\n    {\"slot\": 39, \"label\": \"dst_endpoint.ip\"},\n    {\"slot\": 40, \"label\": \"message\"},\n    {\"slot\": 41, \"label\": \"message\"},\n    {\"slot\": 42, \"label\": \"message\"},\n    {\"slot\": 43, \"label\": \"message\"},\n    {\"slot\": 44, \"label\": \"message\"},\n    {\"slot\": 45, \"label\": \"message\"},\n    {\"slot\": 46, \"label\": \"message\"},\n    {\"slot\": 47, \"label\": \"activity_name\"},\n    {\"slot\": 48, \"label\": \"actor.idp.name\"},\n    {\"slot\": 49, \"label\": \"actor.idp.name\"},\n    {\"slot\": 50, \"label\": \"actor.idp.name\"},\n    {\"slot\": 51, \"label\": \"message\"},\n    {\"slot\": 52, \"label\": \"message\"},\n    {\"slot\": 53, \"label\": \"message\"},\n    {\"slot\": 54, \"label\": \"message\"},\n    {\"slot\": 55, \"label\": \"message\"},\n    {\"slot\": 56, \"label\": \"message\"},\n    {\"slot\": 57, \"label\": \"message\"},\n    {\"slot\": 58, \"label\": \"message\"},\n    {\"slot\": 59, \"label\": \"message\"},\n    {\"slot\": 60, \"label\": \"message\"},\n    {\"slot\": 61, \"label\": \"message\"},\n    {\"slot\": 62, \"label\": \"message\"},\n    {\"slot\": 63, \"label\": \"message\"},\n    {\"slot\": 64, \"label\": \"message\"},\n    {\"slot\": 65, \"label\": \"message\"},\n    {\"slot\": 66, \"label\": \"message\"},\n    {\"slot\": 67, \"label\": \"message\"},\n    {\"slot\": 68, \"label\": \"src_endpoint.mac\"},\n    {\"slot\": 69, \"label\": \"src_endpoint.mac\"},\n    {\"slot\": 70, \"label\": \"message\"},\n    {\"slot\": 71, \"label\": \"message\"},\n    {\"slot\": 72, \"label\": \"message\"}\n  ]\n}"
+ ],
+ "llama_server_log_tail": "ve: max_nodes = 20480\n0.06.755.319 D sched_reserve: reserving full memory module\n0.06.755.353 D sched_reserve: worst-case: n_tokens = 512, n_seqs = 1, n_outputs = 1\n0.06.755.355 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.756.330 I resolve_fused_ops: Flash Attention enabled\n0.06.756.352 I resolve_fused_ops: resolving fused DeepSeek V4 HC support:\n0.06.756.354 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.757.093 I resolve_fused_ops: fused DeepSeek V4 HC pre enabled\n0.06.757.116 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.757.830 I resolve_fused_ops: fused DeepSeek V4 HC comb enabled\n0.06.757.853 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.758.586 I resolve_fused_ops: fused DeepSeek V4 HC post enabled\n0.06.758.611 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n0.06.784.714 D graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1\n0.06.786.935 D graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =    1\n0.06.788.717 I sched_reserve:      CUDA0 compute buffer size =   106.46 MiB\n0.06.788.744 I sched_reserve:  CUDA_Host compute buffer size =    29.11 MiB\n0.06.788.745 I sched_reserve: graph nodes  = 1831\n0.06.788.745 I sched_reserve: graph splits = 181 (with bs=512), 20 (with bs=1)\n0.06.788.747 I sched_reserve: reserve took 46.10 ms, sched copies = 1\n0.06.788.844 I cmn          init: llama threadpool init, n_threads = 6\n0.06.788.898 D attach_threadpool: call\n0.06.788.912 D set_adapters_lora: adapters = (nil)\n0.06.788.915 D adapters_lora_are_same: adapters = (nil)\n0.27.584.167 I cmn  common_conte: the context does not support partial sequence removal\n0.27.752.468 I srv    load_model: speculative decoding will use checkpoints\n0.27.752.591 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'\n0.27.752.718 I spec common_specu: no implementations specified for speculative decoding\n0.27.752.725 I slot   load_model: id  0 | task -1 | new slot, n_ctx = 8192\n0.27.752.735 D slot        reset: id  0 | task -1 | \n0.27.754.237 I srv    load_model: prompt cache is enabled, size limit: 8192 MiB\n0.27.754.257 I srv    load_model: use `--cache-ram 0` to disable the prompt cache\n0.27.754.257 I srv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391\n0.27.754.258 I srv    load_model: context checkpoints enabled, max = 32, min spacing = 8192\n0.27.754.291 I srv          init: idle slots will be saved to prompt cache upon starting a new task\n0.27.754.291 D srv          init: __TEST_TAG_CACHE_IDLE_SLOTS_ENABLED__\n0.27.763.419 D Using specialized template: Qwen3-Coder\n0.27.766.302 I srv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n<think>\n'\n0.27.766.374 D Using specialized template: Qwen3-Coder\n0.27.767.130 I srv          init: init: chat template, thinking = 1\n0.27.767.172 I srv          init: preserve_reasoning kwarg: not supported by template\n0.27.768.347 I srv  llama_server: model loaded\n0.27.768.375 I srv  llama_server: listening on http://0.0.0.0:8080\n0.27.768.376 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release\n0.27.768.376 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508\n0.27.768.551 D que    start_loop: processing new tasks\n0.27.768.573 D que    start_loop: update slots\n0.27.768.576 I srv  update_slots: all slots are idle\n0.27.768.576 D que    start_loop: waiting for new tasks\n0.29.036.013 D srv          stop: all tasks already finished, no need to cancel\n"
+}

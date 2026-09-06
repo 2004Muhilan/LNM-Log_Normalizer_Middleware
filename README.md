@@ -10,7 +10,7 @@ development environment is WSL2 (Ubuntu). See `ulpf-implementation-plan.md` for 
 |---|---|
 | `contracts/` | The six frozen data contracts (JSON Schema 2020-12; four at P1 exit, the normalized event at P2 exit, the ML feature tuple at P6 exit; parser-pack 1.3.0 since P6), golden vectors, README with embedded decisions |
 | `learning/` | Python learning plane: `ulpf_contracts` (contract validation) and `ulpf_learn` (induction, enumerator, acceptance engine, ambiguity analyzer, discriminator appliers, pack emission, review CLI, reference DSL executor); fixtures stand in for the model until P4 |
-| `runtime/` | Go runtime: contract loader, DSL compiler/executor, framing, evidence store, interim router, normalizer, pipeline, CLI (`cmd/ulpf-runtime`), Dockerfile |
+| `runtime/` | Go runtime: contract loader, DSL compiler/executor, framing (newline, RFC 6587 octet counting, UDP, TCP, HTTP, directory pull, multiline, de-batching, envelope chain), evidence store, routing DAG, normalizer, gap accounting, pipeline, CLIs (`cmd/ulpf-runtime`, `ulpf-committer`, `ulpf-verify`), Dockerfile |
 | `ocsf/` | Pinned OCSF 1.3.0 class tables (`pinned/`) generated from the schema export, cross-checked against the schema source; tools in `tools/` |
 | `library/` | Discriminator library v1 (data) |
 | `acceptance/` | Per-class acceptance policy data (engine is P3) |
@@ -97,6 +97,24 @@ runtime/bin/ulpf-runtime export --evidence EV --event-id ev_... --out bundle/
 runtime/bin/ulpf-verify evidence --evidence EV --trust keys/trust    # recompute every root, check chain + signatures
 runtime/bin/ulpf-verify bundle --bundle bundle/ --trust keys/trust    # the external witness's command
 runtime/bin/ulpf-runtime run --pack P --listen udp::5514 --evidence EV --out -   # syslog UDP; envelope unwrapped after the raw write
+```
+
+Transports, framing breadth and gap accounting (P7). One runtime, any arrival: syslog over UDP/TCP (RFC 6587
+octet counting with non-transparent fallback, bounded per connection), HTTP receive, a directory-drop
+collector, one multiline mechanism, JSON-array de-batching (N independently hashed events), recursive
+envelope unwrap (relay chain, CEF application envelope), and per-peer continuity: sequence gaps, silence
+and connection loss become **gap records committed as evidence-log leaves**, listed and exported by the
+verifier like any event:
+
+```bash
+bash scripts/p7-check.sh                                      # P7 exit: suites, invariant 7 under load (sized to this machine), named P7 tests, canned demos
+bash scripts/p7-demo.sh                                       # octet-counted TCP capture; batched JSON drop; a silenced UDP source -> signed gap leaf -> witness
+runtime/bin/ulpf-runtime run --pack P --listen tcp::6514 --idle-timeout 30s --max-conns 256 --evidence EV --out -      # RFC 6587 + newline fallback
+runtime/bin/ulpf-runtime run --pack P --listen http::8514 --max-body-bytes 8388608 --evidence EV --out -                 # POST newline bodies or JSON arrays
+runtime/bin/ulpf-runtime run --pack P --pull-dir /drop --evidence EV --out -                                             # files ingested in name order, renamed .done
+runtime/bin/ulpf-runtime run --pack P --input app.log --multiline-start '^\d{4}-\d{2}-\d{2} ' --evidence EV --out -      # stack traces join their first line
+runtime/bin/ulpf-runtime run --pack P --listen udp::5514 --silence-after 30s --evidence EV --out -                        # a peer quiet for 30 s -> silence gap record
+runtime/bin/ulpf-verify gaps --evidence EV --trust keys/trust                                                            # every gap record with its checkpoint, root and signature verdict
 ```
 
 Runtime CLI (after `go build -o runtime/bin/ulpf-runtime ./cmd/ulpf-runtime` in `runtime/`):

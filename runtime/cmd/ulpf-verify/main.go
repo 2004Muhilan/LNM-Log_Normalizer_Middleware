@@ -5,6 +5,7 @@
 //	ulpf-verify evidence --evidence <dir> --trust <dir>     recompute every root, check every signature and the chain
 //	ulpf-verify bundle   --bundle <dir>   --trust <dir>     verify one exported event against its checkpoint
 //	ulpf-verify locate   --evidence <dir> --segment <id>    name the first record whose bytes changed
+//	ulpf-verify gaps     --evidence <dir> --trust <dir>     P7: list every gap record (silence, sequence gap, connection lost) with its commitment status
 package main
 
 import (
@@ -74,6 +75,64 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("VERIFY: OK — event %v: raw bytes match the record, leaf proof reaches segment root %v, checkpoint %v signed by a trusted authority\n", doc["event_id"], doc["segment_root"], doc["checkpoint_id"])
+	case "gaps":
+		// P7: absence made tamper-evident. Every gap record is a leaf like any event: listed here with the
+		// checkpoint that committed it, the recomputed segment root and the signature verdict — or
+		// UNCOMMITTED, never hidden.
+		fs := flag.NewFlagSet("gaps", flag.ExitOnError)
+		ev := fs.String("evidence", "", "evidence directory")
+		cdir := fs.String("commit", "", "commit directory (default <evidence>/commit)")
+		trust := fs.String("trust", "", "trust store directory")
+		asJSON := fs.Bool("json", false, "one JSON object per line")
+		fs.Parse(os.Args[2:])
+		entries, err := checkpoint.Gaps(*ev, *cdir, keys.TrustStore{Dir: *trust})
+		die(err)
+		bad := 0
+		for _, e := range entries {
+			if *asJSON {
+				json.NewEncoder(os.Stdout).Encode(e)
+				continue
+			}
+			state := "UNCOMMITTED"
+			if e.Committed {
+				state = fmt.Sprintf("committed in %s", e.CheckpointID)
+				if e.RootVerified && e.SignatureOK {
+					state += fmt.Sprintf(", root recomputed, signed by %s (%s)", e.AuthorityID, e.CommitMode)
+				} else {
+					state += " BUT root or signature does not verify"
+					bad++
+				}
+			}
+			if e.Problem != "" {
+				state += " PROBLEM: " + e.Problem
+				bad++
+			}
+			r := e.Record
+			detail := ""
+			switch r.Kind {
+			case "silence":
+				detail = fmt.Sprintf("silent for %d ms since %d (last event %s)", r.SilenceMS, r.LastSeenAt, r.LastEventID)
+			case "silence_end":
+				detail = fmt.Sprintf("resumed after %d ms", r.SilenceMS)
+			case "sequence_gap":
+				detail = fmt.Sprintf("expected sequence %d, observed %d: %d message(s) missing", r.Expected, r.Observed, r.Missing)
+			case "sequence_reset":
+				detail = fmt.Sprintf("expected sequence %d, observed %d: %s", r.Expected, r.Observed, r.Detail)
+			default:
+				detail = r.Detail
+			}
+			fmt.Printf("GAP %-15s peer=%s source=%s channel=%s at=%d — %s\n     leaf %d of %s (%s), %s\n", r.Kind, r.Peer, r.SourceID, r.Channel, r.DetectedAt, detail, e.LeafIndex, e.SegmentID, e.EventID, state)
+		}
+		summary := os.Stdout
+		if *asJSON {
+			summary = os.Stderr // keep stdout one JSON object per line
+		}
+		fmt.Fprintf(summary, "GAPS: %d record(s)", len(entries))
+		if bad > 0 {
+			fmt.Fprintf(summary, ", %d with problems\n", bad)
+			os.Exit(1)
+		}
+		fmt.Fprintln(summary)
 	case "locate":
 		fs := flag.NewFlagSet("locate", flag.ExitOnError)
 		ev := fs.String("evidence", "", "evidence directory")
@@ -125,6 +184,6 @@ func die(err error) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ulpf-verify evidence|bundle|locate [flags]")
+	fmt.Fprintln(os.Stderr, "usage: ulpf-verify evidence|bundle|locate|gaps [flags]")
 	os.Exit(2)
 }

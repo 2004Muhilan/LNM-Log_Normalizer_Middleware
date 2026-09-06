@@ -4,83 +4,271 @@
   "title": "ULPF normalized event (OCSF JSON + _lineage envelope)",
   "description": "The runtime's output record for one event: an OCSF event object (class_uid and the attributes the pack maps, nested as OCSF objects) plus the mandatory _lineage block (architecture §4.1) and the unmapped vendor extensions. OCSF attributes themselves are validated against the pinned class table by the pack, not enumerated here; this contract fixes the envelope so the learning plane's differential test (P3) can compare outputs field for field. Frozen at P2 exit.",
   "type": "object",
-  "required": ["class_uid", "time", "_lineage"],
+  "required": [
+    "class_uid",
+    "time",
+    "_lineage"
+  ],
   "properties": {
-    "class_uid": { "type": "integer", "minimum": 0 },
-    "category_uid": { "type": "integer", "minimum": 0, "description": "1.1.0. Derived from the class via the pinned table." },
-    "type_uid": { "type": "integer", "minimum": 0, "description": "1.1.0. class_uid * 100 + activity_id (0 when activity_id is absent)." },
-    "severity_id": { "type": "integer", "minimum": 0, "description": "1.1.0. Pack-declared (constant or mapped) with provenance — a judgement, never derived." },
-    "metadata": { "type": "object", "description": "1.1.0. OCSF metadata: version and product from the pack." },
-    "time": { "type": "integer", "description": "OCSF event time, epoch milliseconds." },
+    "class_uid": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "category_uid": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "1.1.0. Derived from the class via the pinned table."
+    },
+    "type_uid": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "1.1.0. class_uid * 100 + activity_id (0 when activity_id is absent)."
+    },
+    "severity_id": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "1.1.0. Pack-declared (constant or mapped) with provenance — a judgement, never derived."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "1.1.0. OCSF metadata: version and product from the pack."
+    },
+    "time": {
+      "type": "integer",
+      "description": "OCSF event time, epoch milliseconds."
+    },
     "unmapped": {
       "type": "object",
       "description": "Vendor extensions carried under their pack-declared names; values are the decoded span values.",
-      "propertyNames": { "pattern": "^[a-z_][a-z0-9_]*$" },
-      "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+      "propertyNames": {
+        "pattern": "^[a-z_][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      }
     },
     "_lineage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "event_id", "raw_hash", "segment_id", "offset", "length", "parser_id", "parser_version", "mapping_version", "ocsf_version", "source_id", "collector_id", "ingest_channel", "framing", "routing_signature", "event_time", "ingest_time", "processing_time", "normalization_version"],
+      "required": [
+        "schema_version",
+        "event_id",
+        "raw_hash",
+        "segment_id",
+        "offset",
+        "length",
+        "parser_id",
+        "parser_version",
+        "mapping_version",
+        "ocsf_version",
+        "source_id",
+        "collector_id",
+        "ingest_channel",
+        "framing",
+        "routing_signature",
+        "event_time",
+        "ingest_time",
+        "processing_time",
+        "normalization_version"
+      ],
       "properties": {
-        "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds the optional envelope record; earlier documents remain valid." },
-        "event_id": { "type": "string", "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{10,26}$" },
-        "raw_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "segment_id": { "type": "string", "pattern": "^seg_[0-9]{5,}$" },
-        "offset": { "type": "integer", "minimum": 0 },
-        "length": { "type": "integer", "minimum": 0 },
-        "parser_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
-        "parser_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
-        "mapping_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
-        "ocsf_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-        "source_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
-        "collector_id": { "type": "string", "maxLength": 128 },
-        "ingest_channel": { "type": "string", "maxLength": 512 },
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "1.0.0",
+            "1.1.0",
+            "1.2.0",
+            "1.3.0"
+          ],
+          "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds the optional envelope record; 1.3.0 (P7) adds the relay chain (recursive unwrap), the CEF application envelope, the batch record of a de-batched element, and the udp_datagram framing method; every bump is additive and earlier documents remain valid."
+        },
+        "event_id": {
+          "type": "string",
+          "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{10,26}$"
+        },
+        "raw_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "segment_id": {
+          "type": "string",
+          "pattern": "^seg_[0-9]{5,}$"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "parser_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "parser_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        },
+        "mapping_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        },
+        "ocsf_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "collector_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ingest_channel": {
+          "type": "string",
+          "maxLength": 512
+        },
         "framing": {
           "type": "object",
           "description": "Structured framing record: reconstruction is raw_prefix + raw + raw_suffix (base64).",
           "additionalProperties": false,
-          "required": ["method", "raw_prefix", "raw_suffix", "fragment_count", "original_message_length", "truncation_status", "framing_confidence"],
+          "required": [
+            "method",
+            "raw_prefix",
+            "raw_suffix",
+            "fragment_count",
+            "original_message_length",
+            "truncation_status",
+            "framing_confidence"
+          ],
           "properties": {
-            "method": { "type": "string", "enum": ["newline", "octet_count", "multiline", "batch_element"] },
-            "raw_prefix": { "type": "string", "pattern": "^[A-Za-z0-9+/]*={0,2}$" },
-            "raw_suffix": { "type": "string", "pattern": "^[A-Za-z0-9+/]*={0,2}$" },
-            "fragment_count": { "type": "integer", "minimum": 1 },
-            "original_message_length": { "type": "integer", "minimum": 0 },
-            "truncation_status": { "type": "string", "enum": ["none", "truncated", "continuation"] },
-            "framing_confidence": { "type": "string", "enum": ["high", "low"] }
+            "method": {
+              "type": "string",
+              "enum": [
+                "newline",
+                "octet_count",
+                "multiline",
+                "batch_element",
+                "udp_datagram"
+              ]
+            },
+            "raw_prefix": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+            },
+            "raw_suffix": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+            },
+            "fragment_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "original_message_length": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "truncation_status": {
+              "type": "string",
+              "enum": [
+                "none",
+                "truncated",
+                "continuation"
+              ]
+            },
+            "framing_confidence": {
+              "type": "string",
+              "enum": [
+                "high",
+                "low"
+              ]
+            }
           }
         },
         "envelope": {
-          "type": "object",
-          "description": "1.2.0 (P5). The transport envelope unwrapped before routing, one level (recursive unwrap and relay chains are P7). The raw evidence record holds the complete received bytes; offset/length above address them. payload_offset/payload_length locate, within those bytes, the payload the parser saw; span offsets in the parser's span map are relative to the payload. Header fields are carried verbatim as the envelope stated them — the envelope's own timestamp is the relay's clock unless a pack says otherwise (temporal_role).",
-          "additionalProperties": false,
-          "required": ["kind", "payload_offset", "payload_length"],
-          "properties": {
-            "kind": { "type": "string", "enum": ["none", "rfc3164", "rfc5424"] },
-            "payload_offset": { "type": "integer", "minimum": 0 },
-            "payload_length": { "type": "integer", "minimum": 0 },
-            "priority": { "type": "integer", "minimum": 0, "maximum": 191 },
-            "facility": { "type": "integer", "minimum": 0, "maximum": 23 },
-            "severity": { "type": "integer", "minimum": 0, "maximum": 7 },
-            "timestamp": { "type": "string", "maxLength": 64 },
-            "hostname": { "type": "string", "maxLength": 255 },
-            "app_name": { "type": "string", "maxLength": 48 },
-            "proc_id": { "type": "string", "maxLength": 128 },
-            "msg_id": { "type": "string", "maxLength": 32 },
-            "structured_data": { "type": "string", "maxLength": 8192 },
-            "version": { "type": "integer", "minimum": 1, "maximum": 999 }
+          "$ref": "#/$defs/envelope"
+        },
+        "relay_chain": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "description": "1.3.0 (P7). Every envelope removed by recursive unwrap, outermost first, when there was more than one: up to two syslog envelopes (a relay re-wrapping a device header) plus one CEF application envelope. The last entry equals envelope. Absent when at most one envelope was removed.",
+          "items": {
+            "$ref": "#/$defs/envelope"
           }
         },
-        "routing_signature": { "type": "string", "description": "The L1–L4 signature key the event matched, as computed by the router.", "maxLength": 1024 },
-        "family_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
-        "event_time": { "type": "integer" },
-        "ingest_time": { "type": "integer" },
-        "processing_time": { "type": "integer" },
-        "source_timezone": { "type": ["string", "null"] },
-        "timezone_confidence": { "type": "string", "enum": ["declared", "inferred", "unresolved"] },
-        "normalization_version": { "type": "integer", "minimum": 1, "description": "Corrections emit a new version with derived_from (invariant 8, P8); v1 is never rewritten." },
-        "derived_from": { "type": "integer", "minimum": 1 },
+        "batch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "batch_hash",
+            "index",
+            "size"
+          ],
+          "description": "1.3.0 (P7). Present when the event is one element of a de-batched JSON array: the sha256 of the whole received batch, this element's index and the batch size. The element's own raw bytes are hashed in raw_hash; the batch is reconstructible from its elements' framing records.",
+          "properties": {
+            "batch_hash": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "routing_signature": {
+          "type": "string",
+          "description": "The L1–L4 signature key the event matched, as computed by the router.",
+          "maxLength": 1024
+        },
+        "family_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "event_time": {
+          "type": "integer"
+        },
+        "ingest_time": {
+          "type": "integer"
+        },
+        "processing_time": {
+          "type": "integer"
+        },
+        "source_timezone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timezone_confidence": {
+          "type": "string",
+          "enum": [
+            "declared",
+            "inferred",
+            "unresolved"
+          ]
+        },
+        "normalization_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Corrections emit a new version with derived_from (invariant 8, P8); v1 is never rewritten."
+        },
+        "derived_from": {
+          "type": "integer",
+          "minimum": 1
+        },
         "absent": {
           "type": "array",
           "description": "Mapped mandatory attributes that have no value in this event, with the cause. Mandatory is a mapping obligation, not a per-event presence requirement: the event is usable; the absence is a recorded fact. 'structural' = the source carried no span for the field; 'uncoercible' = a span exists but its value failed coercion (e.g. a vendor null marker such as Squid's '-'). Omitted when empty.",
@@ -88,12 +276,131 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["attribute", "cause"],
+            "required": [
+              "attribute",
+              "cause"
+            ],
             "properties": {
-              "attribute": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*(\\.[a-z_][a-z0-9_]*)*$" },
-              "cause": { "type": "string", "enum": ["structural", "uncoercible", "declared_null"], "description": "declared_null (1.1.0): the source carried a pack-declared null marker for the field." }
+              "attribute": {
+                "type": "string",
+                "pattern": "^[a-z_][a-z0-9_]*(\\.[a-z_][a-z0-9_]*)*$"
+              },
+              "cause": {
+                "type": "string",
+                "enum": [
+                  "structural",
+                  "uncoercible",
+                  "declared_null"
+                ],
+                "description": "declared_null (1.1.0): the source carried a pack-declared null marker for the field."
+              }
             }
           }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "envelope": {
+      "type": "object",
+      "description": "1.2.0 (P5). The transport envelope unwrapped before routing. The raw evidence record holds the complete received bytes; offset/length above address them. payload_offset/payload_length locate, within those bytes, the payload the parser saw; span offsets in the parser's span map are relative to the payload. Header fields are carried verbatim as the envelope stated them — the envelope's own timestamp is the relay's clock unless a pack says otherwise (temporal_role). 1.3.0 (P7): when a relay chain was unwrapped this is the INNERMOST envelope (the device's own header, the one routing anchors and envelope-sourced mappings read) and relay_chain holds every envelope removed, outermost first; level is the envelope's position in that chain (1 = outermost). kind cef is the ArcSight CEF application header, unwrapped after the transport envelopes; its seven header fields are carried in device_vendor … cef_severity and the payload is the extension.",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "payload_offset",
+        "payload_length"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "none",
+            "rfc3164",
+            "rfc5424",
+            "cef"
+          ]
+        },
+        "payload_offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "payload_length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 191
+        },
+        "facility": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "severity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "hostname": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "app_name": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "proc_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "msg_id": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "structured_data": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "RFC 5424 VERSION (1 or more) or the CEF version (0 for CEF:0)."
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "device_vendor": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "device_product": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "device_version": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "signature_id": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "cef_severity": {
+          "type": "string",
+          "maxLength": 1024
         }
       }
     }

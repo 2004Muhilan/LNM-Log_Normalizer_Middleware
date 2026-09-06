@@ -18,7 +18,7 @@ import (
 	"ulpf/runtime/internal/spanmap"
 )
 
-const LineageSchemaVersion = "1.2.0" // P5: optional envelope record (additive; 1.0.0/1.1.0 documents remain valid)
+const LineageSchemaVersion = "1.3.0" // P5: optional envelope record; P7: relay_chain, batch, cef envelope, udp_datagram (additive; earlier documents remain valid)
 
 type Context struct {
 	Pack           *pack.Pack
@@ -26,7 +26,8 @@ type Context struct {
 	Record         evidence.Record
 	Signature      string
 	ProcessingTime time.Time
-	Envelope       *frame.Envelope // the unwrapped transport envelope, when there was one (1.2.0)
+	Envelope       *frame.Envelope // the innermost unwrapped envelope, when there was one (1.2.0; the device's own header on a relay chain)
+	Chain          *frame.Chain    // P7 (1.3.0): every envelope removed, when more than one
 }
 
 // Absent records a mapped mandatory attribute that has no value in this event, with its cause.
@@ -216,6 +217,12 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 	}
 	if ctx.Envelope != nil {
 		lineage["envelope"] = ctx.Envelope
+	}
+	if ctx.Chain != nil && ctx.Chain.Depth() > 1 {
+		lineage["relay_chain"] = ctx.Chain.Envelopes
+	}
+	if ctx.Record.Framing.BatchSize > 0 {
+		lineage["batch"] = map[string]any{"batch_hash": ctx.Record.Framing.BatchHash, "index": ctx.Record.Framing.BatchIndex, "size": ctx.Record.Framing.BatchSize}
 	}
 	out["_lineage"] = lineage
 	if _, ok := out["time"]; !ok {

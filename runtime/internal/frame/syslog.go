@@ -5,11 +5,14 @@ import (
 	"strconv"
 )
 
-// Envelope is the transport header unwrapped from a received message, one level (recursive unwrap and
-// relay chains are P7). The evidence record keeps the complete received bytes; the payload the parser
-// sees is raw[PayloadOffset : PayloadOffset+PayloadLength]. Header fields are carried verbatim.
+// Envelope is one transport or application header unwrapped from a received message. The evidence
+// record keeps the complete received bytes; the payload the parser sees is
+// raw[PayloadOffset : PayloadOffset+PayloadLength] (offsets absolute in the received bytes, also when
+// the envelope is an inner one of a relay chain — see UnwrapChain). Header fields are carried verbatim.
+// P7 adds Level (1 = outermost) and the CEF header fields (kind cef).
 type Envelope struct {
-	Kind           string `json:"kind"` // none | rfc3164 | rfc5424
+	Kind           string `json:"kind"` // none | rfc3164 | rfc5424 | cef
+	Level          int    `json:"level,omitempty"`
 	PayloadOffset  int    `json:"payload_offset"`
 	PayloadLength  int    `json:"payload_length"`
 	Priority       *int   `json:"priority,omitempty"`
@@ -22,6 +25,13 @@ type Envelope struct {
 	MsgID          string `json:"msg_id,omitempty"`
 	StructuredData string `json:"structured_data,omitempty"`
 	Version        *int   `json:"version,omitempty"`
+	// CEF header (kind cef): CEF:Version|Device Vendor|Device Product|Device Version|Signature ID|Name|Severity|
+	DeviceVendor  string `json:"device_vendor,omitempty"`
+	DeviceProduct string `json:"device_product,omitempty"`
+	DeviceVersion string `json:"device_version,omitempty"`
+	SignatureID   string `json:"signature_id,omitempty"`
+	Name          string `json:"name,omitempty"`
+	CEFSeverity   string `json:"cef_severity,omitempty"`
 }
 
 // Unwrap recognises a syslog envelope at the START of raw and returns it with the payload bounds.

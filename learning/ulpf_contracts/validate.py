@@ -17,7 +17,7 @@ KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack", "nor
 SUPPORTED_VERSIONS = {kind: {"1.0.0", "1.1.0"} for kind in KINDS}
 SUPPORTED_VERSIONS["ml-feature"] = {"1.0.0"}   # P6 boundary: the ML feature tuple (requirement h), the sixth contract
 SUPPORTED_VERSIONS["parser-pack"] = {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}  # P5: proposal provenance, live signing; P6: envelope-sourced mappings
-SUPPORTED_VERSIONS["normalized-event"] = {"1.0.0", "1.1.0", "1.2.0"}   # P5: _lineage.envelope
+SUPPORTED_VERSIONS["normalized-event"] = {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}   # P5: _lineage.envelope; P7: relay_chain, batch, cef, udp_datagram
 FORBIDDEN_KEYS = {"confidence", "probability", "score", "likelihood"}
 CONSUMING_OPS = {"literal", "regex", "csv", "kv", "positional", "quoted", "optional", "repeated"}
 

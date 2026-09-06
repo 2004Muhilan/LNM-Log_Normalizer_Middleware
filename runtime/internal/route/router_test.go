@@ -219,7 +219,7 @@ func TestStaticNoTryAllPath(t *testing.T) {
 		t.Fatalf("pipeline must call Program.Parse exactly once (found %d)", len(calls))
 	}
 	// and that single call is on the routed family, after the routing decision
-	if !regexp.MustCompile(`(?s)router\.Route\(.*d\.Family\.Program\.Parse\(`).Match(pipe) {
+	if !regexp.MustCompile(`(?s)router\.Route(Chain)?\(.*d\.Family\.Program\.Parse\(`).Match(pipe) { // P7: RouteChain is the chain-aware entry
 		t.Fatal("the single Parse call must be on the family the router chose, after Route")
 	}
 	// no loop over packs or families reaches a Parse

@@ -69,8 +69,10 @@ def machine_info() -> dict:
 
 # ---------------------------------------------------------------- server
 class Server:
-    def __init__(self, model: dict, cache: Path, gpu: bool, ngl: str, port: int = 8080, image: str = "ulpf-llama", ctx: int = 16384):
+    def __init__(self, model: dict, cache: Path, gpu: bool, ngl: str, port: int = 8080, image: str = "ulpf-llama", ctx: int = 16384,
+                 cuda_cache: str | None = None):
         self.model, self.cache, self.gpu, self.ngl, self.port, self.image, self.ctx = model, cache, gpu, ngl, port, image, ctx
+        self.cuda_cache = cuda_cache
         self.log = ""
         self.name = f"{CONTAINER}-{port}"
 
@@ -79,6 +81,10 @@ class Server:
         cmd = ["docker", "run", "-d", "--name", self.name, "-p", f"{self.port}:8080", "-v", f"{self.cache}:/models:ro"]
         if self.gpu:
             cmd += ["--gpus", "all"]
+            if self.cuda_cache:
+                # images that carry PTX (not SASS) for this GPU JIT-compile it on first load; a named volume
+                # keeps the driver's compute cache across container starts so that happens once per machine
+                cmd += ["-v", f"{self.cuda_cache}:/root/.nv/ComputeCache"]
         # --verbose: the load summary (offloaded N/M layers, buffer sizes, fit projection) is only logged
         # at that level in this build; the log is captured once at readiness, before any generation.
         cmd += [self.image, "-m", f"/models/{self.model['file']}", "--parallel", "1", "--ctx-size", str(self.ctx), "--seed", "0",
@@ -117,7 +123,10 @@ class Server:
     def offload(self) -> dict:
         """What llama.cpp actually did: layers offloaded, device buffer sizes, KV placement."""
         log = self.log or self.logs()
-        off = re.search(r"offloaded (\d+)/(\d+) layers to GPU", log)
+        # LAST match: llama.cpp's -fit probes several splits and logs each; the final line is what runs
+        # (found on the laptop: the first probe said 33/33, the server ran 22/33)
+        offs = re.findall(r"offloaded (\d+)/(\d+) layers to GPU", log)
+        off = re.match(r"(\d+)/(\d+)", f"{offs[-1][0]}/{offs[-1][1]}") if offs else None
         bufs = {m.group(1): float(m.group(2)) for m in re.finditer(r"(\w+) model buffer size\s*=\s*([\d.]+) MiB", log)}
         kv = {m.group(1): float(m.group(2)) for m in re.finditer(r"(\w+) KV buffer size\s*=\s*([\d.]+) MiB", log)}
         dev = re.search(r"using device (\w+) \(([^)]+)\)", log)
@@ -253,7 +262,7 @@ def run(a) -> None:
         client = LlamaClient(a.server or f"http://127.0.0.1:{a.port}")
         srv = None
         if not a.server:
-            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx).start()
+            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx, a.cuda_cache).start()
             srv.wait(client)
         backend = "cpu" if not a.gpu else f"cuda ngl={a.ngl}"
         off = srv.offload() if srv else {}
@@ -312,7 +321,7 @@ def grammar(a) -> None:
         client = LlamaClient(a.server or f"http://127.0.0.1:{a.port}")
         srv = None
         if not a.server:
-            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx).start()
+            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx, a.cuda_cache).start()
             srv.wait(client)
         res = {"model_id": mid, "dropped_keywords": {k: len(v) for k, v in dropped.items()}, "dropped_pointers": dropped}
         for name, sch in (("class", emission.class_schema()), ("proposal-4002-10", emission.proposal_schema(4002, 10)),
@@ -349,7 +358,7 @@ def wholespec(a) -> None:
         client = LlamaClient(a.server or f"http://127.0.0.1:{a.port}")
         srv = None
         if not a.server:
-            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx).start()
+            srv = Server(m, cache, a.gpu, a.ngl, a.port, a.image, a.ctx, a.cuda_cache).start()
             srv.wait(client)
         for cid in a.cases:
             case, structure, lines = load_case(cid, a.limit_lines)
@@ -514,6 +523,7 @@ def main(argv=None):
         p.add_argument("--image", default="ulpf-llama")
         p.add_argument("--cache", default=str(ROOT / "models" / "cache"))
         p.add_argument("--ctx", type=int, default=16384, help="llama-server context size (KV cache grows with it; lower on a 4 GB card if needed)")
+        p.add_argument("--cuda-cache", default=None, help="named Docker volume mounted at /root/.nv/ComputeCache so a PTX-only image JITs once per machine")
         p.add_argument("--resume", action="store_true", help="skip configurations whose result file already exists without an error")
     s = sub.add_parser("summarize")
     s.add_argument("--results", default=str(RESULTS))

@@ -9,7 +9,7 @@ can run, in the order the problems bite. Nothing here is optional; each step has
 are what that run found; the rest is the procedure as originally written where it still holds. The
 short version: **the driver is the blocker (§1), the WSL cap bit exactly as predicted (§2), weights must
 live on the WSL ext4 disk (§2a), port 8080 is taken (§3a), Docker Hub is locked out by a stale login (§3b),
-and the CPU floor is 434 s for the Squid session (§5).** No GPU number exists yet; §1 says why.
+and the CPU floor is 434 s for the Squid session (§5).** *Revised again 2026-09-07:* the driver was updated (616.64, CUDA 13.4) and the GPU figures for both candidate models are in §5a.
 
 ## 0. What the two machines share — and what changed on the laptop
 
@@ -197,6 +197,35 @@ desktop's CPU floor for the 4B was 266 s on a Ryzen 2700X, so the 8B on this i5 
 number to quote if the GPU path is not working on the day: a Squid onboarding session is ~7½ minutes on
 CPU, plus half a minute of model load.** Only one model was fetched (Granite; 5.35 GB took ~30 min at
 0.5–4 MB/s); the 4B floor is not measured here.
+
+## 5a. GPU measurements — **measured 2026-09-07 after the driver update** (616.64, CUDA 13.4)
+
+Both candidate models, whole mode, all five cases, `--repeat 2`, weights on ext4, `--port 8081`, the compute
+cache mounted (`--cuda-cache ulpf-cuda-cache`, so the upstream image's sm_75 PTX is JIT-compiled once per
+machine). The GPU has ~3.2 GB free at start (Windows holds the rest of the 4 GB).
+
+**Qwen3.5-4B-Q4** (`--ctx 8192`, `-fit` chose 22/33 layers on the GPU, 1.87 GB CUDA + 1.23 GB host):
+
+| case | wall s (session, first repeat) | iterations | agreement | byte-identical |
+|---|---|---|---|---|
+| asa-106023 | 118.8 | 2 | 0.82 | yes |
+| asa-302013 | 161.8 | 3 | 0.36 | yes |
+| fortigate-traffic | 436.4 | 3 | 0.49 | yes |
+| panos-traffic | 296.3 | 2 | 0.51 | yes |
+| squid-native | 121.0 | 3 | 0.50 | yes |
+
+Server throughput: prompt eval ~115 tokens/s, generation ~9–11 tokens/s. Model load 6 s.
+
+**Granite 4.1 8B-Q4 with `--n-gpu-layers auto` and the 16k default context is slower than CPU on this
+card** (prompt eval 6 tokens/s, generation 1.8 tokens/s): the fit heuristic offloaded 41/41 layers of a
+5 GB model into 4 GB and the driver paged VRAM through shared memory. **Rule for the 8B on the 1650: `--ngl 20
+--ctx 8192`.** Its measured figures under that rule are in `spike/results/laptop-1650/` and the P7 report's
+demo-shape recommendation; `python learning/tools/spike.py summarize` merges both machines.
+
+The spike tool recorded the offload split from the **first** `offloaded N/M layers` line; llama.cpp's fit
+loop logs several probes and only the last is what runs (the first said 33/33 for the 4B, 22/33 ran).
+Fixed in P7 to read the last line; laptop results written before the fix carry the wrong `offload` field
+and are superseded by re-runs.
 
 ## 6. The measurements
 

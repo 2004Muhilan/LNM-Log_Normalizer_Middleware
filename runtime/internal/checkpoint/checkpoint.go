@@ -381,6 +381,8 @@ func VerifyAll(dir, cdir string, trust keys.TrustStore) ([]Finding, int, error) 
 	return findings, checked, nil
 }
 
+func merkleRootString(leaves []merkle.Hash) string { return merkle.Root(leaves).String() }
+
 // LocateTamper names the first record whose raw bytes no longer match its raw_hash — the leaf the
 // verifier points at when a segment root differs.
 func LocateTamper(dir, segID string) (string, error) {

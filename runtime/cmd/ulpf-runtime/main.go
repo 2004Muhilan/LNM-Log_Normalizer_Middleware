@@ -3,6 +3,8 @@
 //	ulpf-runtime compile  --spec <file>                      print dsl_hash and parser_hash
 //	ulpf-runtime verify-pack --pack <dir>                    load a pack (fail closed) and report
 //	ulpf-runtime run --pack <dir> --input <file> --evidence <dir> --out <jsonl> [--quarantine <jsonl>]
+//	ulpf-runtime run ... --listen udp::5514 | tcp::6514 | http::8514   (P7: syslog UDP/TCP with RFC 6587 octet counting, HTTP receive)
+//	ulpf-runtime run ... --pull-dir <dir>                              (P7: directory-drop collector)
 //	ulpf-runtime reconstruct --evidence <dir> --out <file>   write the byte-exact original stream
 package main
 
@@ -15,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -86,8 +89,18 @@ func main() {
 		collector := fs.String("collector", "col-01", "collector id")
 		channel := fs.String("channel", "", "ingest channel (defaults to file:<input>)")
 		failAfter := fs.Int("fail-after-raw-write", 0, "kill-test hook: exit after the Nth raw write")
-		listen := fs.String("listen", "", "syslog UDP listener instead of --input, e.g. udp::5514 or udp:127.0.0.1:5514")
-		maxFrames := fs.Int("max-frames", 0, "with --listen: stop after N datagrams (0 = until SIGINT)")
+		listen := fs.String("listen", "", "listener instead of --input: udp::5514, tcp::6514 (RFC 6587 octet counting, newline fallback), http::8514 (POST bodies)")
+		maxFrames := fs.Int("max-frames", 0, "with --listen: stop after N frames (0 = until SIGINT)")
+		pullDir := fs.String("pull-dir", "", "P7: directory-drop collector; files are ingested in name order and renamed .done")
+		pullOnce := fs.Bool("pull-once", false, "with --pull-dir: one pass, then exit")
+		maxConns := fs.Int("max-conns", 256, "tcp: connections served at once; more are accepted and closed (invariant 7)")
+		idle := fs.Duration("idle-timeout", 30*time.Second, "tcp: close a connection silent for this long; its partial frame is retained")
+		maxBody := fs.Int64("max-body-bytes", 8<<20, "http: bytes read per request; the rest is not read, what arrived is framed and flagged")
+		maxEvent := fs.Int("max-event-bytes", 65536, "per-frame byte cap; longer frames arrive as truncated/continuation pieces")
+		mlStart := fs.String("multiline-start", "", "P7: RE2 pattern that begins an event; other lines join the open event (bounded by --multiline-max-lines)")
+		mlLines := fs.Int("multiline-max-lines", 512, "multiline bound (lines)")
+		silence := fs.Duration("silence-after", 0, "P7: declare a peer silent after this long without a message and append a gap record (0 = off)")
+		noDebatch := fs.Bool("no-debatch", false, "P7: do not explode JSON-array frames into elements")
 		fixedClock := fs.Int64("fixed-clock-ms", 0, "deterministic clock for golden outputs (epoch ms)")
 		fixedIDs := fs.Bool("deterministic-ids", false, "sequential event ids for golden outputs")
 		contractsDir, pinned := commonFlags(fs)
@@ -103,7 +116,7 @@ func main() {
 			packs = append(packs, p)
 		}
 		var in io.Reader = os.Stdin
-		if *listen == "" && *input != "-" {
+		if *listen == "" && *pullDir == "" && *input != "-" {
 			f, err := os.Open(*input)
 			die(err)
 			defer f.Close()
@@ -133,7 +146,14 @@ func main() {
 			defer f.Close()
 			mlw = f
 		}
-		o := pipeline.Options{Packs: packs, SourceID: *sourceID, ML: mlw, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: out, Quarantine: q, FailAfterRawWrite: *failAfter}
+		o := pipeline.Options{Packs: packs, SourceID: *sourceID, ML: mlw, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: out, Quarantine: q, FailAfterRawWrite: *failAfter,
+			MaxEventBytes: *maxEvent, NoDebatch: *noDebatch, SilenceAfter: *silence}
+		var multi *frame.Multiline
+		if *mlStart != "" {
+			re, err := regexp.Compile(*mlStart)
+			die(err)
+			multi = &frame.Multiline{Start: re, MaxLines: *mlLines}
+		}
 		if *fixedClock > 0 {
 			t := time.UnixMilli(*fixedClock).UTC()
 			o.Now = func() time.Time { return t }
@@ -144,22 +164,74 @@ func main() {
 		}
 		var st pipeline.Stats
 		var err error
-		if *listen != "" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		switch {
+		case strings.HasPrefix(*listen, "udp:"):
 			// syslog over UDP: one datagram per frame; every received byte is evidence, the envelope is
 			// unwrapped after the raw write, the payload is routed and parsed.
 			addr := strings.TrimPrefix(*listen, "udp:")
-			u := frame.UDP{Addr: addr, MaxEventBytes: 65536, MaxFrames: *maxFrames}
+			u := frame.UDP{Addr: addr, MaxEventBytes: *maxEvent, MaxFrames: *maxFrames}
 			conn, err := u.Listen()
 			die(err)
 			if *channel == "file:" {
 				o.Channel = "udp:" + addr
 			}
-			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
 			fmt.Fprintf(os.Stderr, "listening for syslog datagrams on %s\n", conn.LocalAddr())
 			st, err = pipeline.RunFrames(func(emit func(frame.Frame) error) error { return u.Serve(ctx, conn, emit) }, o)
 			die(err)
-		} else {
+		case strings.HasPrefix(*listen, "tcp:"):
+			// syslog over TCP (P7): RFC 6587 octet counting with non-transparent fallback, bounded per
+			// connection; a connection that ends mid-frame leaves a partial frame and a gap record.
+			addr := strings.TrimPrefix(*listen, "tcp:")
+			t := &frame.TCP{Addr: addr, MaxEventBytes: *maxEvent, MaxConns: *maxConns, IdleTimeout: *idle, MaxFrames: int64(*maxFrames), Multiline: multi}
+			ln, err := t.Listen()
+			die(err)
+			if *channel == "file:" {
+				o.Channel = "tcp:" + addr
+			}
+			fmt.Fprintf(os.Stderr, "listening for syslog over TCP on %s\n", ln.Addr())
+			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return t.Serve(ctx, ln, emit) }, o,
+				func(p *pipeline.Pipeline) { t.OnClose = p.Lost })
+			die(err)
+			fmt.Fprintf(os.Stderr, "tcp: accepted=%d refused=%d idle_closed=%d partial_at_close=%d peak_active=%d\n", t.Accepted.Load(), t.Refused.Load(), t.IdleClosed.Load(), t.PartialAtClose.Load(), t.PeakActive.Load())
+		case strings.HasPrefix(*listen, "http:"):
+			// HTTP receive (P7): POST newline-delimited events or a JSON array; bodies read through a cap.
+			addr := strings.TrimPrefix(*listen, "http:")
+			h := &frame.HTTP{Addr: addr, MaxBodyBytes: *maxBody, MaxEventBytes: *maxEvent, MaxFrames: int64(*maxFrames)}
+			ln, err := h.Listen()
+			die(err)
+			if *channel == "file:" {
+				o.Channel = "http:" + addr
+			}
+			fmt.Fprintf(os.Stderr, "receiving HTTP POST bodies on %s\n", ln.Addr())
+			st, err = pipeline.RunFrames(func(emit func(frame.Frame) error) error { return h.Serve(ctx, ln, emit) }, o)
+			die(err)
+			fmt.Fprintf(os.Stderr, "http: requests=%d rejected=%d truncated=%d\n", h.Requests.Load(), h.Rejected.Load(), h.Truncated.Load())
+		case *listen != "":
+			die(fmt.Errorf("--listen must be udp:, tcp: or http:"))
+		case *pullDir != "":
+			// directory-drop collector (P7): the drop directory is the queue.
+			pl := &frame.Pull{Dir: *pullDir, MaxEventBytes: *maxEvent, Once: *pullOnce, Multiline: multi}
+			if *channel == "file:" {
+				o.Channel = "dir:" + *pullDir
+			}
+			st, err = pipeline.RunFrames(func(emit func(frame.Frame) error) error { return pl.Serve(ctx, emit) }, o)
+			die(err)
+			fmt.Fprintf(os.Stderr, "pull: files=%d\n", pl.Files)
+		default:
+			if multi != nil {
+				maxBytes := *maxEvent
+				st, err = pipeline.RunFrames(func(emit func(frame.Frame) error) error {
+					j := multi.Joiner(emit)
+					if err := (frame.Newline{MaxEventBytes: maxBytes}).Scan(in, j.Feed); err != nil {
+						return err
+					}
+					return j.Flush()
+				}, o)
+				die(err)
+				break
+			}
 			st, err = pipeline.Run(in, o)
 			die(err)
 		}

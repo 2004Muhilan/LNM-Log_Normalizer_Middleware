@@ -36,7 +36,14 @@ type Record struct {
 	Collector  string        `json:"collector_id"`
 	Channel    string        `json:"ingest_channel"`
 	Sequence   int64         `json:"ingest_sequence"`
+	Peer       string        `json:"peer,omitempty"` // P7: the sender within the channel (remote address, file name)
 }
+
+// MethodGapRecord marks an evidence record that is not received bytes but a gap record (P7): the
+// canonical JSON of a detected discontinuity, appended to the same segment as the events around it so
+// it is hashed, Merkle-committed, signed and exportable exactly like an event. Reconstruct skips
+// these records: they are annotations of the stream, not bytes of it.
+const MethodGapRecord = "gap_record"
 
 type Limits struct {
 	MaxEvents int
@@ -249,6 +256,11 @@ func ReadIndex(dir, segID string) ([]Record, error) {
 // Append writes raw bytes and the index record, fsyncs both, and returns the record. It seals and
 // rotates when the open segment has reached any limit.
 func (s *Store) Append(raw []byte, fr frame.Framing, sourceID, collector, channel string) (Record, error) {
+	return s.AppendFrom(raw, fr, sourceID, collector, channel, "")
+}
+
+// AppendFrom is Append with the peer recorded (P7).
+func (s *Store) AppendFrom(raw []byte, fr frame.Framing, sourceID, collector, channel, peer string) (Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.seg != nil && (s.segEv >= s.limits.MaxEvents || s.segLen+int64(len(raw)) > s.limits.MaxBytes || s.now().Sub(s.opened) >= s.limits.MaxAge) {
@@ -264,7 +276,7 @@ func (s *Store) Append(raw []byte, fr frame.Framing, sourceID, collector, channe
 	s.seq++
 	rec := Record{
 		EventID: s.newID(s.now()), RawHash: Hash(raw), SegmentID: s.segID, Offset: s.segLen, Length: len(raw),
-		Framing: fr, IngestTime: s.now().UnixMilli(), SourceID: sourceID, Collector: collector, Channel: channel, Sequence: s.seq,
+		Framing: fr, IngestTime: s.now().UnixMilli(), SourceID: sourceID, Collector: collector, Channel: channel, Sequence: s.seq, Peer: peer,
 	}
 	if _, err := s.seg.Write(raw); err != nil {
 		return Record{}, err
@@ -324,6 +336,10 @@ func Reconstruct(dir string) ([]byte, []Record, error) {
 			ev := raw[r.Offset : r.Offset+int64(r.Length)]
 			if Hash(ev) != r.RawHash {
 				return nil, nil, fmt.Errorf("%s: raw_hash mismatch for %s", segID, r.EventID)
+			}
+			if r.Framing.Method == MethodGapRecord {
+				recs = append(recs, r) // verified like any leaf, but not part of the received stream
+				continue
 			}
 			out = append(out, r.Framing.RawPrefix...)
 			out = append(out, ev...)

@@ -36,7 +36,7 @@ func (u UDP) Serve(ctx context.Context, conn *net.UDPConn, emit func(Frame) erro
 	}()
 	n := 0
 	for {
-		got, _, err := conn.ReadFromUDP(buf)
+		got, from, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
@@ -51,6 +51,9 @@ func (u UDP) Serve(ctx context.Context, conn *net.UDPConn, emit func(Frame) erro
 		copy(raw, buf[:got])
 		fr := Frame{Raw: raw, Framing: Framing{Method: "udp_datagram", RawPrefix: []byte{}, RawSuffix: []byte{}, FragmentCount: 1,
 			OriginalMessageLength: got, TruncationStatus: status, FramingConfidence: "high"}}
+		if from != nil {
+			fr.Peer = from.String() // P7: continuity is kept per sender
+		}
 		if err := emit(fr); err != nil {
 			return err
 		}

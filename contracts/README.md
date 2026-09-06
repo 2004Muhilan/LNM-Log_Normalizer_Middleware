@@ -1,6 +1,6 @@
 # ULPF contracts (frozen at P1 exit)
 
-The five data contracts both stacks depend on (four frozen at P1 exit, the normalized event at P2 exit; see "1.1.0" below for the one additive bump). Schemas are JSON Schema draft 2020-12; every
+The six data contracts both stacks depend on (four frozen at P1 exit, the normalized event at P2 exit, the ML feature tuple at P6 exit; every later change is an additive version bump recorded below). Schemas are JSON Schema draft 2020-12; every
 instance carries `schema_version`. Post-freeze changes require a version bump, a same-commit update
 of `golden/`, and green suites on both sides (`scripts/p1-check.sh`). The Go loader refuses unknown
 versions before doing anything else (fail closed); the Python validator does the same.
@@ -175,6 +175,29 @@ The golden candidate spec and its span map deliberately stay at 1.0.0 to prove t
 - **parser-pack**: a mapping entry may carry `constant` instead of `path` (e.g. `severity_id: 1`
   asserted by the operator for a source that carries no severity), with the same provenance rules.
 - **pinned tables** carry `category_uid` (hashes changed; cross-check still agrees on all four classes).
+
+## normalized-event 1.3.0 (P7) — transport breadth, additive
+
+- **`_lineage.relay_chain`**: every envelope removed by recursive unwrap, outermost first, when more than
+  one came off — up to two syslog envelopes (a relay re-wrapping a device's RFC 3164 header as RFC 5424)
+  plus one application envelope. `_lineage.envelope` is now defined as the **innermost** envelope (the
+  device's own header — what routing anchors and `envelope_field` mappings read); on a single-envelope
+  message nothing changes. Each envelope carries `level` (1 = outermost).
+- **`kind: cef`**: the ArcSight CEF header is an application envelope, unwrapped after the transport
+  envelopes only when it starts the innermost payload; its seven header fields are `device_vendor`,
+  `device_product`, `device_version`, `signature_id`, `name`, `cef_severity` and `version` (0 for CEF:0 —
+  `version`'s minimum drops to 0 for this reason; RFC 5424 still emits 1). The payload is the extension.
+  Header-looking text anywhere else is payload: precedence is transport before application, outer
+  before inner, and position decides (P7 exit criterion, tested).
+- **`_lineage.batch`**: present on an event that was one element of a de-batched JSON array — the sha256
+  of the whole received batch, the element's `index` and the batch `size`. The element's own bytes are
+  what `raw_hash` covers; the batch reconstructs from its elements' framing records.
+- **`framing.method: udp_datagram`**: the P5 UDP listener has emitted this value since P5 without the
+  enum admitting it — a contract omission found when P7's tests validated listener output against the
+  schema; added here.
+- Gap records (P7) are **not** normalized events and do not touch this contract: they are evidence
+  records (`framing.method: gap_record` in the evidence index) with a canonical JSON body
+  (`gap-record 1.0.0`, `runtime/internal/gap`), committed as Merkle leaves like any event.
 
 ## 1.2.0 (P5) — two additive bumps, and signing goes live
 
