@@ -30,15 +30,24 @@ import (
 	"ulpf/runtime/internal/merkle"
 )
 
-const CheckpointVersion = "1.0.0"
+// 1.1.0 (P5 boundary): commit_mode on the checkpoint and observed_state per segment — a development
+// checkpoint over merely SEALED files is distinguishable from one over kernel-locked evidence, in the
+// signed artifact itself. 1.0.0 checkpoints are read with commit_mode "unknown".
+const CheckpointVersion = "1.1.0"
+
+const (
+	ModeKernelImmutable = "kernel_immutable" // every committed segment carried FS_IMMUTABLE_FL when committed
+	ModeSealedOnlyDev   = "sealed_only_dev"  // at least one segment was only SEALED (development seam) — attests to file hashes, not to kernel-locked evidence
+)
 
 type SegmentRoot struct {
-	SegmentID string `json:"segment_id"`
-	Root      string `json:"root"`
-	Leaves    int    `json:"leaves"`
-	RawSHA256 string `json:"raw_sha256"`
-	IdxSHA256 string `json:"idx_sha256"`
-	SealedAt  int64  `json:"sealed_at"`
+	SegmentID     string `json:"segment_id"`
+	Root          string `json:"root"`
+	Leaves        int    `json:"leaves"`
+	RawSHA256     string `json:"raw_sha256"`
+	IdxSHA256     string `json:"idx_sha256"`
+	SealedAt      int64  `json:"sealed_at"`
+	ObservedState string `json:"observed_state,omitempty"` // 1.1.0: what the kernel said at commit time: immutable | sealed
 }
 
 type Checkpoint struct {
@@ -51,7 +60,16 @@ type Checkpoint struct {
 	Segments         []SegmentRoot `json:"segments,omitempty"`    // minute
 	Checkpoints      []string      `json:"checkpoints,omitempty"` // daily: ids of the minute checkpoints covered
 	CheckpointHashes []string      `json:"checkpoint_hashes,omitempty"`
-	Root             string        `json:"root"` // merkle root over segment roots (minute) or checkpoint hashes (daily)
+	Root             string        `json:"root"`                  // merkle root over segment roots (minute) or checkpoint hashes (daily)
+	CommitMode       string        `json:"commit_mode,omitempty"` // 1.1.0: kernel_immutable | sealed_only_dev (daily: the weakest of its checkpoints)
+}
+
+// Mode of a checkpoint read from disk; 1.0.0 files carry none.
+func (c Checkpoint) Mode() string {
+	if c.CommitMode == "" {
+		return "unknown (checkpoint_version " + c.Version + ")"
+	}
+	return c.CommitMode
 }
 
 // Immutability decides whether a segment may be committed. The production check is the kernel flag
@@ -153,7 +171,8 @@ func Commit(dir, cdir string, key keys.Key, imm Immutability, now time.Time) (Re
 			rep.Refused[seg] = err.Error()
 			continue
 		}
-		sr := SegmentRoot{SegmentID: seg, Root: merkle.Root(leaves).String(), Leaves: len(leaves), RawSHA256: man.RawSHA256, IdxSHA256: man.IdxSHA256, SealedAt: man.SealedAt}
+		// observed_state is the KERNEL's answer, recorded even when a development seam decided commitability
+		sr := SegmentRoot{SegmentID: seg, Root: merkle.Root(leaves).String(), Leaves: len(leaves), RawSHA256: man.RawSHA256, IdxSHA256: man.IdxSHA256, SealedAt: man.SealedAt, ObservedState: evidence.SegmentState(dir, seg)}
 		b, _ := json.MarshalIndent(sr, "", "  ")
 		if err := os.WriteFile(filepath.Join(cdir, "segments", seg+".root.json"), append(b, '\n'), 0o644); err != nil {
 			return rep, err
@@ -173,8 +192,14 @@ func Commit(dir, cdir string, key keys.Key, imm Immutability, now time.Time) (Re
 		h, _ := merkle.Parse(r.Root)
 		rh = append(rh, h)
 	}
+	mode := ModeKernelImmutable
+	for _, r := range roots {
+		if r.ObservedState != "immutable" {
+			mode = ModeSealedOnlyDev
+		}
+	}
 	ck := Checkpoint{Version: CheckpointVersion, CheckpointID: fmt.Sprintf("ckpt_%06d", n+1), Kind: "minute", CreatedAt: now.UnixMilli(),
-		PrevHash: prevHash, AuthorityID: key.AuthorityID, Segments: roots, Root: merkle.Root(rh).String()}
+		PrevHash: prevHash, AuthorityID: key.AuthorityID, Segments: roots, Root: merkle.Root(rh).String(), CommitMode: mode}
 	path, err := writeSigned(filepath.Join(cdir, "checkpoints", ck.CheckpointID+".json"), ck, key)
 	if err != nil {
 		return rep, err
@@ -193,6 +218,7 @@ func Daily(dir, cdir string, key keys.Key, day time.Time) (*Checkpoint, string, 
 	dayStr := day.UTC().Format("2006-01-02")
 	var ids, hashes []string
 	var hs []merkle.Hash
+	mode := ModeKernelImmutable
 	for _, f := range files {
 		b, err := os.ReadFile(f)
 		if err != nil {
@@ -207,6 +233,9 @@ func Daily(dir, cdir string, key keys.Key, day time.Time) (*Checkpoint, string, 
 		}
 		h := evidence.Hash(b)
 		ids = append(ids, ck.CheckpointID)
+		if ck.CommitMode != ModeKernelImmutable {
+			mode = ModeSealedOnlyDev
+		}
 		hashes = append(hashes, h)
 		mh, _ := merkle.Parse(h)
 		hs = append(hs, mh)
@@ -215,7 +244,7 @@ func Daily(dir, cdir string, key keys.Key, day time.Time) (*Checkpoint, string, 
 		return nil, "", errors.New("no minute checkpoints on " + dayStr)
 	}
 	ck := Checkpoint{Version: CheckpointVersion, CheckpointID: "day_" + dayStr, Kind: "daily", CreatedAt: day.UnixMilli(), PrevHash: zeroHash,
-		AuthorityID: key.AuthorityID, Checkpoints: ids, CheckpointHashes: hashes, Root: merkle.Root(hs).String()}
+		AuthorityID: key.AuthorityID, Checkpoints: ids, CheckpointHashes: hashes, Root: merkle.Root(hs).String(), CommitMode: mode}
 	if err := os.MkdirAll(filepath.Join(cdir, "daily"), 0o755); err != nil {
 		return nil, "", err
 	}
@@ -369,4 +398,26 @@ func LocateTamper(dir, segID string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// Modes returns checkpoint id -> commit mode for every checkpoint and daily root in the commit tree.
+func Modes(dir, cdir string) map[string]string {
+	if cdir == "" {
+		cdir = filepath.Join(dir, "commit")
+	}
+	out := map[string]string{}
+	for _, pat := range []string{"checkpoints/ckpt_*.json", "daily/day_*.json"} {
+		files, _ := filepath.Glob(filepath.Join(cdir, pat))
+		for _, f := range files {
+			b, err := os.ReadFile(f)
+			if err != nil {
+				continue
+			}
+			var ck Checkpoint
+			if json.Unmarshal(b, &ck) == nil && ck.CheckpointID != "" {
+				out[ck.CheckpointID] = ck.Mode()
+			}
+		}
+	}
+	return out
 }

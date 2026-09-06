@@ -6,6 +6,7 @@ set -uo pipefail
 source "$HOME/.ulpf-env"
 cd "$(dirname "$(readlink -f "$0")")/.."
 status=0
+bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)
 export ULPF_ROOT="$PWD"
 
 echo "=== go: fmt/vet/build runtime binary"

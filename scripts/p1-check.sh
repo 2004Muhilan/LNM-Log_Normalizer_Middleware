@@ -4,6 +4,7 @@ set -uo pipefail
 source "$HOME/.ulpf-env"
 cd "$(dirname "$(readlink -f "$0")")/.."
 status=0
+bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)
 
 echo "=== build golden vectors ==="
 python contracts/golden/tools/build_vectors.py || status=1

@@ -18,3 +18,10 @@ runtime/bin/
 
 # model weights: never in git; manifest committed, cache fetched and digest-verified
 models/cache/
+
+# dev signing keys and the signatures made with them are generated at bootstrap (scripts/keys-bootstrap.sh),
+# never committed: private key material stays out of git; pack.json content is byte-identical across clones,
+# its .sig is not
+keys/dev/
+keys/trust/*-dev.pub.json
+contracts/golden/squid-native/pack.json.sig

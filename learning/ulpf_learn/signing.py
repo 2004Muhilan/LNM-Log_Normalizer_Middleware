@@ -39,7 +39,9 @@ def sign_pack(pack_dir: Path, key_path: Path = DEFAULT_KEY) -> Path:
         raise ValueError(f"pack names authority {doc['signing']['authority_id']!r}, key is {key['authority_id']!r}")
     sig = sign_bytes(data, key)
     out = pack_dir / doc["signing"]["signature_file"]
-    out.write_text(sig + "\n", encoding="utf-8")
+    # `<authority_id> <hex signature>`: the verifier reads the authority from the .sig, looks up the key
+    # and verifies the exact bytes BEFORE parsing pack.json (signature before contract, P5 boundary)
+    out.write_text(f"{key['authority_id']} {sig}\n", encoding="utf-8")
     return out
 
 
@@ -48,6 +50,8 @@ def verify_pack(pack_dir: Path, trust_dir: Path = ROOT / "keys" / "trust") -> No
     pack_dir = Path(pack_dir)
     data = (pack_dir / "pack.json").read_bytes()
     doc = json.loads(data)
-    pub = json.loads((Path(trust_dir) / f"{doc['signing']['authority_id']}.pub.json").read_text(encoding="utf-8"))
-    sig = bytes.fromhex((pack_dir / doc["signing"]["signature_file"]).read_text(encoding="utf-8").strip())
-    Ed25519PublicKey.from_public_bytes(bytes.fromhex(pub["public_key"])).verify(sig, data)  # raises InvalidSignature
+    authority, sig_hex = (pack_dir / doc["signing"]["signature_file"]).read_text(encoding="utf-8").split()
+    if authority != doc["signing"]["authority_id"]:
+        raise ValueError(f"signature by {authority!r} but pack names {doc['signing']['authority_id']!r}")
+    pub = json.loads((Path(trust_dir) / f"{authority}.pub.json").read_text(encoding="utf-8"))
+    Ed25519PublicKey.from_public_bytes(bytes.fromhex(pub["public_key"])).verify(bytes.fromhex(sig_hex), data)  # raises InvalidSignature

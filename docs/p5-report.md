@@ -96,6 +96,39 @@ and verifiable on a machine that never ran ULPF.
    golden signature is reproducible from a clean clone. Demo-grade by decision; a deployment generates
    its own and ships only the public half.
 
+## 5a. P5→P6 boundary items (settled 2026-09-06)
+
+1. **`ULPF_COMMIT_SEALED` is now visible in the artifact.** Validated: the checkpoint format is P5's own
+   (not one of the five contracts), so this is a checkpoint-format bump to **1.1.0**, additive; 1.0.0
+   files read with mode `unknown`. The cleaner formulation you suggested is adopted **as well as** the
+   flag: every `SegmentRoot` records `observed_state` — the kernel's answer at commit time (`immutable`
+   or `sealed`), recorded even when the development seam decided commitability — and the checkpoint's
+   `commit_mode` is derived from it (`kernel_immutable` only when every segment was kernel-locked, else
+   `sealed_only_dev`); a daily root carries the weakest mode of its checkpoints. All signed. `ulpf-verify`
+   prints `MODE <id>: …` prominently in both the evidence and bundle paths; a `sealed_only_dev`
+   checkpoint **verifies with a loud warning** by default (the cryptographic chain is intact; what is
+   weaker is the immutability claim) and **fails under `--strict`**, which is what the demo shows.
+   `TestCommitModeIsStampedAndSigned`: an unprivileged commit is stamped `sealed_only_dev` with
+   `observed_state: sealed`; upgrading the mode after signing fails verification.
+2. **No private keys in git.** Validated: `pack.json` content is byte-identical across clones; only the
+   `.sig` depends on the key, and no golden vector or test compares signature bytes. So
+   `scripts/keys-bootstrap.sh` (idempotent, called by every `pN-check.sh` and by the clean-clone test
+   after `wsl-bootstrap.sh`) generates the two dev authorities locally and re-signs the golden pack;
+   `keys/dev/`, the dev `*.pub.json` and `pack.json.sig` are git-ignored and were removed from the tree.
+   Deterministic derivation from a committed seed was rejected for the reason you gave. Cost: a clean clone
+   must run the bootstrap before any check — which it already had to for Go and the venv.
+3. **Signature before contract.** Validated: the signature needs only the exact bytes and an authority;
+   the authority had come from the *unverified* document. The `.sig` format is now
+   `<authority_id> <hex>`; the loader verifies the bytes against that authority first, then validates the
+   contract, then requires the document's `signing.authority_id` to equal the signer (a document naming a
+   different authority than its signature is refused). An unsigned pack is refused with "signature
+   missing" before its contract errors are known — `--allow-unsigned` gives the contract errors.
+   Checkpoint `.sig` files stay bare hex (the authority is inside the signed checkpoint).
+4. **Known posture item — root plus `CAP_LINUX_IMMUTABLE` on the ingest path.** Recorded, not fixed: the
+   store sets the flag and could clear it, so a compromise of the ingest path softens the boundary. The
+   fix is a small privileged sealer separated from a nonroot ingest process — **P8 hardening**. This item
+   goes on the deck as a stated limitation.
+
 ## 6. What was tried and rejected
 
 - **`chattr` via shell-out** — silent no-op in distroless; the ioctl instead.

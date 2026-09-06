@@ -75,13 +75,25 @@ func TestPackSignatureFailClosed(t *testing.T) {
 	// corrupted signature bytes
 	d = copyPack(t, golden)
 	sig, _ := os.ReadFile(filepath.Join(d, "pack.json.sig"))
-	sig[0] ^= 0x0f
-	if sig[0] == 'g' || sig[0] > 'f' && sig[0] < 'a' { // keep it hex
-		sig[0] = '0'
+	// `<authority> <hex>`: corrupt one hex digit of the signature (keep it hex)
+	s := strings.TrimSpace(string(sig))
+	last := s[len(s)-1]
+	if last == '0' {
+		s = s[:len(s)-1] + "1"
+	} else {
+		s = s[:len(s)-1] + "0"
 	}
-	os.WriteFile(filepath.Join(d, "pack.json.sig"), sig, 0o644)
+	os.WriteFile(filepath.Join(d, "pack.json.sig"), []byte(s+"\n"), 0o644)
+	if _, err := Load(d, base); err == nil || !strings.Contains(err.Error(), "does not verify") {
+		t.Fatalf("corrupted signature must refuse: %v", err)
+	}
+	// the .sig names an authority the document does not: refused after the bytes verify
+	d = copyPack(t, golden)
+	b2, _ := os.ReadFile(filepath.Join(d, "pack.json"))
+	renamed := strings.Replace(string(b2), "\"authority_id\": \"ulpf-pack-authority-dev\"", "\"authority_id\": \"ulpf-pack-authority-other\"", 1)
+	os.WriteFile(filepath.Join(d, "pack.json"), []byte(renamed), 0o644)
 	if _, err := Load(d, base); err == nil {
-		t.Fatal("corrupted signature must refuse")
+		t.Fatal("a document naming a different authority than its signature must refuse")
 	}
 	// development escape hatch loads, but says so
 	d = copyPack(t, golden)

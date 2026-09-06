@@ -189,10 +189,11 @@ The golden candidate spec and its span map deliberately stay at 1.0.0 to prove t
   verbatim). The evidence record holds every received byte; `offset`/`length` address those bytes;
   span offsets are relative to the payload. Present only when an envelope was unwrapped, so
   file-collected events are unchanged. Recursive unwrap and relay chains are P7.
-- **Signing is live and fail-closed.** `pack.json.sig` holds a hex ed25519 signature over the exact bytes
-  of `pack.json` by `signing.authority_id`; the runtime verifies it against a trust store of
-  `<authority_id>.pub.json` files (`keys/trust`, `--trust`) before compiling anything, and refuses on a
-  missing file, unknown authority or any mismatch. The learning plane signs at promotion
+- **Signing is live and fail-closed.** `pack.json.sig` holds `<authority_id> <hex ed25519 signature>` over
+  the exact bytes of `pack.json`; the runtime verifies those bytes against the trust store
+  (`keys/trust/<authority_id>.pub.json`, `--trust`) **before parsing the document**, then validates the
+  contract, then requires `signing.authority_id` to equal the signer; it refuses on a missing file,
+  unknown authority or any mismatch. The learning plane signs at promotion
   (`ulpf_learn.signing`); the golden pack is signed by `build_vectors.py` with the dev authority in
   `keys/dev`. `--allow-unsigned` is development-only and loud. No schema change was needed for signing:
   the metadata block existed since 1.0.0.

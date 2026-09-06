@@ -124,27 +124,42 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 		return nil, err
 	}
 	packPath := filepath.Join(dir, "pack.json")
-	if _, err := loader.Load(contracts.ParserPack, packPath); err != nil {
-		return nil, fmt.Errorf("pack rejected: %w", err)
-	}
 	raw, err := os.ReadFile(packPath)
 	if err != nil {
 		return nil, err
+	}
+	// 1. Signature BEFORE anything parses the bytes (P5 boundary decision 3). The detached file is
+	//    `<authority_id> <hex>`; the authority comes from the .sig, not from the unverified document.
+	var sigAuthority string
+	if !opts.AllowUnsigned {
+		if opts.TrustDir == "" {
+			return nil, errors.New("pack rejected: no trust store configured and unsigned packs are not allowed (fail closed)")
+		}
+		sigB, err := os.ReadFile(filepath.Join(dir, "pack.json.sig"))
+		if err != nil {
+			return nil, errors.New("pack rejected: detached signature pack.json.sig is missing (fail closed)")
+		}
+		parts := strings.Fields(string(sigB))
+		if len(parts) != 2 {
+			return nil, errors.New("pack rejected: pack.json.sig must be `<authority_id> <hex signature>` (fail closed)")
+		}
+		sigAuthority = parts[0]
+		if err := (keys.TrustStore{Dir: opts.TrustDir}).Verify(sigAuthority, raw, parts[1]); err != nil {
+			return nil, fmt.Errorf("pack rejected: %w (fail closed)", err)
+		}
+	}
+	// 2. Contract, over bytes now known to be the authority's.
+	if _, err := loader.Load(contracts.ParserPack, packPath); err != nil {
+		return nil, fmt.Errorf("pack rejected: %w", err)
 	}
 	var p Pack
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, err
 	}
 	if !opts.AllowUnsigned {
-		if opts.TrustDir == "" {
-			return nil, errors.New("pack rejected: no trust store configured and unsigned packs are not allowed (fail closed)")
-		}
-		sigB, err := os.ReadFile(filepath.Join(dir, p.Signing.SignatureFile))
-		if err != nil {
-			return nil, fmt.Errorf("pack rejected: detached signature %s is missing (fail closed)", p.Signing.SignatureFile)
-		}
-		if err := (keys.TrustStore{Dir: opts.TrustDir}).Verify(p.Signing.AuthorityID, raw, strings.TrimSpace(string(sigB))); err != nil {
-			return nil, fmt.Errorf("pack rejected: %w (fail closed)", err)
+		// 3. The document must name the authority that signed it and the file that was checked.
+		if p.Signing.AuthorityID != sigAuthority || p.Signing.SignatureFile != "pack.json.sig" {
+			return nil, fmt.Errorf("pack rejected: pack names authority %q / file %q but was signed by %q over pack.json.sig (fail closed)", p.Signing.AuthorityID, p.Signing.SignatureFile, sigAuthority)
 		}
 		p.SignatureVerified = true
 	}

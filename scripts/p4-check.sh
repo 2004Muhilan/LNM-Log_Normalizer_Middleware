@@ -9,6 +9,7 @@ source "$HOME/.ulpf-env"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0
+bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)
 echo "=== runtime build"
 (cd runtime && gofmt -l ./internal ./cmd ./contracts && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
 echo "=== golden vectors + contract suites"

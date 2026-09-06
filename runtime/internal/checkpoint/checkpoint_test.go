@@ -153,7 +153,7 @@ func TestSignatureChainAndDaily(t *testing.T) {
 	cp := rep1.Path
 	cb, _ := os.ReadFile(cp)
 	sig, _ := other.Sign(cb)
-	os.WriteFile(cp+".sig", []byte(sig+"\n"), 0o644)
+	os.WriteFile(cp+".sig", []byte(sig+"\n"), 0o644) // checkpoint .sig files are bare hex; the authority is inside the signed checkpoint
 	f, _, _ := VerifyAll(dir, "", tr)
 	if len(f) == 0 || !strings.Contains(f[0].Detail, "signature") {
 		t.Fatalf("forged signature not detected: %v", f)
@@ -203,5 +203,36 @@ func TestExportBundleVerifiesWithOnlyTheTrustStore(t *testing.T) {
 	// an untrusted authority -> refused
 	if f, err := VerifyBundle(out, keys.TrustStore{Dir: t.TempDir()}); err == nil || len(f) == 0 {
 		t.Fatal("bundle verified without a trusted key")
+	}
+}
+
+// A development checkpoint cannot masquerade as a real one: the mode is in the signed artifact.
+func TestCommitModeIsStampedAndSigned(t *testing.T) {
+	dir := t.TempDir()
+	fixtureStore(t, dir, 4, 2)
+	key, _ := keys.Generate("ulpf-committer-test")
+	rep, _ := Commit(dir, "", key, pretendImmutable, time.Date(2026, 9, 6, 10, 0, 0, 0, time.UTC))
+	if rep.Checkpoint.CommitMode != ModeSealedOnlyDev {
+		t.Fatalf("unprivileged commit must be stamped sealed_only_dev, got %q", rep.Checkpoint.CommitMode)
+	}
+	for _, s := range rep.Checkpoint.Segments {
+		if s.ObservedState != "sealed" {
+			t.Fatalf("observed_state must be the kernel's answer (sealed), got %q", s.ObservedState)
+		}
+	}
+	dk, _, _ := Daily(dir, "", key, time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC))
+	if dk.CommitMode != ModeSealedOnlyDev {
+		t.Fatalf("daily root must carry the weakest mode, got %q", dk.CommitMode)
+	}
+	modes := Modes(dir, "")
+	if modes[rep.Checkpoint.CheckpointID] != ModeSealedOnlyDev || modes[dk.CheckpointID] != ModeSealedOnlyDev {
+		t.Fatalf("modes: %v", modes)
+	}
+	// editing the mode after signing is caught like any other edit
+	cb, _ := os.ReadFile(rep.Path)
+	os.WriteFile(rep.Path, []byte(strings.Replace(string(cb), ModeSealedOnlyDev, ModeKernelImmutable, 1)), 0o644)
+	f, _, _ := VerifyAll(dir, "", trust(t, key))
+	if len(f) == 0 {
+		t.Fatal("a checkpoint whose mode was upgraded after signing must fail verification")
 	}
 }

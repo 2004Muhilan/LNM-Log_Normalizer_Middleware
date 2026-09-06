@@ -22,6 +22,7 @@ ls corpus/cache ocsf/cache 2>&1 | head -3
 
 echo "=== bootstrap (idempotent)"
 bash scripts/wsl-bootstrap.sh >/dev/null 2>&1 && echo "bootstrap ok" || { echo "bootstrap failed"; exit 1; }
+bash scripts/keys-bootstrap.sh >/dev/null 2>&1 && echo "keys bootstrapped locally (dev authorities generated, golden pack signed)" || { echo "key bootstrap failed"; exit 1; }
 source "$HOME/.ulpf-env"
 
 echo "=== refetch corpus from pinned commits; catalogue must reproduce"
