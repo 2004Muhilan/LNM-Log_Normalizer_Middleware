@@ -99,6 +99,15 @@ runtime/bin/ulpf-verify bundle --bundle bundle/ --trust keys/trust    # the exte
 runtime/bin/ulpf-runtime run --pack P --listen udp::5514 --evidence EV --out -   # syslog UDP; envelope unwrapped after the raw write
 ```
 
+The live demo (assembly over P1–P7, no new capability; `docs/demo-runbook.md` is what the presenter reads):
+
+```bash
+bash demo/llama-server.sh start      # Qwen3.5-4B-Q4 on the GPU, 20 layers, 8k context, port 8081
+python3 demo/serve-ui.py &           # offline read-only UI over ~/ulpf-demo at http://localhost:8765
+bash demo/reset.sh && bash demo/preflight.sh && bash demo/run.sh      # six steps; demo/twice.sh runs it twice from clean
+ULPF_DEMO_PROVIDER=fixture bash demo/run.sh 2 6                       # the one-flag fallback if the GPU path stalls
+```
+
 Transports, framing breadth and gap accounting (P7). One runtime, any arrival: syslog over UDP/TCP (RFC 6587
 octet counting with non-transparent fallback, bounded per connection), HTTP receive, a directory-drop
 collector, one multiline mechanism, JSON-array de-batching (N independently hashed events), recursive
