@@ -1,0 +1,6 @@
+{
+  "authority_id": "ulpf-pack-authority-dev",
+  "algorithm": "ed25519",
+  "public_key": "a5627030f34a363e38c381f3b271b1a5d9d6286731b409bbae519b902cb6ab07",
+  "private_key": "02306c556cabb084784e6d32ec433091ba62ff250becd71252846c16574a03d1"
+}

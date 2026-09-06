@@ -30,15 +30,30 @@ func TestAppendSealReconstruct(t *testing.T) {
 		want = append(want, l...)
 		want = append(want, "\r\n"...)
 	}
-	// MaxEvents=2 forces a rotation: the first segment must be immutable, the second open.
-	if s.State(recs[0].SegmentID) != "immutable" || s.State(recs[2].SegmentID) != "open" || recs[0].SegmentID == recs[2].SegmentID {
+	// MaxEvents=2 forces a rotation: the first segment must be sealed (immutable when this process holds
+	// CAP_LINUX_IMMUTABLE on an inode-flag filesystem — the kernel decides, the store only reports), the
+	// second open.
+	sealedOrImmutable := func(st string) bool { return st == "sealed" || st == "immutable" }
+	if !sealedOrImmutable(s.State(recs[0].SegmentID)) || s.State(recs[2].SegmentID) != "open" || recs[0].SegmentID == recs[2].SegmentID {
 		t.Fatalf("lifecycle: %s=%s %s=%s", recs[0].SegmentID, s.State(recs[0].SegmentID), recs[2].SegmentID, s.State(recs[2].SegmentID))
+	}
+	if s.State(recs[0].SegmentID) == "sealed" {
+		t.Logf("segment sealed but not immutable here: %s (expected without the capability)", s.ImmutabilityError(recs[0].SegmentID))
 	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if s.State(recs[2].SegmentID) != "immutable" {
+	if !sealedOrImmutable(s.State(recs[2].SegmentID)) {
 		t.Fatal("close must seal the open segment")
+	}
+	// the on-disk view agrees with the in-memory one, and every sealed segment carries a manifest
+	for _, seg := range Segments(dir) {
+		if SegmentState(dir, seg) != s.State(seg) {
+			t.Fatalf("state disagreement for %s: disk %s store %s", seg, SegmentState(dir, seg), s.State(seg))
+		}
+		if _, err := os.Stat(filepath.Join(dir, seg+".seal.json")); err != nil {
+			t.Fatalf("no seal manifest for %s", seg)
+		}
 	}
 	got, rs, err := Reconstruct(dir)
 	if err != nil {

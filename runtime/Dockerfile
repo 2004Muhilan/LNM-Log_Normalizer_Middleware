@@ -12,7 +12,9 @@ COPY contracts ./contracts
 COPY ocsf/pinned ./ocsf/pinned
 COPY drafts ./drafts
 COPY runtime ./runtime
-RUN cd runtime && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-runtime ./cmd/ulpf-runtime
+RUN cd runtime && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-runtime ./cmd/ulpf-runtime \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-committer ./cmd/ulpf-committer \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-verify ./cmd/ulpf-verify
 
 FROM build AS test
 # Corpus-backed tests skip when corpus/cache is absent; mount it read-only to include them:
@@ -23,5 +25,23 @@ FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 COPY --from=build /out/ulpf-runtime /ulpf-runtime
 COPY --from=build /src/contracts /contracts
 COPY --from=build /src/ocsf/pinned /ocsf/pinned
+# The evidence store sets FS_IMMUTABLE_FL on sealed segments through the kernel ioctl; that needs
+# CAP_LINUX_IMMUTABLE, so the ingesting container is run `--user 0 --cap-add LINUX_IMMUTABLE`
+# (scripts/p5-boundary-test.sh). Without it the store still works and reports segments as SEALED, and
+# the committer refuses them — the state is what the kernel did, never a claim.
 USER nonroot
 ENTRYPOINT ["/ulpf-runtime"]
+
+# The committer: signs checkpoints, holds NO capability, runs as the distroless nonroot user. It must
+# be unable to modify the evidence it commits — the kernel enforces that once the store flagged it.
+FROM gcr.io/distroless/static-debian12:nonroot AS committer
+COPY --from=build /out/ulpf-committer /ulpf-committer
+USER nonroot
+ENTRYPOINT ["/ulpf-committer"]
+
+# The standalone verifier: the external witness's tool. No contracts, no packs, no keys inside — the
+# trust store is mounted at run time. This is the image a machine that has never run ULPF uses.
+FROM gcr.io/distroless/static-debian12:nonroot AS verify
+COPY --from=build /out/ulpf-verify /ulpf-verify
+USER nonroot
+ENTRYPOINT ["/ulpf-verify"]

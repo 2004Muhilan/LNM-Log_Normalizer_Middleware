@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"ulpf/runtime/internal/evidence"
+	"ulpf/runtime/internal/frame"
 	"ulpf/runtime/internal/pack"
 	"ulpf/runtime/internal/spanmap"
 )
 
-const LineageSchemaVersion = "1.0.0"
+const LineageSchemaVersion = "1.2.0" // P5: optional envelope record (additive; 1.0.0/1.1.0 documents remain valid)
 
 type Context struct {
 	Pack           *pack.Pack
@@ -24,6 +25,7 @@ type Context struct {
 	Record         evidence.Record
 	Signature      string
 	ProcessingTime time.Time
+	Envelope       *frame.Envelope // the unwrapped transport envelope, when there was one (1.2.0)
 }
 
 // Absent records a mapped mandatory attribute that has no value in this event, with its cause.
@@ -177,6 +179,9 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 	}
 	if len(res.Absent) > 0 {
 		lineage["absent"] = res.Absent
+	}
+	if ctx.Envelope != nil {
+		lineage["envelope"] = ctx.Envelope
 	}
 	out["_lineage"] = lineage
 	if _, ok := out["time"]; !ok {

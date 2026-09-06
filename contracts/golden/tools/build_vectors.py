@@ -192,8 +192,18 @@ def negatives(pack):
     return out
 
 
+def sign_golden():
+    """Detached ed25519 signature over the exact bytes of the golden pack.json by the dev pack authority
+    (keys/dev, demo-grade). The Go loader refuses the pack without it since P5."""
+    sys.path.insert(0, str(ROOT / "learning"))
+    from ulpf_learn.signing import sign_pack, verify_pack  # noqa: E402
+    sign_pack(SQ)
+    verify_pack(SQ)
+
+
 def main():
     pack = rehash_pack()
+    sign_golden()
     resolve_certificates()
     normalized_golden()
     vectors = [

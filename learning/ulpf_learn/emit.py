@@ -13,6 +13,27 @@ from ulpf_contracts import validate_document
 
 from .acceptance import Verdict, policy_for
 from .plan import Plan
+from .signing import DEFAULT_KEY as DEFAULT_SIGNING_KEY
+
+PACK_SCHEMA_VERSION = "1.2.0"   # P5: proposal provenance + live signing (additive over 1.1.0)
+
+
+def proposal_provenance_block(prov: dict | None, model_hash: str) -> dict:
+    """The pack's record of WHAT produced the proposals (P4 §4.4: the backend changes the output for the
+    same prompt, so model_hash alone does not describe it). Fixture and hand-authored packs record the
+    provider kind only."""
+    if not prov:
+        return {"provider": "fixture" if model_hash == "none:fixture" else "hand-authored", "model_hash": model_hash}
+    dec = prov.get("decoding", {})
+    out = {
+        "provider": "model", "model_id": prov.get("model_id"), "model_hash": prov.get("model_hash", model_hash),
+        "backend": prov.get("backend"), "mode": prov.get("mode"),
+        "decoding": {k: dec[k] for k in ("temperature", "top_k", "top_p", "min_p", "seed", "cache_prompt") if k in dec},
+        "prompt_template_hash": prov.get("prompt_template_hash"),
+        "grammar_hashes": prov.get("grammar_hashes") if isinstance(prov.get("grammar_hashes"), dict) and all(isinstance(v, str) for v in prov.get("grammar_hashes", {}).values()) else None,
+        "runtime_build": (prov.get("llama_cpp") or {}).get("build_info"),
+    }
+    return {k: v for k, v in out.items() if v is not None}
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_BIN = os.environ.get("ULPF_RUNTIME_BIN", str(ROOT / "runtime" / "bin" / "ulpf-runtime"))
@@ -35,7 +56,7 @@ def parser_hash(spec_path: Path) -> str:
 
 def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict], resolutions: list[dict],
               samples: bytes, sample_count: int, operator_id: str, pack_id: str, out_dir: Path, created_at: str,
-              routing_sketch: dict, library_version: str) -> Path:
+              routing_sketch: dict, library_version: str, proposal_provenance: dict | None = None, key_path: Path | None = None) -> Path:
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -70,19 +91,22 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
         "sample_provenance": {"tier": 1, "operator_id": operator_id, "sample_count": sample_count, "corpus_hash": sha(samples)},
     }
     pack = {
-        "schema_version": "1.1.0", "pack_id": pack_id, "pack_version": "1.0", "created_at": created_at,
+        "schema_version": PACK_SCHEMA_VERSION, "pack_id": pack_id, "pack_version": "1.0", "created_at": created_at,
         "source": {"source_id": plan.source_id, "vendor": "Squid", "product": "Squid Cache", "declared_envelope": "raw", "transport_hint": "file"},
         "ocsf": {"version": "1.3.0", "pinned_classes": [{"uid": cls["uid"], "name": cls["name"], "table_hash": cls["table_hash"]}]},
         "acceptance": {"policy_version": "1.0.0"},
         "time": {"source_timezone": plan.source_timezone, "timezone_confidence": plan.timezone_confidence},
         "anchors": [], "tiebreaker_field": None,
         "families": [family],
-        "provenance": {"generator_version": "ulpf-gen-0.3", "validator_version": "ulpf-val-0.3", "model_hash": plan.model_hash, "discriminator_library_version": library_version},
+        "provenance": {"generator_version": "ulpf-gen-0.4", "validator_version": "ulpf-val-0.4", "model_hash": plan.model_hash, "discriminator_library_version": library_version,
+                       "proposal": proposal_provenance_block(proposal_provenance, plan.model_hash)},
         "hashes": {"parser_hash": sha(p_hash.encode()), "dsl_hash": sha(dsl_hash.encode()), "mapping_hash": sha(mapping_hash.encode()), "corpus_hash": sha(samples)},
         "signing": {"authority_id": "ulpf-pack-authority-dev", "algorithm": "ed25519", "signature_file": "pack.json.sig"},
     }
     pack_path = out_dir / "pack.json"
     pack_path.write_text(json.dumps(pack, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    from .signing import sign_pack
+    sign_pack(out_dir, key_path or DEFAULT_SIGNING_KEY)   # detached ed25519 over the exact bytes just written
     errs = validate_document("parser-pack", pack, pack_dir=out_dir)
     if errs:
         raise RuntimeError("emitted pack fails the contract: " + "; ".join(errs))

@@ -15,6 +15,8 @@ PINNED_INDEX = ROOT / "ocsf" / "pinned" / "index.json"
 
 KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack", "normalized-event")
 SUPPORTED_VERSIONS = {kind: {"1.0.0", "1.1.0"} for kind in KINDS}
+SUPPORTED_VERSIONS["parser-pack"] = {"1.0.0", "1.1.0", "1.2.0"}        # P5: proposal provenance, live signing
+SUPPORTED_VERSIONS["normalized-event"] = {"1.0.0", "1.1.0", "1.2.0"}   # P5: _lineage.envelope
 FORBIDDEN_KEYS = {"confidence", "probability", "score", "likelihood"}
 CONSUMING_OPS = {"literal", "regex", "csv", "kv", "positional", "quoted", "optional", "repeated"}
 

@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "pack_id", "pack_version", "created_at", "source", "ocsf", "acceptance", "time", "anchors", "tiebreaker_field", "families", "provenance", "hashes", "signing"],
   "properties": {
-    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.0.0 documents remain valid." },
+    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds provenance.proposal and is additive over 1.1.0; earlier documents remain valid." },
     "pack_id": { "$ref": "#/$defs/slug" },
     "pack_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
     "created_at": { "$ref": "#/$defs/rfc3339" },
@@ -126,7 +126,31 @@
           "description": "sha256 of the model weights that generated candidate proposals, or an explicit non-model marker. Never absent.",
           "pattern": "^(sha256:[0-9a-f]{64}|none:hand-authored|none:fixture)$"
         },
-        "discriminator_library_version": { "$ref": "#/$defs/semver" }
+        "discriminator_library_version": { "$ref": "#/$defs/semver" },
+        "proposal": {
+          "type": "object",
+          "description": "1.2.0 (P5). What produced the candidate proposals. P4 measured that the same prompt yields different labels on GPU and CPU, so model_hash alone does not describe the provider: backend and decoding configuration are part of what a proposal is. Fixture and hand-authored packs record the provider kind only. Reproducibility is claimed for the recorded backend and decoding configuration, not across backends.",
+          "additionalProperties": false,
+          "required": ["provider", "model_hash"],
+          "properties": {
+            "provider": { "type": "string", "enum": ["model", "fixture", "hand-authored"] },
+            "model_id": { "type": "string", "maxLength": 128 },
+            "model_hash": { "type": "string", "pattern": "^(sha256:[0-9a-f]{64}|none:hand-authored|none:fixture)$" },
+            "backend": { "type": "string", "maxLength": 256, "description": "e.g. 'cuda ngl=auto (hostname)' or 'cpu'; recorded proposals are produced on cpu" },
+            "mode": { "type": "string", "enum": ["whole", "per-slot"] },
+            "decoding": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "temperature": { "type": "number" }, "top_k": { "type": "integer" }, "top_p": { "type": "number" }, "min_p": { "type": "number" },
+                "seed": { "type": "integer" }, "cache_prompt": { "type": "boolean" }
+              }
+            },
+            "prompt_template_hash": { "$ref": "#/$defs/sha256" },
+            "grammar_hashes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/sha256" }, "maxProperties": 64 },
+            "runtime_build": { "type": "string", "maxLength": 256, "description": "the inference runtime's build identifier (llama.cpp build_info)" }
+          }
+        }
       }
     },
     "hashes": {

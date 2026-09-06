@@ -176,6 +176,29 @@ The golden candidate spec and its span map deliberately stay at 1.0.0 to prove t
   asserted by the operator for a source that carries no severity), with the same provenance rules.
 - **pinned tables** carry `category_uid` (hashes changed; cross-check still agrees on all four classes).
 
+## 1.2.0 (P5) — two additive bumps, and signing goes live
+
+- **parser-pack 1.2.0**: `provenance.proposal` — what produced the candidate proposals: `provider`
+  (`model | fixture | hand-authored`), `model_id`, `model_hash`, `backend`, `mode`, `decoding`
+  (temperature, top_k, top_p, min_p, seed, cache_prompt), `prompt_template_hash`, `grammar_hashes`,
+  `runtime_build`. P4 measured that the same prompt yields different labels on GPU and CPU, so
+  `model_hash` alone did not describe the provider. Reproducibility is claimed for the recorded backend
+  and decoding configuration. Fixture and hand-authored packs record the provider kind only.
+- **normalized-event 1.2.0**: `_lineage.envelope` — the transport envelope unwrapped before routing, one
+  level (`kind: none | rfc3164 | rfc5424`, `payload_offset`, `payload_length`, and the header fields
+  verbatim). The evidence record holds every received byte; `offset`/`length` address those bytes;
+  span offsets are relative to the payload. Present only when an envelope was unwrapped, so
+  file-collected events are unchanged. Recursive unwrap and relay chains are P7.
+- **Signing is live and fail-closed.** `pack.json.sig` holds a hex ed25519 signature over the exact bytes
+  of `pack.json` by `signing.authority_id`; the runtime verifies it against a trust store of
+  `<authority_id>.pub.json` files (`keys/trust`, `--trust`) before compiling anything, and refuses on a
+  missing file, unknown authority or any mismatch. The learning plane signs at promotion
+  (`ulpf_learn.signing`); the golden pack is signed by `build_vectors.py` with the dev authority in
+  `keys/dev`. `--allow-unsigned` is development-only and loud. No schema change was needed for signing:
+  the metadata block existed since 1.0.0.
+
+Both bumps are additive; 1.0.0 and 1.1.0 documents remain valid and both validators accept all three.
+
 ## Lessons from executing the drafts (P2)
 
 P1 validated the drafts and executed only their regexes; executing them through the compiler

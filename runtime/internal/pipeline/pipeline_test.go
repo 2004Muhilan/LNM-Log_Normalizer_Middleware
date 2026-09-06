@@ -24,7 +24,7 @@ func repoRoot(t *testing.T) string {
 func loadGoldenPack(t *testing.T) *pack.Pack {
 	t.Helper()
 	root := repoRoot(t)
-	p, err := pack.Load(filepath.Join(root, "contracts", "golden", "squid-native"), pack.LoadOptions{ContractsDir: filepath.Join(root, "contracts"), PinnedIndex: filepath.Join(root, "ocsf", "pinned", "index.json")})
+	p, err := pack.Load(filepath.Join(root, "contracts", "golden", "squid-native"), pack.LoadOptions{ContractsDir: filepath.Join(root, "contracts"), PinnedIndex: filepath.Join(root, "ocsf", "pinned", "index.json"), TrustDir: filepath.Join(root, "keys", "trust")})
 	if err != nil {
 		t.Fatalf("golden pack must load (regenerate vectors with build_vectors.py if parser_hash changed): %v", err)
 	}
@@ -160,7 +160,7 @@ func TestKillHelper(t *testing.T) {
 		t.Skip("helper process only")
 	}
 	root := os.Getenv("ULPF_KILL_ROOT")
-	p, err := pack.Load(os.Getenv("ULPF_KILL_PACK"), pack.LoadOptions{ContractsDir: filepath.Join(root, "contracts"), PinnedIndex: filepath.Join(root, "ocsf", "pinned", "index.json")})
+	p, err := pack.Load(os.Getenv("ULPF_KILL_PACK"), pack.LoadOptions{ContractsDir: filepath.Join(root, "contracts"), PinnedIndex: filepath.Join(root, "ocsf", "pinned", "index.json"), TrustDir: filepath.Join(root, "keys", "trust")})
 	if err != nil {
 		t.Fatal(err)
 	}

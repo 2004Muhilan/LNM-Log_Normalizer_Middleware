@@ -33,8 +33,8 @@ if [ "${ULPF_SKIP_DOCKER:-0}" != "1" ]; then
   docker build -q -f runtime/Dockerfile --target test -t ulpf-runtime-test . >/dev/null && echo "container test stage: PASS" || { echo "container test stage: FAIL"; status=1; }
   docker build -q -f runtime/Dockerfile --target runtime -t ulpf-runtime . >/dev/null && echo "runtime image: built ($(docker image inspect ulpf-runtime --format '{{.Size}}' | awk '{printf "%.1f MB", $1/1048576}'))" || { echo "runtime image: FAIL"; status=1; }
   echo "=== container: golden pack through the runtime image (no network, non-root)"
-  docker run --rm --network none -v "$PWD/contracts/golden/squid-native:/pack:ro" -v "$PWD/ocsf/pinned:/ocsf/pinned:ro" ulpf-runtime \
-    run --pack /pack --input /pack/samples/access.log --evidence /tmp/ev --out - --contracts /contracts --pinned /ocsf/pinned/index.json 2>/tmp/ulpf-stats.json | wc -l | sed 's/^/  events emitted in container: /'
+  docker run --rm --network none -v "$PWD/contracts/golden/squid-native:/pack:ro" -v "$PWD/ocsf/pinned:/ocsf/pinned:ro" -v "$PWD/keys/trust:/keys/trust:ro" ulpf-runtime \
+    run --pack /pack --input /pack/samples/access.log --evidence /tmp/ev --out - --contracts /contracts --pinned /ocsf/pinned/index.json --trust /keys/trust 2>/tmp/ulpf-stats.json | wc -l | sed 's/^/  events emitted in container: /'
   cat /tmp/ulpf-stats.json 2>/dev/null | sed 's/^/  stats: /'
 fi
 

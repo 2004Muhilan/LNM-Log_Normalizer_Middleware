@@ -199,7 +199,8 @@ class Session:
                               f"{self.plan.event_class_name} parser for {self.state['source_id']}, resolved by device configuration.")
         samples = Path(self.state["samples_path"]).read_bytes()
         path = emit_pack(self.plan, spec, verdict, certs, resolutions, samples, self.state["sample_count"], self.state["operator_id"],
-                         pack_id, out_dir, now_iso(), self.state["structure"]["routing_sketch"], self.lib.version)
+                         pack_id, out_dir, now_iso(), self.state["structure"]["routing_sketch"], self.lib.version,
+                         proposal_provenance=self.state.get("proposal_provenance"))
         self.state["state"] = "promoted"
         self.state["pack_path"] = str(path)
         self.log("promoted", pack=str(path))

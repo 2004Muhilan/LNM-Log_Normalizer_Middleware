@@ -17,6 +17,7 @@ development environment is WSL2 (Ubuntu). See `ulpf-implementation-plan.md` for 
 | `corpus/` | Corpus catalogue, licence verdict, fetch/inspection tools (fixture content is cached locally, never committed) |
 | `drafts/sufficiency/` | Hand-drafted vendor specs for the DSL sufficiency check, plus the checker and its notes |
 | `models/` | `manifest.json` pins every model (source, sha256); `cache/` is git-ignored — weights never enter git or a build context |
+| `keys/` | Demo-grade ed25519 key files: `dev/` private dev authorities (fixtures), `trust/` the public-key trust store the runtime and verifier use |
 | `spike/` | P4 spike: ground-truth cases (`cases/`) and measured results per machine (`results/<machine>/`) |
 | `docs/` | Phase reports, the demo-laptop runbook |
 | `scripts/` | WSL bootstrap and check scripts |
@@ -69,6 +70,22 @@ bash scripts/p4-spike.sh desktop-5060ti gpu          # measure every model on TH
 bash scripts/p4-check.sh                             # P4 exit: suites incl. op-coverage matrix, invariant 2, fixture path unchanged
 python -m ulpf_learn onboard --provider model --model-id qwen3.5-4b-q4_k_m --server http://127.0.0.1:8080 --mode whole ...
 DOCKER_BUILDKIT=1 docker build -f learning/Dockerfile --target learning --build-arg MODEL=qwen3.5-4b-q4_k_m --build-context models=models/cache -t ulpf-learning:qwen3.5-4b .
+```
+
+Evidence log (P5). Packs must be signed (`keys/trust` is the default trust store); the committer runs
+as a separate unprivileged process over the store's volume; the verifier runs anywhere:
+
+```bash
+bash scripts/p5-keygen.sh                                     # build runtime, committer, verify; dev key pairs into keys/
+bash scripts/p5-check.sh                                      # P5 exit: suites, signing fail-closed, invariant 2, boundary + witness (Docker), signed fixture demo
+bash scripts/p5-boundary-test.sh                              # two containers: kernel immutable flag vs an unprivileged committer, tamper -> leaf named
+bash scripts/p5-witness-test.sh                               # export a bundle; a fresh container with only ulpf-verify + public key verifies it
+runtime/bin/ulpf-committer commit --evidence EV --commit EV/commit --key keys/dev/ulpf-committer-dev.json
+runtime/bin/ulpf-committer daily  --evidence EV --key keys/dev/ulpf-committer-dev.json
+runtime/bin/ulpf-runtime export --evidence EV --event-id ev_... --out bundle/
+runtime/bin/ulpf-verify evidence --evidence EV --trust keys/trust    # recompute every root, check chain + signatures
+runtime/bin/ulpf-verify bundle --bundle bundle/ --trust keys/trust    # the external witness's command
+runtime/bin/ulpf-runtime run --pack P --listen udp::5514 --evidence EV --out -   # syslog UDP; envelope unwrapped after the raw write
 ```
 
 Runtime CLI (after `go build -o runtime/bin/ulpf-runtime ./cmd/ulpf-runtime` in `runtime/`):

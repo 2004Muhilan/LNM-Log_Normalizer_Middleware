@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"ulpf/runtime/contracts"
 	"ulpf/runtime/internal/dsl"
+	"ulpf/runtime/internal/keys"
 )
 
 type MappingField struct {
@@ -90,19 +92,29 @@ type Pack struct {
 		SourceTimezone     *string `json:"source_timezone"`
 		TimezoneConfidence string  `json:"timezone_confidence"`
 	} `json:"time"`
-	TiebreakerField *string        `json:"tiebreaker_field"`
-	Families        []Family       `json:"families"`
-	Dir             string         `json:"-"`
-	Location        *time.Location `json:"-"`
-	CategoryUIDs    map[int]int64  `json:"-"` // class uid -> category uid, from the pinned index
+	TiebreakerField *string  `json:"tiebreaker_field"`
+	Families        []Family `json:"families"`
+	Signing         struct {
+		AuthorityID   string `json:"authority_id"`
+		Algorithm     string `json:"algorithm"`
+		SignatureFile string `json:"signature_file"`
+	} `json:"signing"`
+	SignatureVerified bool           `json:"-"`
+	Dir               string         `json:"-"`
+	Location          *time.Location `json:"-"`
+	CategoryUIDs      map[int]int64  `json:"-"` // class uid -> category uid, from the pinned index
 }
 
 type LoadOptions struct {
 	ContractsDir string
 	PinnedIndex  string
-	// RequireSignature is false in P2: signing and the trust store are P5. When true, a missing or
-	// invalid pack.json.sig refuses the pack.
-	RequireSignature bool
+	// AllowUnsigned disables signature verification (development only; the CLI prints a warning).
+	// Since P5 the default is to REQUIRE a valid detached signature: pack.json.sig must hold an ed25519
+	// signature over the exact bytes of pack.json by the authority named in signing.authority_id, and
+	// that authority must be in the trust store. Missing file, unknown authority, or any mismatch
+	// refuses the pack before anything in it is compiled (fail closed).
+	AllowUnsigned bool
+	TrustDir      string
 }
 
 // Load validates pack.json against the contract, compiles every family spec, and verifies hashes.
@@ -115,12 +127,6 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 	if _, err := loader.Load(contracts.ParserPack, packPath); err != nil {
 		return nil, fmt.Errorf("pack rejected: %w", err)
 	}
-	if opts.RequireSignature {
-		if _, err := os.Stat(filepath.Join(dir, "pack.json.sig")); err != nil {
-			return nil, errors.New("pack rejected: signature required and pack.json.sig is missing (fail closed)")
-		}
-		return nil, errors.New("pack rejected: signature verification is not implemented before P5 (fail closed)")
-	}
 	raw, err := os.ReadFile(packPath)
 	if err != nil {
 		return nil, err
@@ -128,6 +134,19 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 	var p Pack
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, err
+	}
+	if !opts.AllowUnsigned {
+		if opts.TrustDir == "" {
+			return nil, errors.New("pack rejected: no trust store configured and unsigned packs are not allowed (fail closed)")
+		}
+		sigB, err := os.ReadFile(filepath.Join(dir, p.Signing.SignatureFile))
+		if err != nil {
+			return nil, fmt.Errorf("pack rejected: detached signature %s is missing (fail closed)", p.Signing.SignatureFile)
+		}
+		if err := (keys.TrustStore{Dir: opts.TrustDir}).Verify(p.Signing.AuthorityID, raw, strings.TrimSpace(string(sigB))); err != nil {
+			return nil, fmt.Errorf("pack rejected: %w (fail closed)", err)
+		}
+		p.SignatureVerified = true
 	}
 	p.Dir = dir
 	p.CategoryUIDs = map[int]int64{}

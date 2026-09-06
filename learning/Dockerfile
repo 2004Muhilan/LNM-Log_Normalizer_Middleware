@@ -56,6 +56,7 @@ COPY ocsf/pinned ocsf/pinned
 COPY library library
 COPY acceptance acceptance
 COPY learning learning
+COPY keys keys
 COPY models/manifest.json models/manifest.json
 RUN --mount=type=bind,from=models,target=/models-in \
     /venv/bin/python learning/tools/models.py install --manifest models/manifest.json --cache /models-in --dest /ulpf/models/cache --id "${MODEL}"

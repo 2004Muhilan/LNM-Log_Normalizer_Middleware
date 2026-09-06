@@ -23,7 +23,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "event_id", "raw_hash", "segment_id", "offset", "length", "parser_id", "parser_version", "mapping_version", "ocsf_version", "source_id", "collector_id", "ingest_channel", "framing", "routing_signature", "event_time", "ingest_time", "processing_time", "normalization_version"],
       "properties": {
-        "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.0.0 documents remain valid." },
+        "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds the optional envelope record; earlier documents remain valid." },
         "event_id": { "type": "string", "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{10,26}$" },
         "raw_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "segment_id": { "type": "string", "pattern": "^seg_[0-9]{5,}$" },
@@ -49,6 +49,27 @@
             "original_message_length": { "type": "integer", "minimum": 0 },
             "truncation_status": { "type": "string", "enum": ["none", "truncated", "continuation"] },
             "framing_confidence": { "type": "string", "enum": ["high", "low"] }
+          }
+        },
+        "envelope": {
+          "type": "object",
+          "description": "1.2.0 (P5). The transport envelope unwrapped before routing, one level (recursive unwrap and relay chains are P7). The raw evidence record holds the complete received bytes; offset/length above address them. payload_offset/payload_length locate, within those bytes, the payload the parser saw; span offsets in the parser's span map are relative to the payload. Header fields are carried verbatim as the envelope stated them — the envelope's own timestamp is the relay's clock unless a pack says otherwise (temporal_role).",
+          "additionalProperties": false,
+          "required": ["kind", "payload_offset", "payload_length"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["none", "rfc3164", "rfc5424"] },
+            "payload_offset": { "type": "integer", "minimum": 0 },
+            "payload_length": { "type": "integer", "minimum": 0 },
+            "priority": { "type": "integer", "minimum": 0, "maximum": 191 },
+            "facility": { "type": "integer", "minimum": 0, "maximum": 23 },
+            "severity": { "type": "integer", "minimum": 0, "maximum": 7 },
+            "timestamp": { "type": "string", "maxLength": 64 },
+            "hostname": { "type": "string", "maxLength": 255 },
+            "app_name": { "type": "string", "maxLength": 48 },
+            "proc_id": { "type": "string", "maxLength": 128 },
+            "msg_id": { "type": "string", "maxLength": 32 },
+            "structured_data": { "type": "string", "maxLength": 8192 },
+            "version": { "type": "integer", "minimum": 1, "maximum": 999 }
           }
         },
         "routing_signature": { "type": "string", "description": "The L1–L4 signature key the event matched, as computed by the router.", "maxLength": 1024 },

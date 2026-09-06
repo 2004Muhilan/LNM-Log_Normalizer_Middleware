@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -56,20 +55,21 @@ type Options struct {
 }
 
 type Store struct {
-	newID  func(time.Time) string
-	dir    string
-	limits Limits
-	now    func() time.Time
-	mu     sync.Mutex
-	seq    int64
-	segN   int
-	seg    *os.File
-	idx    *os.File
-	segID  string
-	segLen int64
-	segEv  int
-	opened time.Time
-	states map[string]string
+	newID   func(time.Time) string
+	dir     string
+	limits  Limits
+	now     func() time.Time
+	mu      sync.Mutex
+	seq     int64
+	segN    int
+	seg     *os.File
+	idx     *os.File
+	segID   string
+	segLen  int64
+	segEv   int
+	opened  time.Time
+	states  map[string]string
+	sealErr map[string]string
 }
 
 func Open(dir string, opts Options) (*Store, error) {
@@ -88,16 +88,14 @@ func Open(dir string, opts Options) (*Store, error) {
 	if limits.MaxEvents == 0 {
 		limits = DefaultLimits
 	}
-	s := &Store{dir: dir, limits: limits, now: now, newID: newID, states: map[string]string{}}
-	entries, _ := filepath.Glob(filepath.Join(dir, "seg_*.raw"))
-	sort.Strings(entries)
-	for _, e := range entries {
+	s := &Store{dir: dir, limits: limits, now: now, newID: newID, states: map[string]string{}, sealErr: map[string]string{}}
+	for _, segID := range Segments(dir) {
 		var n int
-		fmt.Sscanf(filepath.Base(e), "seg_%05d.raw", &n)
+		fmt.Sscanf(segID, "seg_%05d", &n)
 		if n >= s.segN {
 			s.segN = n + 1
 		}
-		s.states[strings.TrimSuffix(filepath.Base(e), ".raw")] = "immutable"
+		s.states[segID] = SegmentState(dir, segID)
 	}
 	return s, nil
 }
@@ -119,8 +117,28 @@ func (s *Store) openSegment() error {
 	return nil
 }
 
-// Seal closes the current segment: SEALED, then IMMUTABLE (read-only mode plus chattr +i where the
-// filesystem allows it; the privilege boundary itself is P5).
+// SealManifest is written when a segment is sealed: the segment's own content hashes, so the committer
+// and the verifier can tell a sealed segment from one still being written and can detect any later
+// change. It is the last file written for a segment and is made immutable with the others.
+type SealManifest struct {
+	SegmentID string `json:"segment_id"`
+	RawSHA256 string `json:"raw_sha256"`
+	IdxSHA256 string `json:"idx_sha256"`
+	Events    int    `json:"events"`
+	Bytes     int64  `json:"bytes"`
+	SealedAt  int64  `json:"sealed_at"` // epoch ms
+}
+
+// SegmentFiles are the three files of a segment, in the order they are made immutable.
+func SegmentFiles(dir, segID string) []string {
+	return []string{filepath.Join(dir, segID+".raw"), filepath.Join(dir, segID+".idx.jsonl"), filepath.Join(dir, segID+".seal.json")}
+}
+
+// Seal closes the current segment: SEALED (fsynced, closed, read-only mode, manifest written), then
+// IMMUTABLE (FS_IMMUTABLE_FL set on all three files through the kernel ioctl). Setting the flag needs
+// CAP_LINUX_IMMUTABLE and an inode-flag filesystem; when either is missing the segment stays SEALED
+// and the reason is recorded — the state is never claimed, it is what the kernel did. Only IMMUTABLE
+// segments may be committed (checkpoint package, plan P5 ordering rule).
 func (s *Store) Seal() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -139,14 +157,93 @@ func (s *Store) sealLocked() error {
 			return err
 		}
 	}
-	s.states[s.segID] = "sealed"
-	for _, p := range []string{filepath.Join(s.dir, s.segID+".raw"), filepath.Join(s.dir, s.segID+".idx.jsonl")} {
-		_ = os.Chmod(p, 0o444)
-		_ = exec.Command("chattr", "+i", p).Run()
+	files := SegmentFiles(s.dir, s.segID)
+	rawB, err := os.ReadFile(files[0])
+	if err != nil {
+		return err
 	}
-	s.states[s.segID] = "immutable"
+	idxB, err := os.ReadFile(files[1])
+	if err != nil {
+		return err
+	}
+	man := SealManifest{SegmentID: s.segID, RawSHA256: Hash(rawB), IdxSHA256: Hash(idxB), Events: s.segEv, Bytes: s.segLen, SealedAt: s.now().UnixMilli()}
+	mb, _ := json.Marshal(man)
+	if err := os.WriteFile(files[2], append(mb, '\n'), 0o644); err != nil {
+		return err
+	}
+	if f, err := os.Open(files[2]); err == nil {
+		_ = f.Sync()
+		f.Close()
+	}
+	s.states[s.segID] = "sealed"
+	immutable := true
+	for _, p := range files {
+		_ = os.Chmod(p, 0o444)
+		if err := SetImmutable(p); err != nil {
+			immutable = false
+			s.sealErr[s.segID] = err.Error()
+		}
+	}
+	if immutable {
+		s.states[s.segID] = "immutable"
+	}
 	s.seg, s.idx = nil, nil
 	return nil
+}
+
+// ImmutabilityError returns why a sealed segment could not be made immutable ("" when it was).
+func (s *Store) ImmutabilityError(segID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sealErr[segID]
+}
+
+// SegmentState inspects a segment on disk without a Store: "open" (no manifest), "sealed" (manifest
+// present, not all files immutable), "immutable" (manifest present and all three files carry the
+// kernel flag). This is what the committer and the verifier consult.
+func SegmentState(dir, segID string) string {
+	files := SegmentFiles(dir, segID)
+	if _, err := os.Stat(files[2]); err != nil {
+		return "open"
+	}
+	for _, p := range files {
+		ok, err := IsImmutable(p)
+		if err != nil || !ok {
+			return "sealed"
+		}
+	}
+	return "immutable"
+}
+
+// Segments lists segment ids in the directory in order.
+func Segments(dir string) []string {
+	raws, _ := filepath.Glob(filepath.Join(dir, "seg_*.raw"))
+	sort.Strings(raws)
+	out := make([]string, 0, len(raws))
+	for _, r := range raws {
+		out = append(out, strings.TrimSuffix(filepath.Base(r), ".raw"))
+	}
+	return out
+}
+
+// ReadIndex parses a segment's index records.
+func ReadIndex(dir, segID string) ([]Record, error) {
+	data, err := os.ReadFile(filepath.Join(dir, segID+".idx.jsonl"))
+	if err != nil {
+		return nil, err
+	}
+	var recs []Record
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		var r Record
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			return nil, fmt.Errorf("%s index: %w", segID, err)
+		}
+		recs = append(recs, r)
+	}
+	return recs, nil
 }
 
 // Append writes raw bytes and the index record, fsyncs both, and returns the record. It seals and

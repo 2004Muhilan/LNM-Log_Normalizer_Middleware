@@ -49,6 +49,7 @@ type Stats struct {
 	AbsentUncoercible int            `json:"events_with_uncoercible_absence"`
 	AbsentDeclared    int            `json:"events_with_declared_null"`
 	Quarantined       int            `json:"quarantined"`
+	Enveloped         int            `json:"enveloped"` // frames whose outer syslog envelope was unwrapped
 	Reasons           map[string]int `json:"quarantine_reasons"`
 }
 
@@ -63,8 +64,23 @@ type quarantined struct {
 	Reason    string `json:"reason"`
 }
 
-// Run processes one input stream to EOF.
+// Source delivers frames in arrival order to emit until exhausted (a newline-framed stream to EOF, a
+// UDP listener until stopped).
+type Source func(emit func(frame.Frame) error) error
+
+// Run processes one newline-framed input stream to EOF.
 func Run(in io.Reader, o Options) (Stats, error) {
+	maxBytes := o.MaxEventBytes
+	if maxBytes == 0 {
+		maxBytes = 65536
+	}
+	return RunFrames(func(emit func(frame.Frame) error) error { return frame.Newline{MaxEventBytes: maxBytes}.Scan(in, emit) }, o)
+}
+
+// RunFrames processes frames from any source. Per frame, in this order: raw evidence write of the
+// complete received bytes; envelope unwrap (one level: the parser sees the payload, the evidence keeps
+// the envelope); route on the payload; parse; normalize with the envelope recorded in lineage.
+func RunFrames(source Source, o Options) (Stats, error) {
 	st := Stats{Reasons: map[string]int{}}
 	now := o.Now
 	if now == nil {
@@ -83,10 +99,6 @@ func Run(in io.Reader, o Options) (Stats, error) {
 		q = bufio.NewWriter(o.Quarantine)
 		defer q.Flush()
 	}
-	maxBytes := o.MaxEventBytes
-	if maxBytes == 0 {
-		maxBytes = 65536
-	}
 	env := dsl.Env{SourceLocation: o.Pack.Location}
 	quarantine := func(rec evidence.Record, sig, stage, reason string) {
 		st.Quarantined++
@@ -96,7 +108,7 @@ func Run(in io.Reader, o Options) (Stats, error) {
 			q.Write(append(b, '\n'))
 		}
 	}
-	err = frame.Newline{MaxEventBytes: maxBytes}.Scan(in, func(fr frame.Frame) error {
+	err = source(func(fr frame.Frame) error {
 		st.Frames++
 		// 1. raw evidence write — durable before anything else looks at the bytes
 		rec, err := store.Append(fr.Raw, fr.Framing, o.Pack.Source.SourceID, o.Collector, o.Channel)
@@ -112,14 +124,20 @@ func Run(in io.Reader, o Options) (Stats, error) {
 			quarantine(rec, "", "framing", "truncated or continuation frame retained as evidence, not parsed")
 			return nil
 		}
-		// 2. route: exact signature match or quarantine
-		d := router.Route(fr.Raw)
+		// 2. envelope: unwrap one level; the evidence keeps every received byte, the parser sees the payload
+		envl := frame.Unwrap(fr.Raw)
+		payload := fr.Raw[envl.PayloadOffset : envl.PayloadOffset+envl.PayloadLength]
+		if envl.Kind != "none" {
+			st.Enveloped++
+		}
+		// 3. route: exact signature match or quarantine
+		d := router.Route(payload)
 		if d.Family == nil {
 			quarantine(rec, d.Signature, "routing", d.Reason)
 			return nil
 		}
-		// 3. parse
-		m, perr := d.Family.Program.Parse(fr.Raw, env)
+		// 4. parse
+		m, perr := d.Family.Program.Parse(payload, env)
 		if perr != nil {
 			quarantine(rec, d.Signature, "tiling", perr.Error())
 			return nil
@@ -129,8 +147,12 @@ func Run(in io.Reader, o Options) (Stats, error) {
 			quarantine(rec, d.Signature, "parse", fmt.Sprintf("at %d: %s", m.Failure.AtOffset, m.Failure.Reason))
 			return nil
 		}
-		// 4. normalize
-		ev, res, nerr := normalize.Normalize(m, normalize.Context{Pack: o.Pack, Family: d.Family, Record: rec, Signature: d.Signature, ProcessingTime: now()})
+		// 5. normalize
+		var envPtr *frame.Envelope
+		if envl.Kind != "none" {
+			envPtr = &envl
+		}
+		ev, res, nerr := normalize.Normalize(m, normalize.Context{Pack: o.Pack, Family: d.Family, Record: rec, Signature: d.Signature, ProcessingTime: now(), Envelope: envPtr})
 		if nerr != nil {
 			quarantine(rec, d.Signature, "normalize", nerr.Error())
 			return nil

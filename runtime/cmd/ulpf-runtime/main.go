@@ -7,16 +7,22 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"time"
 
+	"ulpf/runtime/internal/checkpoint"
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/evidence"
+	"ulpf/runtime/internal/frame"
 	"ulpf/runtime/internal/pack"
 	"ulpf/runtime/internal/pipeline"
 )
@@ -58,10 +64,15 @@ func main() {
 		fs := flag.NewFlagSet("verify-pack", flag.ExitOnError)
 		dir := fs.String("pack", "", "pack directory")
 		contractsDir, pinned := commonFlags(fs)
+		trust, allowUnsigned := signingFlags(fs)
 		fs.Parse(os.Args[2:])
-		p, err := pack.Load(*dir, pack.LoadOptions{ContractsDir: *contractsDir, PinnedIndex: *pinned})
+		p, err := pack.Load(*dir, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
 		die(err)
-		fmt.Printf("pack %s v%s: %d families verified (dsl_hash, parser_hash, contract)\n", p.PackID, p.PackVersion, len(p.Families))
+		sigState := "signature verified by " + p.Signing.AuthorityID
+		if !p.SignatureVerified {
+			sigState = "SIGNATURE NOT VERIFIED (--allow-unsigned)"
+		}
+		fmt.Printf("pack %s v%s: %d families verified (dsl_hash, parser_hash, contract); %s\n", p.PackID, p.PackVersion, len(p.Families), sigState)
 	case "run":
 		fs := flag.NewFlagSet("run", flag.ExitOnError)
 		dir := fs.String("pack", "", "pack directory")
@@ -72,14 +83,17 @@ func main() {
 		collector := fs.String("collector", "col-01", "collector id")
 		channel := fs.String("channel", "", "ingest channel (defaults to file:<input>)")
 		failAfter := fs.Int("fail-after-raw-write", 0, "kill-test hook: exit after the Nth raw write")
+		listen := fs.String("listen", "", "syslog UDP listener instead of --input, e.g. udp::5514 or udp:127.0.0.1:5514")
+		maxFrames := fs.Int("max-frames", 0, "with --listen: stop after N datagrams (0 = until SIGINT)")
 		fixedClock := fs.Int64("fixed-clock-ms", 0, "deterministic clock for golden outputs (epoch ms)")
 		fixedIDs := fs.Bool("deterministic-ids", false, "sequential event ids for golden outputs")
 		contractsDir, pinned := commonFlags(fs)
+		trust, allowUnsigned := signingFlags(fs)
 		fs.Parse(os.Args[2:])
-		p, err := pack.Load(*dir, pack.LoadOptions{ContractsDir: *contractsDir, PinnedIndex: *pinned})
+		p, err := pack.Load(*dir, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
 		die(err)
 		var in io.Reader = os.Stdin
-		if *input != "-" {
+		if *listen == "" && *input != "-" {
 			f, err := os.Open(*input)
 			die(err)
 			defer f.Close()
@@ -111,9 +125,38 @@ func main() {
 			n := 0
 			o.NewID = func(time.Time) string { n++; return fmt.Sprintf("ev_%026d", n) }
 		}
-		st, err := pipeline.Run(in, o)
-		die(err)
+		var st pipeline.Stats
+		if *listen != "" {
+			// syslog over UDP: one datagram per frame; every received byte is evidence, the envelope is
+			// unwrapped after the raw write, the payload is routed and parsed.
+			addr := strings.TrimPrefix(*listen, "udp:")
+			u := frame.UDP{Addr: addr, MaxEventBytes: 65536, MaxFrames: *maxFrames}
+			conn, err := u.Listen()
+			die(err)
+			if *channel == "file:" {
+				o.Channel = "udp:" + addr
+			}
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			fmt.Fprintf(os.Stderr, "listening for syslog datagrams on %s\n", conn.LocalAddr())
+			st, err = pipeline.RunFrames(func(emit func(frame.Frame) error) error { return u.Serve(ctx, conn, emit) }, o)
+			die(err)
+		} else {
+			st, err = pipeline.Run(in, o)
+			die(err)
+		}
 		json.NewEncoder(os.Stderr).Encode(st)
+	case "export":
+		// One-command evidence export: raw bytes + lineage record + inclusion proof + signed checkpoint.
+		fs := flag.NewFlagSet("export", flag.ExitOnError)
+		evDir := fs.String("evidence", "", "evidence store directory")
+		cdir := fs.String("commit", "", "commit directory (default <evidence>/commit)")
+		eventID := fs.String("event-id", "", "event id to export")
+		outDir := fs.String("out", "", "bundle directory to create")
+		fs.Parse(os.Args[2:])
+		b, err := checkpoint.Export(*evDir, *cdir, *eventID, *outDir)
+		die(err)
+		fmt.Fprintf(os.Stderr, "exported %s: leaf %d of %s, root %s, checkpoint %s -> %s\n", b.EventID, b.LeafIndex, b.Record.SegmentID, b.SegmentRoot, b.CheckpointID, *outDir)
 	case "reconstruct":
 		fs := flag.NewFlagSet("reconstruct", flag.ExitOnError)
 		evDir := fs.String("evidence", "", "evidence store directory")
@@ -130,6 +173,21 @@ func main() {
 	default:
 		usage()
 	}
+}
+
+// signingFlags: since P5 a pack must carry a valid detached signature by an authority in the trust store.
+// --allow-unsigned exists for development only and is loud about it.
+func signingFlags(fs *flag.FlagSet) (*string, *bool) {
+	trust := fs.String("trust", filepath.Join(repoRoot(), "keys", "trust"), "trust store directory (<authority_id>.pub.json files)")
+	allow := fs.Bool("allow-unsigned", false, "DEVELOPMENT ONLY: load packs without verifying their signature")
+	return trust, allow
+}
+
+func loadOptions(contractsDir, pinned, trust string, allowUnsigned bool) pack.LoadOptions {
+	if allowUnsigned {
+		fmt.Fprintln(os.Stderr, "WARNING: --allow-unsigned: pack signatures are NOT verified (development only)")
+	}
+	return pack.LoadOptions{ContractsDir: contractsDir, PinnedIndex: pinned, TrustDir: trust, AllowUnsigned: allowUnsigned}
 }
 
 func commonFlags(fs *flag.FlagSet) (*string, *string) {
