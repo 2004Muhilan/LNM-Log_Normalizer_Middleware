@@ -1,0 +1,313 @@
+{
+ "machine": "laptop-1650",
+ "machine_info": {
+  "hostname": "MSI",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Core(TM) i5-10500H CPU @ 2.50GHz",
+  "ram_gb": 7.7,
+  "gpu": "NVIDIA GeForce GTX 1650",
+  "vram_mb": 4096,
+  "driver": "616.64"
+ },
+ "model_id": "granite-4.1-8b-q4_k_m",
+ "model_hash": "sha256:ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
+ "backend": "cuda ngl=20",
+ "offload": {
+  "layers_on_gpu": 20,
+  "layers_total": 41,
+  "model_buffers_mib": {
+   "CUDA0": 2492.02,
+   "CUDA_Host": 0.0,
+   "CPU_Mapped": 2604.75
+  },
+  "kv_buffers_mib": {
+   "CPU": 672.0,
+   "CUDA0": 608.0
+  },
+  "device": "NVIDIA GeForce GTX 1650",
+  "projected_device_mib": 3220,
+  "free_device_mib_at_start": 3294,
+  "vram_used_delta_mib": 3282,
+  "fits_in_vram": false
+ },
+ "case": "asa-302013",
+ "mode": "whole",
+ "event_class_uid": 4001,
+ "lines": 12,
+ "slots": 14,
+ "wall_ms": [
+  93099.90456000014,
+  95277.31786299955
+ ],
+ "wall_s_first": 93.1,
+ "prompt_tokens": 2389,
+ "predicted_tokens": 227,
+ "iterations": 1,
+ "calls": 2,
+ "refuted_by_iteration": [
+  []
+ ],
+ "abandoned": [],
+ "schema_invalid": 0,
+ "think_leak": 0,
+ "class_answer": "network_activity",
+ "repeat": 2,
+ "byte_identical": true,
+ "distinct_outputs": 1,
+ "provenance": {
+  "provider": "model",
+  "model_id": "granite-4.1-8b-q4_k_m",
+  "model_hash": "sha256:ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
+  "llama_cpp": {
+   "build_info": "b10820-74a7c897f",
+   "model_path": "/models/granite-4.1-8b-Q4_K_M.gguf",
+   "n_ctx": null
+  },
+  "decoding": {
+   "temperature": 0.0,
+   "top_k": 1,
+   "top_p": 1.0,
+   "min_p": 0.0,
+   "seed": 0,
+   "cache_prompt": false,
+   "repeat_penalty": 1.0,
+   "presence_penalty": 0.0,
+   "frequency_penalty": 0.0
+  },
+  "backend": "cuda ngl=20",
+  "mode": "whole",
+  "max_iterations": 3,
+  "prompt_template_hash": "sha256:200b491effc2b4d34538672d79f32f629298978228198fb27440f94ff5aefca2",
+  "grammar_hashes": {
+   "class": "sha256:4b92b66d7b7325e9387db3bdf4daf84e694cadb82b994d6b61dade15bd814fdf",
+   "labels": "sha256:6a2c3f532d185bff33f5f1ae4bf1804e77cf81dfe919197c7c69c295ea8f3f07"
+  },
+  "trace": {
+   "model_id": "granite-4.1-8b-q4_k_m",
+   "mode": "whole",
+   "iterations": 1,
+   "calls": 2,
+   "prompt_tokens": 2389,
+   "predicted_tokens": 227,
+   "wall_ms": 95277.31786299955,
+   "refuted_by_iteration": [
+    []
+   ],
+   "abandoned": [],
+   "schema_invalid": 0,
+   "think_leak": 0,
+   "class_answer": "network_activity"
+  }
+ },
+ "judgement": {
+  "event_class_correct": true,
+  "event_class_proposed": 4001,
+  "slots": 14,
+  "labelled": 7,
+  "type_compatible_rate": 1.0,
+  "scored": 14,
+  "agreement": 0.5,
+  "over_mapped": 2,
+  "out_of_class_rate": 0.0,
+  "in_class_truth_slots": 6,
+  "certificates": 6,
+  "certificate_shape": {
+   "src_host": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   },
+   "src_port": {
+    "expected": "endpoint_orientation",
+    "got": "endpoint_orientation"
+   }
+  },
+  "shape_preserved": true,
+  "request": true,
+  "rows": [
+   {
+    "slot": 1,
+    "field": "msg_id",
+    "class": "text",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "metadata.event_code",
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 2,
+    "field": "direction",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "connection_info.direction"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 3,
+    "field": "proto",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "connection_info.protocol_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 4,
+    "field": "conn_id",
+    "class": "integer",
+    "proposal": [
+     "connection_info.session.terminal"
+    ],
+    "label": "connection_info.session.terminal",
+    "truth": [
+     "connection_info.uid",
+     "connection_info.session.uid"
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 5,
+    "field": "src_if",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "src_endpoint.interface_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 6,
+    "field": "src_host",
+    "class": "ipv4",
+    "proposal": [
+     "src_endpoint.ip"
+    ],
+    "label": "src_endpoint.ip",
+    "truth": [
+     "src_endpoint.ip",
+     "src_endpoint.hostname"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 7,
+    "field": "src_port",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     "src_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 8,
+    "field": "src_mapped_host",
+    "class": "ipv4",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 9,
+    "field": "src_mapped_port",
+    "class": "integer",
+    "proposal": [
+     "src_endpoint.port"
+    ],
+    "label": "src_endpoint.port",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   },
+   {
+    "slot": 10,
+    "field": "dst_if",
+    "class": "word",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     "dst_endpoint.interface_name"
+    ],
+    "correct": false
+   },
+   {
+    "slot": 11,
+    "field": "dst_host",
+    "class": "ipv4",
+    "proposal": [
+     "dst_endpoint.ip"
+    ],
+    "label": "dst_endpoint.ip",
+    "truth": [
+     "dst_endpoint.ip",
+     "dst_endpoint.hostname"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 12,
+    "field": "dst_port",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.port"
+    ],
+    "label": "dst_endpoint.port",
+    "truth": [
+     "dst_endpoint.port"
+    ],
+    "type_compatible": true,
+    "correct": true
+   },
+   {
+    "slot": 13,
+    "field": "dst_mapped_host",
+    "class": "ipv4",
+    "proposal": [],
+    "label": "unmapped",
+    "truth": [
+     null
+    ],
+    "correct": true
+   },
+   {
+    "slot": 14,
+    "field": "dst_mapped_port",
+    "class": "integer",
+    "proposal": [
+     "dst_endpoint.port"
+    ],
+    "label": "dst_endpoint.port",
+    "truth": [
+     null
+    ],
+    "type_compatible": true,
+    "correct": false
+   }
+  ]
+ },
+ "raw_outputs": [
+  "{\n  \"event_class\": \"network_activity\"\n}",
+  "{\n  \"slots\": [\n    {\"slot\": 1, \"label\": \"unmapped\"},\n    {\"slot\": 2, \"label\": \"unmapped\"},\n    {\"slot\": 3, \"label\": \"unmapped\"},\n    {\"slot\": 4, \"label\": \"connection_info.session.terminal\"},\n    {\"slot\": 5, \"label\": \"unmapped\"},\n    {\"slot\": 6, \"label\": \"src_endpoint.ip\"},\n    {\"slot\": 7, \"label\": \"src_endpoint.port\"},\n    {\"slot\": 8, \"label\": \"unmapped\"},\n    {\"slot\": 9, \"label\": \"src_endpoint.port\"},\n    {\"slot\": 10, \"label\": \"unmapped\"},\n    {\"slot\": 11, \"label\": \"dst_endpoint.ip\"},\n    {\"slot\": 12, \"label\": \"dst_endpoint.port\"},\n    {\"slot\": 13, \"label\": \"unmapped\"},\n    {\"slot\": 14, \"label\": \"dst_endpoint.port\"}\n  ]\n}"
+ ],
+ "llama_server_log_tail": "525 D func_args_separator: ''\n0.10.277.525 D func_close: ''\n0.10.277.526 D call_id_prefix: ''\n0.10.277.526 D call_id_suffix: ''\n0.10.277.526 D call_id_pos: 'NONE'\n0.10.277.526 D args_start: ''\n0.10.277.527 D args_end: ''\n0.10.277.527 D arg_name_prefix: ''\n0.10.277.528 D arg_name_suffix: ''\n0.10.277.528 D arg_value_prefix: ''\n0.10.277.528 D arg_value_suffix: ''\n0.10.277.528 D name_field: 'name'\n0.10.277.528 D args_field: 'arguments'\n0.10.277.529 D id_field: ''\n0.10.277.529 D gen_id_field: ''\n0.10.277.533 D parameter_order: 'name, arguments'\n0.10.277.533 D \u001b[1m\u001b[38;5;126m=== Differential analysis complete ===\n\u001b[0m0.10.279.675 D common_chat_templates_apply_jinja: generated parser:\nSequence(Literal(<|start_of_role|>assistant<|end_of_role|>), Epsilon, Tag(content, Until()), End)\n\nparser generation prompt: <|start_of_role|>assistant<|end_of_role|>\n0.10.279.713 I srv          init: init: chat template, example_format: '<|start_of_role|>system<|end_of_role|>You are a helpful assistant<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Hello<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Hi there<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>How are you?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>'\n0.10.279.781 D common_chat_templates_apply_jinja: using differential autoparser\n0.10.279.804 D \u001b[1m\u001b[38;5;126m=== Starting differential analysis ===\n\u001b[0m0.10.279.805 D \u001b[1m\u001b[38;5;214mPhase 1: Reasoning analysis\n\u001b[0m0.10.281.384 D \u001b[1m\u001b[38;5;214mPhase 2: Content analysis\n\u001b[0m0.10.283.980 D \u001b[1m\u001b[38;5;214mPhase 3: Tool call analysis\n\u001b[0m0.10.286.917 D \n--- Reasoning & Content Structure ---\n0.10.286.949 D user_msg_start: <|start_of_role|>user<|end_of_role|>\n0.10.286.950 D assistant_msg_start: <|start_of_role|>assistant<|end_of_role|>\n0.10.286.952 D reasoning_mode: NONE\n0.10.286.952 D reasoning_start: ''\n0.10.286.952 D reasoning_end: ''\n0.10.286.953 D content_mode: PLAIN\n0.10.286.953 D content_start: ''\n0.10.286.953 D content_end: ''\n0.10.286.953 D \n--- Tool Call Structure ---\n0.10.286.954 D tool_mode: JSON_NATIVE\n0.10.286.954 D supports_tools: true\n0.10.286.954 D supports_parallel_calls: true\n0.10.286.954 D tool_section_start: ''\n0.10.286.955 D tool_section_end: ''\n0.10.286.955 D per_call_start: '<tool_call>\n'\n0.10.286.955 D per_call_end: '</tool_call>'\n0.10.286.955 D func_name_prefix: ''\n0.10.286.955 D func_name_suffix: ''\n0.10.286.955 D func_args_separator: ''\n0.10.286.955 D func_close: ''\n0.10.286.956 D call_id_prefix: ''\n0.10.286.956 D call_id_suffix: ''\n0.10.286.956 D call_id_pos: 'NONE'\n0.10.286.956 D args_start: ''\n0.10.286.956 D args_end: ''\n0.10.286.957 D arg_name_prefix: ''\n0.10.286.957 D arg_name_suffix: ''\n0.10.286.957 D arg_value_prefix: ''\n0.10.286.957 D arg_value_suffix: ''\n0.10.286.958 D name_field: 'name'\n0.10.286.958 D args_field: 'arguments'\n0.10.286.958 D id_field: ''\n0.10.286.958 D gen_id_field: ''\n0.10.286.959 D parameter_order: 'name, arguments'\n0.10.286.959 D \u001b[1m\u001b[38;5;126m=== Differential analysis complete ===\n\u001b[0m0.10.287.467 D common_chat_templates_apply_jinja: generated parser:\nSequence(Literal(<|start_of_role|>assistant<|end_of_role|>), Epsilon, Tag(content, Until()), End)\n\nparser generation prompt: <|start_of_role|>assistant<|end_of_role|>\n0.10.287.500 I srv          init: init: chat template, thinking = 0\n0.10.287.513 I srv          init: preserve_reasoning kwarg: not supported by template\n0.10.287.832 I srv  llama_server: model loaded\n0.10.287.865 I srv  llama_server: listening on http://0.0.0.0:8080\n0.10.287.866 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release\n0.10.287.866 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508\n0.10.288.025 D que    start_loop: processing new tasks\n0.10.288.049 D que    start_loop: update slots\n0.10.288.053 I srv  update_slots: all slots are idle\n0.10.288.053 D que    start_loop: waiting for new tasks\n0.11.582.068 D srv          stop: all tasks already finished, no need to cancel\n"
+}

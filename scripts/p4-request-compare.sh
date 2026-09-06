@@ -27,9 +27,13 @@ req = s.get("pending_request") or s.get("last_request") or {}
 hist = s.get("request_history") or s.get("requests") or []
 m = s.get("metrics", {})
 certs = s.get("certificates") or []
+if isinstance(certs, dict):
+    certs = list(certs.values())
+unresolved = sum(1 for c in certs if isinstance(c, dict) and c.get("status") == "unresolved")
 print(json.dumps({"model": model, "onboard_wall_s": round(wall, 1), "metrics": m,
-                  "request_discriminator": req.get("discriminator") if req else None, "request_resolves": req.get("resolves") if req else None,
-                  "certificates": len(certs), "unresolved": sum(1 for c in certs if (c.get("status") == "unresolved"))}, indent=1))
+                  "request_discriminator": req.get("discriminator") if isinstance(req, dict) else None,
+                  "request_resolves": req.get("resolves") if isinstance(req, dict) else None,
+                  "certificates": len(certs), "unresolved": unresolved}, indent=1))
 EOF
 grep -E "^promotable|blocker|REQUEST|discriminator:|resolves" "$OUT/onboard.txt" | head -20
 grep -E "^cert|UNRESOLVED" "$OUT/certificates.txt"

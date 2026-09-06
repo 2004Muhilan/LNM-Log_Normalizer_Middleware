@@ -219,8 +219,41 @@ Server throughput: prompt eval ~115 tokens/s, generation ~9–11 tokens/s. Model
 **Granite 4.1 8B-Q4 with `--n-gpu-layers auto` and the 16k default context is slower than CPU on this
 card** (prompt eval 6 tokens/s, generation 1.8 tokens/s): the fit heuristic offloaded 41/41 layers of a
 5 GB model into 4 GB and the driver paged VRAM through shared memory. **Rule for the 8B on the 1650: `--ngl 20
---ctx 8192`.** Its measured figures under that rule are in `spike/results/laptop-1650/` and the P7 report's
-demo-shape recommendation; `python learning/tools/spike.py summarize` merges both machines.
+--ctx 8192`** — 20/41 layers, 2.49 GB CUDA + 2.60 GB host mapped, KV 608 MiB CUDA + 672 MiB host, VRAM delta
+3,282 MiB of the 3,294 MiB free (the card is full; there is no room for a browser's GPU process on the day).
+Prompt eval ~54 tokens/s, generation ~5 tokens/s — half the 4B per token, but fewer iterations per session:
+
+| case | wall s (session, first repeat) | iterations | agreement | byte-identical |
+|---|---|---|---|---|
+| asa-106023 | 76.0 | 1 | 0.82 | yes |
+| asa-302013 | 93.1 | 1 | 0.50 | yes |
+| fortigate-traffic | 379.7 | 1 | 0.74 | yes |
+| panos-traffic | 435.4 | 1 | 0.58 | yes |
+| squid-native | 155.8 | 2 | 0.50 | yes |
+
+Across the five cases: 4B mean wall 227 s (median 162), agreement 0.54, 2.6 iterations; Granite mean 228 s
+(median 156), agreement 0.63, 1.2 iterations. Both are byte-identical across the two repeats in one server
+lifetime on this backend. `python learning/tools/spike.py summarize` merges both machines.
+
+**Does the model change what the operator sees?** `scripts/p4-request-compare.sh` ran the live Squid
+onboarding session (the demo's sequence: onboard → certificates → one logformat response → promote →
+`verify-pack`) against each model's server:
+
+| | Qwen3.5-4B-Q4 (22/33 layers) | Granite 4.1 8B-Q4 (20/41) |
+|---|---|---|
+| model proposal + certificates, wall | 103.5 s | 127.5 s |
+| evidence request | `device_logformat_configuration`, resolves pos_1…pos_10 | identical |
+| certificates issued | 3 (`pos_1` temporal_role, `pos_3` endpoint_orientation, `pos_5` volume_direction) | 2 (`pos_1`, `pos_3`) |
+| operator responses to promote | 1 | 1 |
+| promoted pack | verified, signed | verified, signed |
+| VRAM in use while serving | 2,529 MiB | 3,547 MiB |
+
+**The same one question, the same one answer, the same promoted pack.** The agreement gap between the two
+models (0.54 vs 0.63 across cases; 0.50 vs 0.50 on Squid) does not reach the stage: every unlabelled or
+mis-labelled field is covered by the single logformat request either way. What differs on stage is the
+certificate list shown before the request (three vs two — the 4B labels the bytes counter, which is the
+richer demo) and the wait: ~100–160 s for a Squid session on either model, ~75–95 s for an ASA family,
+5–7 minutes for the wide PAN-OS/FortiGate formats.
 
 The spike tool recorded the offload split from the **first** `offloaded N/M layers` line; llama.cpp's fit
 loop logs several probes and only the last is what runs (the first said 33/33 for the 4B, 22/33 ran).
