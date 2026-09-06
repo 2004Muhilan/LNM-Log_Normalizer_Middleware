@@ -1,11 +1,11 @@
 # P6 report — multi-vendor routing: the DAG, families, propagation, ML emission
 
-**Status: P6 exit criteria met; stopped for verification before P7.** Nothing from P7 was built. Both
-tracks: the Go router became the decision DAG and the pipeline runs every onboarded pack at once; the
-learning plane onboards the three anchored vendors through the P3/P4 path. Reproduce with
-`scripts/p6-check.sh` (WSL2; the four-vendor build needs the git-ignored corpus cache and writes its
-packs under `/tmp` because they contain corpus lines). **One exit item is owed, not met: the ECS→OCSF
-crosswalk is built but not yet team-reviewed** (§5.8).
+**Status: P6 accepted 2026-09-06; the four boundary items are settled (§5a) and stopped before P7.**
+Nothing from P7 was built. Both tracks: the Go router became the decision DAG and the pipeline runs every
+onboarded pack at once; the learning plane onboards the three anchored vendors through the P3/P4 path.
+Reproduce with `scripts/p6-check.sh` (WSL2; the four-vendor build needs the git-ignored corpus cache and
+writes its packs under `/tmp` because they contain corpus lines). **One exit item stays owed by decision:
+the ECS→OCSF crosswalk is built and is the team's to review before P8 consumes it** (§5.8, §5a.4).
 
 ## 1. Demonstrable outcome
 
@@ -18,12 +18,14 @@ type by CSV cell 4, FortiGate's `type`/`subtype` by key), L4 arity bucket or tok
 runs until one family remains. The three adversarial lines quarantine without a parser being touched:
 `%ASA-6-999999` and a PAN-OS `WEIRD` log type as **drift signals** (anchor located, value outside its
 declared domain); `%ASA-6-302015`, a message id inside the declared domain that no family owns, as
-**family-discovery input**. The candidate-set distribution after L4 is `{1: 95, 0: 3}` — no event needed
-the K cap, no event reached a tiebreaker.
+**family-discovery input**. The candidate-set distribution after L4 is `{1: 95, 0: 3}`: **the K=4 bound
+exists and was not needed on the reference corpus** — every routed event had exactly one candidate. That
+is the empirical answer to the plan's K question, stated exactly so; the distribution is logged on every
+run for P8's replay mix.
 
 Every emitted event validates against normalized-event 1.2.0; every event also produced an ML feature
-record `(template_id, parameter_vector, timestamp, entity_ids)` that validates against the draft
-`ml-feature 0.1.0` contract. The family discovery tool clusters the same 98 lines with no pack and no
+record `(template_id, parameter_vector, timestamp, entity_ids)` that validates against the
+`ml-feature 1.0.0` contract (frozen at the boundary, §5a.3). The family discovery tool clusters the same 98 lines with no pack and no
 parser into 12 clusters ranked by volume, the top five being exactly the five anchored families, with the
 drift line ranked last and labelled as drift.
 
@@ -41,22 +43,22 @@ route side by side in the mixed stream (arity separates them at L4).
 | **Invariant 6 — no try-all path** | `TestStaticNoTryAllPath`: `router.go` references no parser program and never calls `Parse`; `pipeline.go` calls `Program.Parse` exactly once, on the family the router chose, after `Route`; no loop over packs or families reaches a `Parse`. Checked on every run by `p6-check.sh` |
 | **Invariant 6 — adversarial anchor-defeating event → quarantine** | `TestAnchorDefeatingEventsQuarantine`: an ASA id outside the domain, a PAN-OS type outside its enum, a FortiGate `type` outside its enum → `routing_drift`; in-domain values no family owns → `routing` naming the discovery input; an ASA-shaped payload with no anchor → unknown signature; a FortiGate line with the right anchor but a pair count outside the arity bucket → unknown. Reproduced live in the mixed stream (3 quarantined, 2 drift signals) |
 | **Anchor admission — cardinality alone never admits** | `learning/ulpf_learn/anchors.py` + `tests/test_anchors.py`: a constant hostname in a 12-line sample and a two-valued `vd` key are refused by name ("sample cardinality alone never admits an anchor"); a declared domain admits and records `observed_cardinality`; a declared domain contradicted by observation is **a drift signal, not an admission**; measured utility admits only a perfect partition over ≥2 families, on probation |
-| **Candidate-set distribution captured** | `Stats.candidate_set_sizes` per run (`{"0": 3, "1": 95}` on the mixed stream; `{1: 2, 0: 2}` in the unit test); `TestCapAndTiebreaker` drives 5 same-signature families to `routing_cap` and 2 to `routing_ambiguous` |
+| **Candidate-set distribution captured** | `Stats.candidate_set_sizes` per run (`{"0": 3, "1": 95}` on the mixed stream; `{1: 2, 0: 2}` in the unit test); `TestCapAndAmbiguousQuarantine` drives 5 same-signature families to `routing_cap` and 2 to `routing_ambiguous` |
 | **Propagation demonstrated live, no repeat evidence request** | `p6-build-packs.sh` propagation section and `test_propagation_resolves_a_second_family_without_a_repeat_request`: slots 0–9 propagated, blockers none, pending request resolves only `pos_11`, `operator_responses = 0`, promoted; a different `source_id` receives nothing |
-| **ML feature emission (requirement h)** | `--ml-out`: 95 records for 95 events, 0 invalid against `ml-feature 0.1.0`; the ASA tuple names `cisco-asa-fw-01/asa-302013@sha256:…`, the header timestamp, `{device, dst_ip, session, src_ip}`, and a 14-entry parameter vector with the optional user groups as null |
-| **ECS→OCSF crosswalk team-reviewed** | **Built, not reviewed.** `library/crosswalk/ecs-ocsf.yaml` (64 rows, every semantic gap annotated) and `learning/tools/agreement.py`; run on ASA 302013: 208 comparable pairs, 100 % agreement after adjudication, 32 known-mismatch-class pairs (timezone and severity semantics), 32 reference-only, 16 ULPF-only. Review is the team's, recorded as owed in §5.8 |
+| **ML feature emission (requirement h)** | `--ml-out`: 95 records for 95 events, 0 invalid against `ml-feature 1.0.0` (the sixth contract, frozen at the boundary); the Go runtime validates its own records against the schema in `TestMixedStreamTwoPacksRoutesQuarantinesAndEmitsML`; the ASA tuple names `cisco-asa-fw-01/asa-302013@sha256:…`, the header timestamp, `{device, dst_ip, session, src_ip}`, and a 14-entry parameter vector with the optional user groups as null |
+| **ECS→OCSF crosswalk team-reviewed** | **Built, not reviewed — the team's review, owed before P8.** `library/crosswalk/ecs-ocsf.yaml` (64 rows, every semantic gap annotated) and `learning/tools/agreement.py`; run on ASA 302013: **16 of 46 lines have a reference document; over those 16, 208 comparable attribute pairs agree** after adjudication, with 32 known-mismatch-class pairs (timezone and severity semantics), 32 reference-only, 16 ULPF-only. The sample size travels with the figure wherever it is quoted (the tool prints them together) |
 | Onboarding ASA / PAN-OS / FortiGate through the P3/P4 path | Six families (302013, 302014+302016, 106023, 305011+305012, PAN-OS TRAFFIC, FortiGate traffic), each: given draft spec → recorded model proposals → one evidence request → the vendor's field-order documentation as the resolving evidence → promoted, signed, verified by the runtime; merged into three source packs |
 | Domain-violation → drift-signal quarantine | `routing_drift` stage and `Stats.drift_signals`, kept apart from unknown signatures (P8's monitor input) |
 | Family discovery ranking | `learning/tools/discover.py`: clusters by the router's own surface reading, ranked by volume with cumulative share; drift and in-domain-unowned values reported per cluster |
-| Contracts | parser-pack **1.3.0** (additive), normalized-event unchanged at 1.2.0, `ml-feature 0.1.0` draft; 22/22 golden vectors on both stacks (the golden Squid pack is now emitted as 1.3.0); 55 learning tests; runtime suite green; invariant 2 green |
+| Contracts | parser-pack **1.3.0** (additive), normalized-event unchanged at 1.2.0, `ml-feature 1.0.0` (sixth contract); `tiebreaker_field` deprecated; 22/22 golden vectors on both stacks (the golden Squid pack is now emitted as 1.3.0); 55 learning tests; runtime suite green; invariant 2 green |
 
 ## 2. Deliverables
 
 - **Runtime.** `runtime/internal/route/router.go` — the DAG (`New(packs…)`, `Route(payload, envelope)`,
   `Decision{Pack, Family, Signature, Candidates, Stage, Reason, Drift}`, `K = 4`); surface readers
   (`detectL2`, `csvCells`, `kvPairs`, `classify`), anchor locators (pattern / slot / key /
-  envelope_header) scoped to the surface class their pack's families live in; `tiebreak` (reports, does
-  not apply — §5.3). `runtime/internal/pipeline` — `Options.Packs`, `Options.SourceID`, `Options.ML`;
+  envelope_header) scoped to the surface class their pack's families live in; no tiebreaker stage
+  (2..K candidates quarantine, named — §5a.2). `runtime/internal/pipeline` — `Options.Packs`, `Options.SourceID`, `Options.ML`;
   stats `candidate_set_sizes`, `drift_signals`, `ml_records`, `emitted_by_family`; quarantine stages
   `routing | routing_ambiguous | routing_cap | routing_drift`. `runtime/internal/mlfeat` — the tuple.
   `runtime/internal/pack` — `Anchor`, `AnchorValues`, `RoutingSignature.L3AnchorValues`, `checkAnchors`
@@ -75,8 +77,8 @@ route side by side in the mixed stream (arity separates them at L4).
   `emit.py` writes 1.3.0 (`envelope_field`, `l3_anchor_values`, source identity from the table, anchors).
 - **Tools.** `learning/tools/discover.py` (family discovery ranking), `learning/tools/agreement.py` +
   `library/crosswalk/ecs-ocsf.yaml`.
-- **Contracts.** `contracts/parser-pack.schema.json` 1.3.0; `contracts/ml-feature.schema.json` 0.1.0
-  (draft); both validators accept 1.3.0; the Python validator accepts `ml-feature`.
+- **Contracts.** `contracts/parser-pack.schema.json` 1.3.0 (`tiebreaker_field` deprecated); `contracts/ml-feature.schema.json`
+  1.0.0; both validators accept 1.3.0; the Python validator accepts `ml-feature`, the Go runtime validates its own ML output in tests.
 - **Scripts.** `p6-check.sh`, `p6-build-packs.sh` (the whole four-vendor story; packs under `/tmp`),
   `go-test-p6.sh`, `py-test.sh`, `gofmt-w.sh`, `p6-inspect.sh`.
 - **Fixtures.** `learning/fixtures/squid-native-11.log` (the trace's six lines plus `%>st`; the second
@@ -121,9 +123,10 @@ route side by side in the mixed stream (arity separates them at L4).
 ## 4. Agreement is an effort metric, not a correctness metric
 
 The agreement tool exists so P8 can report *how far ULPF and one production parser read the same line the
-same way*. The ASA 302013 run: 16 of 46 lines have a reference document (the Beats expected file covers
-100 of the fixture's 268 lines); over those, 208 comparable pairs agree after adjudication. What did **not**
-agree, and why it is not a parser disagreement:
+same way*. The ASA 302013 run, always quoted with its sample: **16 of 46 lines** have a reference document
+(the Beats expected file covers 100 of the fixture's 268 lines); over those 16 events, **208 comparable
+attribute pairs**, all agreeing after adjudication. "100 %" on its own is not the result; "208 pairs over 16
+of 46 lines" is. What did **not** agree, and why it is not a parser disagreement:
 
 - `@timestamp` — the reference says `2018-10-10T12:34:56.000-02:00`; ULPF says 12:34:56 UTC. The line
   carries no zone; Filebeat's test harness pins one, the pack says `timezone_confidence: unresolved` and
@@ -147,19 +150,17 @@ be a third source, which is why its review is separate from the parsers (§5.8).
    no timestamp; `time` is mandatory for 4001; the syslog header is the device's clock. The pack now
    declares `envelope_field: timestamp → time` with a `timestamp` transform and vendor provenance. The
    alternative — the runtime "falling back" to the header — would be a silent derivation. Additive; both
-   validators accept 1.0.0–1.3.0. **Needs approval.**
+   validators accept 1.0.0–1.3.0. **Approved at the boundary (§5a.1).**
 2. **parser-pack 1.3.0 — `routing_signature.l3_anchor_values`.** The 1.0.0 contract had pack anchors and
    per-family `l3_anchor_ids` but no place for *which values* route to a family; without it L3 cannot
    select. Added as an optional array, cross-checked against the anchor domain at load (fail closed).
-   **Needs approval.**
+   **Approved at the boundary (§5a.1).**
 3. **The per-pack tiebreaker is not evaluable before parsing.** The plan and the contract type it as a
    `field_path`, which in general only the parser can resolve, and no family declares the tiebreaker
    values it owns. Evaluating it by parsing would be the try-all path invariant 6 forbids. P6's DAG
    **reports** a declared tiebreaker and quarantines at 2..K with the candidates named; >K quarantines at
-   once. **Boundary decision:** either (a) parser-pack 1.4.0 retypes the tiebreaker as an anchor-style
-   locator with per-family values (it then *is* a second-tier anchor), or (b) the plan drops the
-   tiebreaker and "K-cap → quarantine" stands. No pack in this phase declares one, and no real event
-   reached 2..K, so nothing is blocked by the choice; I recommend (b) unless a vendor needs (a).
+   once. **Boundary decision: dropped (§5a.2)** — retyped as a locator with per-family values it would be
+   an anchor, and there is no distinct concept left. No pack declared one and no real event reached 2..K.
 4. **L1 filter semantics.** A family declaring `raw` has no envelope requirement (the same payload arrives
    with or without a relay header; P5's tests already route syslog-wrapped Squid); a family declaring a
    syslog envelope requires one of either RFC form (relays rewrite 3164 as 5424). The plan's "L1
@@ -168,25 +169,61 @@ be a third source, which is why its review is separate from the parsers (§5.8).
    §4.3.3). The P5 test that asserted `none` for `<189>date=…` was corrected. No schema change (`kind`
    stays `rfc3164`; `priority/facility/severity` are already optional).
 6. **ML feature tuple — a draft sixth contract.** `contracts/ml-feature.schema.json` 0.1.0, validated by
-   the Python stack and by the vendor build, not yet by the Go loader. Requirement (h) is met by the
-   emission; whether the shape is frozen as a contract (and the Go loader gains the kind) is the
-   boundary's call. The vocabulary of `entity_ids` (src/dst ip and host, users, device, rule, session) is a
-   projection choice worth a second pair of eyes.
+   the Python stack and by the vendor build, not yet by the Go side. Requirement (h) is met by the
+   emission; whether the shape is frozen as a contract is the boundary's call. The vocabulary of
+   `entity_ids` (src/dst ip and host, users, device, rule, session) is a projection choice worth a second
+   pair of eyes. **Boundary decision: frozen as 1.0.0, vocabulary revised (§5a.3).**
 7. **Evidence record `source_id` on a mixed stream.** Routing happens after the raw write (invariant 3),
    so the record cannot name the routed pack; it carries the stream's declared source (`--source-id`,
    required when more than one pack is loaded) and lineage carries the routed pack's source. The
    trace's Stage 13 assumes one source per record; a relay stream has two source notions.
 8. **Crosswalk team review is owed.** `library/crosswalk/ecs-ocsf.yaml` is drafted with every semantic gap
    annotated and one row adjudicated from measurement; the exit criterion says team-reviewed. It is not.
-   The review should happen before P8 consumes it; the rows to look at hardest are the two
-   `set-of-known-mismatch` rows and the byte-direction rows.
+   The review is the team's, before P8 consumes it (§5a.4); the rows to look at hardest are the two
+   `set-of-known-mismatch` rows and the byte-direction rows. Not self-reviewed, by instruction.
 9. **Trace corrections.** (a) Stage 12: the pack is 1.3.0 and, for header-timestamped sources, carries an
    `envelope_field` mapping and `l3_anchor_values`; the trace's Squid pack is unaffected except for the
    version string. (b) Stage 13: `_lineage.source_id` is the routed pack's source; on a relay stream the
    evidence record's `source_id` is the stream's (item 7). (c) §3.4 routing: the trace describes
    "signature match"; the DAG's L2 is a surface class and its output key is
    `l1|surface|anchors|arity[|classes]` — the `routing_signature` string in lineage changed shape.
-10. **Plan §11 rows 30–37** record the above; plan header bumped to v1.5.
+10. **Plan §11 rows 30–37** record the above; plan header bumped to v1.5. Trace and architecture corrections
+    (Stage 5 surface-class routing and key shape, Stage 12 at 1.3.0 with `l3_anchor_values`, Stage 13
+    `source_id`, architecture §3.5 L2 row with locator scoping) were applied by the user at the boundary.
+
+## 5a. P6→P7 boundary items (settled 2026-09-06)
+
+1. **parser-pack 1.3.0 approved** — `envelope_field` (a declared mapping with provenance, never a runtime
+   fallback) and `l3_anchor_values`. No change to what was built.
+2. **Tiebreaker dropped, as a concept.** The user's reasoning goes further than §5.3: a secondary
+   discriminator readable before parsing is an anchor; one that is not requires parsing to route. Neither
+   leaves a distinct thing to keep. Done: the `tiebreak` stage is gone from the router (2..K candidates
+   quarantine with every candidate named; >K is a cap breach), `Pack.TiebreakerField` is gone, the emitter
+   and the source-pack merge no longer write the key, both validators dropped the "mapped path" check, the
+   plan's invariant-6 row, §3.4 pack contents and P6 deliverable say so, §11 row 32 records it. **One
+   validation against what was built:** removing the key from the contract outright would invalidate every
+   1.0.0–1.2.0 document that carries `tiebreaker_field: null` (the five negative golden vectors do), and
+   the contracts README promises earlier documents stay valid. So the key is **deprecated** — no longer
+   required, accepts only `null` — rather than deleted; 1.3.0 packs omit it. Nothing else referenced it
+   (`grep -ri tiebreak` over the tree: the P2 report's forward-looking sentence is the only remaining
+   mention, left as history).
+3. **ML feature frozen as `ml-feature 1.0.0`, the sixth contract.** The Go runtime, which produces the
+   records, validates its own output against the schema in the pipeline's mixed-stream test (the loader
+   gains no kind it never consumes); the Python validator accepts the kind. `entity_ids` revised: `rule`
+   removed — a rule is an attribute of the event, not something a sequence model follows; `domain` added,
+   sourced in order from `http_request.url.hostname` (proxies), `query.hostname` (DNS),
+   `dst_endpoint.domain`. **Assessment on `domain`, raised not absorbed:** the slot is right and is in the
+   contract, but today's Squid pack maps the URL as `http_request.url.url_string` only, so a Squid tuple
+   carries no `domain` — populating it needs `http_request.url.hostname` mapped, and the DSL has no
+   URL-component transform (`lookup`, `int`, `lowercase`, `compose_datetime`, `timestamp` only).
+   Deriving the host from the URL string inside the ML projection would be an interpretation the
+   normalized event does not carry, which the tuple's contract forbids. The honest path is a `url_host`
+   transform in a later parser-pack bump, or the vendor/logformat table mapping the host where the
+   source emits one separately (PAN-OS and FortiGate do not; DNS sources would via `query.hostname`).
+   Left for the phase that adds a proxy or DNS source needing it.
+4. **Crosswalk review is the team's**, left owed, not self-reviewed. Agreement figures are quoted with
+   their sample from now on: the tool prints `SAMPLE: N of M events … K pairs` beside the percentage, and
+   §1 and §4 above read "208 pairs over 16 of 46 lines".
 
 ## 6. What was tried and rejected
 
@@ -214,6 +251,6 @@ be a third source, which is why its review is separate from the parsers (§5.8).
   `quarantine_reasons.routing`; the candidate-set distribution is logged per run for the replay mix; the
   retained certificate on the Squid 11-slot family is the retroactive-resolution demo; discovery ranking
   is the demo's opening; the agreement tool and crosswalk (after review) produce the agreement results.
-- **Boundary decisions owed:** parser-pack 1.3.0 approval (items 1–2); tiebreaker (item 3); ML contract
-  (item 6); crosswalk review (item 8).
+- **Boundary decisions:** settled in §5a; the crosswalk review (team) and the `domain` entity for proxy
+  sources (a `url_host` transform, when a source needs it) carry forward.
 - **Laptop run** (P4) still owed before any latency figure; nothing in P6 measured latency.

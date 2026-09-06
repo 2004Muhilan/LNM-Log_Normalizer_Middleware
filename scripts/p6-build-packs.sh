@@ -143,7 +143,7 @@ echo "=== family discovery ranking over the mixed capture (no pack, no parser)"
 
 echo "=== agreement with the reference parser (crosswalk draft; effort metric, not correctness)"
 runtime/bin/ulpf-runtime run --pack "$W/source-packs/cisco-asa" --input "$W/samples/asa-302013.log" --evidence "$W/ev-asa" --out "$W/asa-out.jsonl" --quarantine "$W/asa-q.jsonl" 2>/dev/null || status=1
-(cd learning && python tools/agreement.py --normalized "$W/asa-out.jsonl" --expected "../$CORPUS/beats-cisco-asa/asa.log-expected.json" --raw "$W/samples/asa-302013.log" --json "$W/agreement-asa.json") | tail -8 | sed 's/^/  /' || status=1
+(cd learning && python tools/agreement.py --normalized "$W/asa-out.jsonl" --expected "../$CORPUS/beats-cisco-asa/asa.log-expected.json" --raw "$W/samples/asa-302013.log" --json "$W/agreement-asa.json") | tail -9 | sed 's/^/  /' || status=1
 
 echo "p6-build-packs: $([ $status = 0 ] && echo PASS || echo FAIL)"
 exit $status

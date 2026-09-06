@@ -100,7 +100,7 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
         "ocsf": {"version": "1.3.0", "pinned_classes": [{"uid": cls["uid"], "name": cls["name"], "table_hash": cls["table_hash"]}]},
         "acceptance": {"policy_version": "1.0.0"},
         "time": {"source_timezone": plan.source_timezone, "timezone_confidence": plan.timezone_confidence},
-        "anchors": list(anchors or []), "tiebreaker_field": None,
+        "anchors": list(anchors or []),
         "families": [family],
         "provenance": {"generator_version": "ulpf-gen-0.6", "validator_version": "ulpf-val-0.6", "model_hash": plan.model_hash, "discriminator_library_version": library_version,
                        "proposal": proposal_provenance_block(proposal_provenance, plan.model_hash)},

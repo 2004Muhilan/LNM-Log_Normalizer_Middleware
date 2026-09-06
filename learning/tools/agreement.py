@@ -167,8 +167,9 @@ def main(argv=None) -> int:
         if k != "_unpaired":
             tot.update(c)
     comparable = tot["agree"] + tot["disagree"]
-    print(f"\ncomparable pairs {comparable}: agree {tot['agree']}, disagree {tot['disagree']} "
-          f"({(tot['agree'] / comparable if comparable else 0):.1%} agreement — an effort metric about two parsers reading alike, not correctness)")
+    print(f"\nSAMPLE: {paired} of {len(events)} events have a reference document; {comparable} comparable attribute pairs over them.")
+    print(f"agree {tot['agree']}, disagree {tot['disagree']} ({(tot['agree'] / comparable if comparable else 0):.1%} agreement over {comparable} pairs on {paired} events — "
+          f"an effort metric about two parsers reading alike, not correctness; quote the sample with the figure)")
     print(f"reference-only {tot['reference_only']}, ulpf-only {tot['ulpf_only']}, known mismatch classes {tot['known_mismatch_class']}, unpaired events {tally['_unpaired']['events']}")
     if a.json:
         Path(a.json).write_text(json.dumps({"events": len(events), "paired": paired, "tally": {k: dict(v) for k, v in tally.items()}, "disagreements": disagreements}, indent=2) + "\n", encoding="utf-8")

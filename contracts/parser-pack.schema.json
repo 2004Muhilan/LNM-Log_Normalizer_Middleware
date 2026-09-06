@@ -5,7 +5,7 @@
   "description": "The only artifact that crosses from the learning plane to the runtime. One pack per source, with per-family entries. A pack is a directory bundle: pack.json (this document), specs/<spec_id>.json (parser specs), certificates/<certificate_id>.json, and a detached signature over the exact bytes of pack.json. The signature is never inside the signed file. OCSF pinning is by event class only: this contract has no field in which attributes within a class could be listed, which is how the subset guard is enforced structurally.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "pack_id", "pack_version", "created_at", "source", "ocsf", "acceptance", "time", "anchors", "tiebreaker_field", "families", "provenance", "hashes", "signing"],
+  "required": ["schema_version", "pack_id", "pack_version", "created_at", "source", "ocsf", "acceptance", "time", "anchors", "families", "provenance", "hashes", "signing"],
   "properties": {
     "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0", "1.3.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds provenance.proposal; 1.3.0 (P6) adds envelope-sourced mapping fields and the timestamp transform; every bump is additive and earlier documents remain valid." },
     "pack_id": { "$ref": "#/$defs/slug" },
@@ -105,8 +105,8 @@
       }
     },
     "tiebreaker_field": {
-      "description": "The per-pack declared secondary discriminator applied when the routing DAG cannot reduce the candidate set below K. null when none is declared; the runtime then quarantines.",
-      "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/field_path" } ]
+      "description": "DEPRECATED at the P6 boundary and DROPPED as a concept: a per-pack secondary discriminator applied at the K cap cannot be evaluated before parsing (evaluating it by parsing is the try-all path invariant 6 forbids), and retyped as a locator with per-family values it is simply another anchor. The rule is K-cap -> quarantine. Documents from 1.0.0-1.2.0 carry the key as null and remain valid; 1.3.0 packs omit it.",
+      "type": "null"
     },
     "families": {
       "type": "array",

@@ -28,7 +28,6 @@
     "timezone_confidence": "declared"
   },
   "anchors": [],
-  "tiebreaker_field": null,
   "families": [
     {
       "family_id": "positional-10",

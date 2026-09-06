@@ -11,16 +11,20 @@ import (
 	"ulpf/runtime/internal/spanmap"
 )
 
-// SchemaVersion is 0.1.0: the record shape is raised at the P6 boundary as a candidate sixth contract
-// (contracts/ml-feature.schema.json); it is not frozen until accepted.
-const SchemaVersion = "0.1.0"
+// SchemaVersion of contracts/ml-feature.schema.json, the sixth contract (frozen at the P6 boundary).
+// The runtime produces these records and checks its own output against the schema in its tests.
+const SchemaVersion = "1.0.0"
 
-// entity attributes, in a fixed order; absent ones are omitted from entity_ids
+// entity attributes, in a fixed order; absent ones are omitted from entity_ids. Entities are what recur
+// across events and can be followed by a sequence model; a rule name or a verb is a parameter, not an
+// entity. `domain` takes the first of several sources, by class: proxies name the URL host, DNS the
+// query, firewalls sometimes a destination domain.
 var entityAttrs = [][2]string{
 	{"src_ip", "src_endpoint.ip"}, {"dst_ip", "dst_endpoint.ip"},
 	{"src_host", "src_endpoint.hostname"}, {"dst_host", "dst_endpoint.hostname"},
 	{"user", "actor.user.name"}, {"src_user", "src_endpoint.owner.name"}, {"dst_user", "dst_endpoint.owner.name"},
-	{"device", "device.hostname"}, {"rule", "firewall_rule.name"}, {"session", "connection_info.uid"},
+	{"device", "device.hostname"}, {"session", "connection_info.uid"},
+	{"domain", "http_request.url.hostname"}, {"domain", "query.hostname"}, {"domain", "dst_endpoint.domain"},
 }
 
 type Record struct {
@@ -65,6 +69,9 @@ func Build(p *pack.Pack, f *pack.Family, m *spanmap.SpanMap, ev map[string]any, 
 	}
 	ents := map[string]any{}
 	for _, e := range entityAttrs {
+		if _, have := ents[e[0]]; have {
+			continue // first source wins
+		}
 		if v, ok := lookup(ev, e[1]); ok {
 			ents[e[0]] = v
 		}

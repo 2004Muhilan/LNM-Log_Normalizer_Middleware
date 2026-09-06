@@ -8,10 +8,34 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/pack"
 	"ulpf/runtime/internal/spec"
 )
+
+// validateML checks every emitted ML record against contracts/ml-feature.schema.json: the runtime
+// produces the records, so it checks its own output (the loader never consumes them).
+func validateML(t *testing.T, jsonl string) int {
+	t.Helper()
+	sch, err := jsonschema.NewCompiler().Compile(filepath.Join(repoRoot(t), "contracts", "ml-feature.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, line := range strings.Split(strings.TrimSpace(jsonl), "\n") {
+		v, err := jsonschema.UnmarshalJSON(strings.NewReader(line))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := sch.Validate(v); err != nil {
+			t.Fatalf("ml record violates the contract: %v\n%s", err, line)
+		}
+		n++
+	}
+	return n
+}
 
 // asaPack builds, in memory, a one-family ASA pack from the committed draft spec (no corpus, no signing):
 // an rfc3164-declared template family anchored on the message id, `time` sourced from the envelope
@@ -115,7 +139,10 @@ func TestMixedStreamTwoPacksRoutesQuarantinesAndEmitsML(t *testing.T) {
 	if asaEv["time"].(float64) != 1539174896000 {
 		t.Fatalf("envelope-sourced time: %v", asaEv["time"])
 	}
-	// ML tuple
+	// ML tuple: every record validates against the sixth contract
+	if n := validateML(t, ml.String()); n != 2 {
+		t.Fatalf("validated %d ml records, want 2", n)
+	}
 	mls := strings.Split(strings.TrimSpace(ml.String()), "\n")
 	var rec map[string]any
 	if err := json.Unmarshal([]byte(mls[1]), &rec); err != nil {
@@ -127,6 +154,9 @@ func TestMixedStreamTwoPacksRoutesQuarantinesAndEmitsML(t *testing.T) {
 	ents := rec["entity_ids"].(map[string]any)
 	if ents["src_ip"] != "100.66.205.104" || ents["dst_ip"] != "172.31.98.44" || ents["device"] != "localhost" || ents["session"] != float64(11757) {
 		t.Fatalf("entity ids: %v", ents)
+	}
+	if _, has := ents["rule"]; has {
+		t.Fatal("a rule is an attribute, not an entity")
 	}
 	names := rec["parameter_names"].([]any)
 	vec := rec["parameter_vector"].([]any)

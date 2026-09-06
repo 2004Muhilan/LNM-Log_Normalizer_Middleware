@@ -151,10 +151,11 @@ def test_propagation_resolves_a_second_family_without_a_repeat_request(tmp_path)
 
 
 def test_ml_feature_contract_refuses_invented_entities_and_wrong_shapes():
-    ok = {"schema_version": "0.1.0", "event_id": "ev_" + "0" * 26, "source_id": "s", "class_uid": 4001, "template_id": "p/f@sha256:" + "0" * 64,
+    ok = {"schema_version": "1.0.0", "event_id": "ev_" + "0" * 26, "source_id": "s", "class_uid": 4001, "template_id": "p/f@sha256:" + "0" * 64,
           "parameter_names": ["a"], "parameter_vector": [1], "timestamp": 1, "entity_ids": {"src_ip": "1.1.1.1"}}
     assert validate_document("ml-feature", ok) == []
     bad = dict(ok, entity_ids={"src_ip": "1.1.1.1", "confidence": 0.9})
     assert validate_document("ml-feature", bad)
     assert validate_document("ml-feature", dict(ok, template_id="no-hash"))
-    assert validate_document("ml-feature", dict(ok, schema_version="1.0.0"))
+    assert validate_document("ml-feature", dict(ok, schema_version="0.1.0"))   # the draft version is refused
+    assert validate_document("ml-feature", dict(ok, entity_ids={"rule": "acl-1"}))   # a rule is an attribute, not an entity

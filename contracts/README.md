@@ -200,7 +200,7 @@ The golden candidate spec and its span map deliberately stay at 1.0.0 to prove t
 
 Both bumps are additive; 1.0.0 and 1.1.0 documents remain valid and both validators accept all three.
 
-## 1.3.0 (P6) — one additive bump, one draft, raised at the boundary
+## 1.3.0 (P6) — one additive bump, a deprecation, and the sixth contract (approved at the P6 boundary)
 
 - **parser-pack 1.3.0**: `mapping.fields[].envelope_field` — a third mapping source beside `path` and
   `constant`: the value comes from the transport envelope unwrapped at ingest (`timestamp | hostname |
@@ -215,17 +215,25 @@ Both bumps are additive; 1.0.0 and 1.1.0 documents remain valid and both validat
   but no place for the family's own values, so the L3 stage of the DAG had nothing to select on. The
   loader cross-checks every value against the anchor's `expected_value_domain` and refuses the pack
   otherwise (a family may not claim what its anchor calls a domain violation).
-- **ml-feature 0.1.0 — DRAFT** (`contracts/ml-feature.schema.json`): the ML feature tuple of requirement
-  (h), one record per normalized event: `template_id` (`<pack>/<family>@<parser_hash>`),
+- **`tiebreaker_field` deprecated and dropped as a concept** (P6 boundary). A per-pack secondary
+  discriminator at the K cap is either readable before parsing — then it is an anchor — or not, and
+  evaluating it would mean parsing to route (invariant 6). The rule is K-cap → quarantine, with the
+  candidates named. The key is no longer required and accepts only `null`, so 1.0.0–1.2.0 documents
+  that carry it stay valid; 1.3.0 packs omit it.
+- **ml-feature 1.0.0 — the sixth contract** (`contracts/ml-feature.schema.json`): the ML feature tuple of
+  requirement (h), one record per normalized event: `template_id` (`<pack>/<family>@<parser_hash>`),
   `parameter_names`/`parameter_vector` (the spec's semantic fields in spec order; null when a field did
-  not participate), `timestamp` (the OCSF `time`), `entity_ids` (a fixed vocabulary of entity-bearing
-  attributes present on the event, never invented). The Python validator accepts it as a sixth kind; the
-  Go loader does not yet. Whether it becomes a frozen sixth contract is a boundary decision.
+  not participate), `timestamp` (the OCSF `time`), `entity_ids` — things that recur across events and a
+  sequence model can follow: `src_ip`, `dst_ip`, `src_host`, `dst_host`, `user`, `src_user`, `dst_user`,
+  `device`, `session`, `domain` (URL host for proxies, query name for DNS, destination domain otherwise).
+  A rule name is an attribute of the event, not an entity, and is not in the vocabulary. Absent entities
+  are omitted, never invented. The Python validator accepts the kind; the Go runtime, which produces the
+  records, validates its own output against the schema in its tests (the loader never consumes them).
 - **Envelope unwrap rule added (no schema change):** a PRI followed by no valid TIMESTAMP is an RFC 3164
   envelope of the PRI alone (§4.3.3), payload everything after it. FortiGate emits exactly this form
   (`<189>date=...`); before P6 it was `kind: none` and the parser would have seen `<189>`.
 
-1.3.0 is additive; every earlier document remains valid and both validators accept all four versions.
+1.3.0 is additive apart from the deprecation above; every earlier document remains valid and both validators accept all four versions.
 
 ## Lessons from executing the drafts (P2)
 

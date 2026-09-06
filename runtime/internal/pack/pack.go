@@ -119,10 +119,9 @@ type Pack struct {
 		SourceTimezone     *string `json:"source_timezone"`
 		TimezoneConfidence string  `json:"timezone_confidence"`
 	} `json:"time"`
-	Anchors         []Anchor `json:"anchors"`
-	TiebreakerField *string  `json:"tiebreaker_field"`
-	Families        []Family `json:"families"`
-	Signing         struct {
+	Anchors  []Anchor `json:"anchors"`
+	Families []Family `json:"families"`
+	Signing  struct {
 		AuthorityID   string `json:"authority_id"`
 		Algorithm     string `json:"algorithm"`
 		SignatureFile string `json:"signature_file"`

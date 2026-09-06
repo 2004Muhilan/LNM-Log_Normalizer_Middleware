@@ -73,7 +73,7 @@ def main(argv=None) -> int:
     r.add_argument("--field"); r.add_argument("--attribute"); r.add_argument("--initiator-ip"); r.add_argument("--sample-line")
     pr = sub.add_parser("promote"); pr.add_argument("--session", required=True); pr.add_argument("--out", required=True); pr.add_argument("--pack-id", required=True)
     mg = sub.add_parser("merge", help="P6: merge promoted single-family packs of one source into a signed source pack (anchors from the vendor table)")
-    mg.add_argument("packs", nargs="+"); mg.add_argument("--out", required=True); mg.add_argument("--pack-id", required=True); mg.add_argument("--vendor"); mg.add_argument("--tiebreaker")
+    mg.add_argument("packs", nargs="+"); mg.add_argument("--out", required=True); mg.add_argument("--pack-id", required=True); mg.add_argument("--vendor")
     a = ap.parse_args(argv)
 
     if a.cmd in ("onboard", "onboard-spec"):
@@ -104,7 +104,7 @@ def main(argv=None) -> int:
         from .discriminators import load_vendor_table
         from .sourcepack import merge
         anchors = load_declared(load_vendor_table(a.vendor)) if a.vendor else []
-        out = merge([Path(p) for p in a.packs], Path(a.out), a.pack_id, anchors, a.tiebreaker)
+        out = merge([Path(p) for p in a.packs], Path(a.out), a.pack_id, anchors)
         print("merged:", out)
         return 0
     s = Session.load(Path(a.session))

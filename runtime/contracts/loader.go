@@ -645,9 +645,6 @@ func (l *Loader) checkPack(doc map[string]any, packDir string) []error {
 			errs = append(errs, fmt.Errorf("%s: held_out.passed > samples", p))
 		}
 	}
-	if tb, ok := doc["tiebreaker_field"].(string); ok && !allPaths[tb] {
-		errs = append(errs, errors.New("tiebreaker_field is not a mapped path in any family"))
-	}
 	h := doc["hashes"].(map[string]any)
 	if sha256Hex([]byte(strings.Join(dslHashes, ""))) != str(h["dsl_hash"]) {
 		errs = append(errs, errors.New("hashes.dsl_hash != sha256 of concatenated family dsl_hash values"))

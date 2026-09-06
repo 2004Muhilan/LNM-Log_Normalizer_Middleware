@@ -20,8 +20,7 @@ def sha(b: bytes) -> str:
     return "sha256:" + hashlib.sha256(b).hexdigest()
 
 
-def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict], tiebreaker_field: str | None = None,
-          key_path: Path = DEFAULT_KEY) -> Path:
+def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict], key_path: Path = DEFAULT_KEY) -> Path:
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -56,7 +55,7 @@ def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict
     pack["pack_id"] = pack_id
     pack["families"] = families
     pack["anchors"] = anchors
-    pack["tiebreaker_field"] = tiebreaker_field
+    pack.pop("tiebreaker_field", None)   # dropped at the P6 boundary; older single-family packs may still carry it as null
     pack["hashes"] = {"parser_hash": sha("".join(parser).encode()), "dsl_hash": sha("".join(dsl).encode()),
                       "mapping_hash": sha("".join(mapping).encode()), "corpus_hash": sha("".join(corpus).encode())}
     (out_dir / "pack.json").write_text(json.dumps(pack, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

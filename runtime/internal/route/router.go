@@ -1,6 +1,7 @@
 // Package route is the compiled routing decision DAG (architecture §3.4, plan P6): L1 envelope,
-// L2 structure detection, L3 anchors, L4 arity/token-class sketch, the hard cap K=4, the per-pack
-// declared tiebreaker, then quarantine. It never executes a parser to find out which one fits
+// L2 structure detection, L3 anchors, L4 arity/token-class sketch, then the hard cap K=4 and
+// quarantine. There is no tiebreaker stage: a secondary discriminator that could be read before
+// parsing is an anchor, and one that cannot would require parsing to route (dropped at the P6 boundary). It never executes a parser to find out which one fits
 // (invariant 6): every stage reads cheap surface facts of the payload — envelope kind, leading bytes,
 // delimiter counts, anchor locators — and only narrows the candidate set. Exactly one survivor routes.
 //
@@ -24,14 +25,15 @@ import (
 	"ulpf/runtime/internal/pack"
 )
 
-// K is the hard cap on the candidate set after L4. A larger set is quarantined without a tiebreaker.
+// K is the hard cap on the candidate set after L4. More than one survivor quarantines with the
+// candidates named; more than K quarantines as a cap breach — the size is what the stats record.
 const K = 4
 
 type Decision struct {
 	Pack      *pack.Pack
 	Family    *pack.Family
 	Signature string // the L1–L4 key the router computed for the event
-	// Candidates is the size of the candidate set after L4 (before the tiebreaker) — the empirical
+	// Candidates is the size of the candidate set after L4 — the empirical
 	// answer to the K=4 question is the distribution of this number.
 	Candidates int
 	Stage      string // when Family is nil: routing | routing_ambiguous | routing_cap | routing_drift
@@ -455,8 +457,13 @@ func (r *Router) Route(payload []byte, env *frame.Envelope) Decision {
 		d.Stage, d.Reason = "routing_cap", fmt.Sprintf("candidate set of %d exceeds K=%d after L4 (quarantined)", len(l4), K)
 		return d
 	}
-	// 2..K candidates: the per-pack declared tiebreaker, then quarantine
-	return r.tiebreak(d, l4, s)
+	// 2..K candidates: quarantine with the candidates named (no tiebreaker stage — see the package doc)
+	ids := make([]string, len(l4))
+	for i, f := range l4 {
+		ids[i] = f.pack.PackID + "/" + f.family.FamilyID
+	}
+	d.Stage, d.Reason = "routing_ambiguous", fmt.Sprintf("%d candidates [%s] share the L1–L4 key (quarantined, not guessed)", len(l4), strings.Join(ids, " "))
+	return d
 }
 
 func dedupe(in []string) []string {
@@ -484,36 +491,6 @@ func sketchMatches(f *fam, toks []string) bool {
 		}
 	}
 	return true
-}
-
-// tiebreak is the DAG's last stage for a candidate set of 2..K. The plan names a per-pack declared
-// tiebreaker here; the contract types it as a field_path, which in general only the parser can
-// evaluate, and gives a family no place to declare the tiebreaker VALUES it owns. Nothing in this phase
-// can therefore select among candidates without parsing — and parsing to route is the try-all path
-// invariant 6 forbids. The outcome at 2..K is quarantine, with the candidates named, whether or not a
-// tiebreaker is declared; the declaration is reported so the operator sees it was not applied. Raised at
-// the P6 boundary: either the tiebreaker becomes a locator with per-family values (parser-pack 1.4.0)
-// or the plan drops it and K-cap → quarantine stands as the rule.
-func (r *Router) tiebreak(d Decision, cands []*fam, s surface) Decision {
-	ids := make([]string, len(cands))
-	p := cands[0].pack
-	same := true
-	for i, f := range cands {
-		ids[i] = f.pack.PackID + "/" + f.family.FamilyID
-		if f.pack != p {
-			same = false
-		}
-	}
-	d.Stage = "routing_ambiguous"
-	switch {
-	case !same:
-		d.Reason = fmt.Sprintf("%d candidates across packs [%s]; a tiebreaker is per pack (quarantined)", len(cands), strings.Join(ids, " "))
-	case p.TiebreakerField == nil:
-		d.Reason = fmt.Sprintf("%d candidates [%s], no tiebreaker declared by pack %s (quarantined)", len(cands), strings.Join(ids, " "), p.PackID)
-	default:
-		d.Reason = fmt.Sprintf("%d candidates [%s]; pack %s declares tiebreaker %s, which cannot be evaluated before parsing (quarantined; raised at the P6 boundary)", len(cands), strings.Join(ids, " "), p.PackID, *p.TiebreakerField)
-	}
-	return d
 }
 
 // Signature computes the interim L1/L2/L4 key for a raw positional event (kept for the P2 tests and

@@ -164,9 +164,9 @@ func TestAnchorDefeatingEventsQuarantine(t *testing.T) {
 	}
 }
 
-// The hard cap and the tiebreaker: 2..K candidates go to the per-pack tiebreaker, then quarantine;
-// more than K quarantine at once.
-func TestCapAndTiebreaker(t *testing.T) {
+// The hard cap and the 2..K case: both quarantine, naming what they saw; anchors — not a tiebreaker —
+// are what separates families that share a surface.
+func TestCapAndAmbiguousQuarantine(t *testing.T) {
 	// five FortiGate families that all own type=traffic: the candidate set is 5 > K
 	p := fgtPack()
 	for _, sub := range []string{"a", "b", "c", "d"} {
@@ -176,21 +176,14 @@ func TestCapAndTiebreaker(t *testing.T) {
 	if d.Family != nil || d.Stage != "routing_cap" || d.Candidates != 5 {
 		t.Fatalf("expected cap quarantine with 5 candidates, got %+v", d)
 	}
-	// two candidates, no tiebreaker declared -> ambiguous quarantine naming both
+	// two candidates -> ambiguous quarantine naming both
 	p = fgtPack()
 	p.Families = append(p.Families, family("fortigate-traffic-2", "rfc3164", "kv", "20-80", map[string][]string{"fortigate-type": {"traffic"}}))
 	d = New(p).Route([]byte(fgtLine), env3164())
-	if d.Family != nil || d.Stage != "routing_ambiguous" || !strings.Contains(d.Reason, "no tiebreaker declared") || d.Candidates != 2 {
+	if d.Family != nil || d.Stage != "routing_ambiguous" || !strings.Contains(d.Reason, "fgt/fortigate-traffic fgt/fortigate-traffic-2") || d.Candidates != 2 {
 		t.Fatalf("expected ambiguous quarantine, got %+v", d)
 	}
-	// a declared tiebreaker is reported, not applied: the contract gives no pre-parse way to evaluate it
-	tb := "policytype"
-	p.TiebreakerField = &tb
-	d = New(p).Route([]byte(fgtLine), env3164())
-	if d.Family != nil || d.Stage != "routing_ambiguous" || !strings.Contains(d.Reason, "declares tiebreaker policytype") {
-		t.Fatalf("expected ambiguous quarantine naming the tiebreaker, got %+v", d)
-	}
-	// when the second anchor (subtype) separates the two families, L3 does it and no tiebreak is needed
+	// when a second anchor (subtype) separates the two families, L3 does it
 	p = fgtPack()
 	p.Families = append(p.Families, family("fortigate-traffic-local", "rfc3164", "kv", "20-80", map[string][]string{"fortigate-type": {"traffic"}, "fortigate-subtype": {"local"}}))
 	p.Families[0].Routing.L3AnchorValues = append(p.Families[0].Routing.L3AnchorValues, pack.AnchorValues{AnchorID: "fortigate-subtype", Values: []string{"forward"}})
@@ -198,11 +191,11 @@ func TestCapAndTiebreaker(t *testing.T) {
 	if d.Family == nil || d.Family.FamilyID != "fortigate-traffic" || d.Candidates != 1 {
 		t.Fatalf("subtype anchor should separate the families at L3: %+v", d)
 	}
-	// two candidates from two packs: never tiebroken
+	// two candidates from two packs quarantine the same way
 	q := fgtPack()
 	q.PackID = "fgt-copy"
 	d = New(fgtPack(), q).Route([]byte(fgtLine), env3164())
-	if d.Family != nil || !strings.Contains(d.Reason, "across packs") {
+	if d.Family != nil || d.Stage != "routing_ambiguous" || !strings.Contains(d.Reason, "fgt-copy/") {
 		t.Fatalf("cross-pack candidates must quarantine: %+v", d)
 	}
 }

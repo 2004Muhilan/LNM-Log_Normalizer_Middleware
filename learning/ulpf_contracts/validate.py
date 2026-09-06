@@ -15,7 +15,7 @@ PINNED_INDEX = ROOT / "ocsf" / "pinned" / "index.json"
 
 KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack", "normalized-event", "ml-feature")
 SUPPORTED_VERSIONS = {kind: {"1.0.0", "1.1.0"} for kind in KINDS}
-SUPPORTED_VERSIONS["ml-feature"] = {"0.1.0"}   # P6 DRAFT: the ML feature tuple (requirement h); raised as a sixth contract, not frozen
+SUPPORTED_VERSIONS["ml-feature"] = {"1.0.0"}   # P6 boundary: the ML feature tuple (requirement h), the sixth contract
 SUPPORTED_VERSIONS["parser-pack"] = {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}  # P5: proposal provenance, live signing; P6: envelope-sourced mappings
 SUPPORTED_VERSIONS["normalized-event"] = {"1.0.0", "1.1.0", "1.2.0"}   # P5: _lineage.envelope
 FORBIDDEN_KEYS = {"confidence", "probability", "score", "likelihood"}
@@ -370,8 +370,6 @@ def _check_pack(doc: dict, pack_dir: Path | None) -> list[str]:
                 errs.append(f"{p}.resolutions[{i}]: propagation_scope.source_id != source.source_id")
         if fam["validation"]["held_out"]["passed"] > fam["validation"]["held_out"]["samples"]:
             errs.append(f"{p}: held_out.passed > samples")
-    if doc["tiebreaker_field"] is not None and doc["tiebreaker_field"] not in all_paths:
-        errs.append("tiebreaker_field is not a mapped path in any family")
     if sha256_bytes("".join(dsl_hashes).encode()) != doc["hashes"]["dsl_hash"]:
         errs.append("hashes.dsl_hash != sha256 of concatenated family dsl_hash values")
     if sha256_bytes("".join(mapping_hashes).encode()) != doc["hashes"]["mapping_hash"]:
