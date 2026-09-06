@@ -1,0 +1,101 @@
+# Fortinet FortiOS traffic log reference -> OCSF network_activity (4001). VENDOR SCHEMA evidence (the
+# FortiOS Log Reference, traffic/forward). Keys are the KV keys themselves (the draft spec declares 73).
+vendor: Fortinet
+product: FortiGate
+event_class_uid: 4001
+declared_envelope: rfc3164          # FortiGate emits `<PRI>` + KV; the corpus lines carry PRI only (no header) — envelope kind none after PRI
+transport_hint: syslog-udp
+timezone_confidence: unresolved
+null_values: ["N/A"]
+document: "FortiOS Log Message Reference — traffic: forward / local"
+
+anchors:
+  - anchor_id: fortigate-type
+    locator: { kind: key, key: type }
+    expected_value_domain: { kind: enum, values: ["traffic", "event", "utm"] }
+    admission_basis: declared_domain
+    utility_note: "vendor log type key; present on every FortiGate line"
+  - anchor_id: fortigate-subtype
+    locator: { kind: key, key: subtype }
+    expected_value_domain: { kind: enum, values: ["forward", "local", "multicast", "sniffer", "system", "vpn", "user", "router", "wireless", "wad", "endpoint", "ha", "security-rating", "fortiextender", "connector", "webfilter", "virus", "ips", "app-ctrl", "dlp", "anomaly", "voip", "ssl", "waf", "dns", "emailfilter", "ssh", "file-filter"] }
+    admission_basis: declared_domain
+    utility_note: "vendor subtype catalogue"
+
+families:
+  fortigate-traffic: { anchor_values: { fortigate-type: ["traffic"] }, l2: kv, arity_bucket: "20-80", severity_id: 1, activity_id: 6 }
+
+fields:
+  date:        { unmapped_name: date, description: "device-local date; date+time need compose_datetime (P6 later); eventtime carries the event time" }
+  time:        { unmapped_name: time }
+  tz:          { unmapped_name: tz }
+  eventtime:   { attribute: time, mandatory: true, description: "epoch, precision differs by FortiOS version (epoch_auto in the spec)" }
+  devname:     { attribute: device.name }
+  devid:       { attribute: device.uid }
+  logid:       { attribute: metadata.event_code }
+  type:        { attribute: metadata.log_name }
+  subtype:     { attribute: activity_name }
+  level:       { attribute: severity }
+  vd:          { unmapped_name: vd }
+  srcip:       { attribute: src_endpoint.ip, mandatory: true }
+  srcport:     { attribute: src_endpoint.port, transform: { kind: int } }
+  srcintf:     { attribute: src_endpoint.interface_name }
+  srcintfrole: { unmapped_name: srcintfrole }
+  srcmac:      { attribute: src_endpoint.mac }
+  mastersrcmac: { unmapped_name: mastersrcmac }
+  srcserver:   { unmapped_name: srcserver }
+  srcuuid:     { attribute: src_endpoint.uid }
+  srccountry:  { attribute: src_endpoint.location.country }
+  dstip:       { attribute: dst_endpoint.ip, mandatory: true }
+  dstport:     { attribute: dst_endpoint.port, transform: { kind: int } }
+  dstintf:     { attribute: dst_endpoint.interface_name }
+  dstintfrole: { unmapped_name: dstintfrole }
+  dstuuid:     { attribute: dst_endpoint.uid }
+  dstcountry:  { attribute: dst_endpoint.location.country }
+  sessionid:   { attribute: connection_info.uid }
+  proto:       { attribute: connection_info.protocol_num, transform: { kind: int } }
+  action:      { attribute: action,
+                 also: [{ attribute: action_id, mandatory: true, transform: { kind: lookup, lookup: { accept: 1, close: 1, "client-rst": 1, "server-rst": 1, timeout: 1, deny: 2, block: 2, blocked: 2, dropped: 2, ip-conn: 2 }, default: 99 }, description: "FortiOS action mapped onto the action_id enum" }] }
+  utmaction:   { unmapped_name: utmaction }
+  utmref:      { unmapped_name: utmref }
+  policyid:    { attribute: firewall_rule.uid }
+  policyname:  { attribute: firewall_rule.name }
+  policytype:  { attribute: firewall_rule.type }
+  poluuid:     { unmapped_name: poluuid }
+  service:     { unmapped_name: service }
+  trandisp:    { unmapped_name: trandisp }
+  transip:     { unmapped_name: transip }
+  transport:   { unmapped_name: transport }
+  duration:    { attribute: duration, transform: { kind: int } }
+  sentbyte:    { attribute: traffic.bytes_out, transform: { kind: int } }
+  rcvdbyte:    { attribute: traffic.bytes_in, transform: { kind: int } }
+  sentpkt:     { attribute: traffic.packets_out, transform: { kind: int } }
+  rcvdpkt:     { attribute: traffic.packets_in, transform: { kind: int } }
+  sentdelta:   { unmapped_name: sentdelta }
+  rcvddelta:   { unmapped_name: rcvddelta }
+  lanin:       { unmapped_name: lanin }
+  lanout:      { unmapped_name: lanout }
+  wanin:       { unmapped_name: wanin }
+  wanout:      { unmapped_name: wanout }
+  app:         { attribute: app_name }
+  appid:       { unmapped_name: appid }
+  appcat:      { unmapped_name: appcat }
+  apprisk:     { unmapped_name: apprisk }
+  applist:     { unmapped_name: applist }
+  appact:      { unmapped_name: appact }
+  countapp:    { unmapped_name: countapp }
+  countav:     { unmapped_name: countav }
+  countdlp:    { unmapped_name: countdlp }
+  countips:    { unmapped_name: countips }
+  countweb:    { unmapped_name: countweb }
+  crscore:     { unmapped_name: crscore }
+  craction:    { unmapped_name: craction }
+  crlevel:     { unmapped_name: crlevel }
+  user:        { attribute: src_endpoint.owner.name }
+  group:       { unmapped_name: group }
+  authserver:  { unmapped_name: authserver }
+  identifier:  { unmapped_name: identifier }
+  devtype:     { unmapped_name: devtype }
+  devcategory: { unmapped_name: devcategory }
+  osname:      { attribute: src_endpoint.os.name }
+  vwlid:       { unmapped_name: vwlid }
+  vwlquality:  { unmapped_name: vwlquality }

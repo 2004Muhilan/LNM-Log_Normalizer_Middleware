@@ -79,6 +79,8 @@ def evaluate(plan: Plan, spec: dict, samples: list[bytes]) -> Verdict:
             mapped[m.attribute] = (slot, part, m)
     for m in plan.constants:
         mapped[m.attribute] = (None, None, m)
+    for e in plan.envelope_mappings:
+        mapped[e.attribute] = (None, None, e)   # envelope-sourced (1.3.0): judged by its provenance like any mapping
     report, determinations = [], []
     sufficient_count = 0
     for attr in mandatory:

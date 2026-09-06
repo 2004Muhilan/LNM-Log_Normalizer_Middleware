@@ -81,6 +81,8 @@ def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analy
         cats = {m.provenance.get("category") for m in part.mappings}
         if part.mappings and cats <= SUFFICIENT:
             continue
+        if not part.mappings and not part.candidates and part.proposed_by not in ("fixture", "model"):
+            continue  # named by evidence as a vendor extension (unmapped), not a proposal: nothing to resolve
         # every field without sufficient provenance is pending: configuration/documentation evidence
         # resolves all of them at once (the trace's "resolves both, plus positions 2, 4, 9")
         pending_fields.append(part.field)

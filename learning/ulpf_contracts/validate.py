@@ -13,9 +13,10 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts"
 PINNED_INDEX = ROOT / "ocsf" / "pinned" / "index.json"
 
-KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack", "normalized-event")
+KINDS = ("parser-spec", "span-map", "ambiguity-certificate", "parser-pack", "normalized-event", "ml-feature")
 SUPPORTED_VERSIONS = {kind: {"1.0.0", "1.1.0"} for kind in KINDS}
-SUPPORTED_VERSIONS["parser-pack"] = {"1.0.0", "1.1.0", "1.2.0"}        # P5: proposal provenance, live signing
+SUPPORTED_VERSIONS["ml-feature"] = {"0.1.0"}   # P6 DRAFT: the ML feature tuple (requirement h); raised as a sixth contract, not frozen
+SUPPORTED_VERSIONS["parser-pack"] = {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}  # P5: proposal provenance, live signing; P6: envelope-sourced mappings
 SUPPORTED_VERSIONS["normalized-event"] = {"1.0.0", "1.1.0", "1.2.0"}   # P5: _lineage.envelope
 FORBIDDEN_KEYS = {"confidence", "probability", "score", "likelihood"}
 CONSUMING_OPS = {"literal", "regex", "csv", "kv", "positional", "quoted", "optional", "repeated"}
@@ -399,7 +400,7 @@ def validate_document(kind: str, doc, pack_dir: Path | None = None) -> list[str]
         return _check_span_map(doc)
     if kind == "ambiguity-certificate":
         return _check_certificate(doc)
-    if kind == "normalized-event":
+    if kind in ("normalized-event", "ml-feature"):
         return _forbidden_keys(doc)
     return _check_pack(doc, pack_dir)
 

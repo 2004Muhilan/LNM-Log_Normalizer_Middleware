@@ -24,7 +24,7 @@
     "parser_version": "1.0",
     "processing_time": 1734567890481,
     "raw_hash": "sha256:b6bf09bdddc9b70a39a856ee4ed153964dbb91c435e5a64bb7e721fc9ffca00b",
-    "routing_signature": "raw|positional|10|float,integer,ipv4,text,integer,word,url,word,text,text",
+    "routing_signature": "raw|tokens||10|float,integer,ipv4,text,integer,word,url,word,text,text",
     "schema_version": "1.2.0",
     "segment_id": "seg_00000",
     "source_id": "squid-proxy-01",

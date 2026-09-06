@@ -174,3 +174,69 @@ def mandatory_for(plan: Plan) -> set[str]:
 
 
 _ = re  # kept for lexer extension
+
+
+# ---------------------------------------------------------------- vendor_schema_field_order (P6)
+
+VENDOR_TABLES.update({
+    "cisco-asa": ROOT / "library" / "vendor-tables" / "cisco-asa.yaml",
+    "paloalto-panos": ROOT / "library" / "vendor-tables" / "panos-traffic.yaml",
+    "fortinet-fortigate": ROOT / "library" / "vendor-tables" / "fortigate-traffic.yaml",
+})
+
+
+def apply_vendor_schema(plan: Plan, vendor: str, family_id: str, mandatory: set[str], operator_id: str, cert_for_slot: dict[int, str]) -> tuple[Plan, list[str]]:
+    """vendor_schema_field_order: the vendor's field-order documentation names every field of a
+    structured format (ASA message guide, PAN-OS field reference, FortiOS log reference). The plan's
+    parts carry the spec's field names (hand-authored draft or kv keys); each name found in the vendor
+    table is resolved with provenance vendor_schema_or_device_configuration. Names the table does not
+    know stay unevidenced — the table never guesses. Per-family constants (action_id, severity_id,
+    activity_id) and envelope-sourced mappings (ASA's time from the syslog header) come from the table too."""
+    table = load_vendor_table(vendor)
+    fam = (table.get("families") or {}).get(family_id, {})
+    doc = table.get("document", vendor)
+    new = copy.deepcopy(plan)
+    new.family_id = family_id
+    new.null_values = list(table.get("null_values", []))
+    new.source_timezone = table.get("source_timezone")
+    new.timezone_confidence = table.get("timezone_confidence", "unresolved")
+    resolved: list[str] = []
+    for slot, part in new.parts():
+        entry = table["fields"].get(part.field)
+        if entry is None:
+            continue
+        prov = {"category": "vendor_schema_or_device_configuration", "discriminator_id": "vendor_schema_field_order",
+                "evidence_ref": f"{doc}: {part.field}" + (f" — {entry['description']}" if entry.get("description") else "")}
+        if slot.index in cert_for_slot:
+            prov["certificate_id"] = cert_for_slot[slot.index]
+        part.mappings = []
+        part.candidates = []
+        part.unmapped_name = entry.get("unmapped_name")
+        if entry.get("attribute"):
+            part.mappings.append(Mapping(entry["attribute"], dict(prov), copy.deepcopy(entry.get("transform")), bool(entry.get("mandatory")) or entry["attribute"] in mandatory))
+        for also in entry.get("also", []):
+            part.mappings.append(Mapping(also["attribute"], {**prov, "evidence_ref": f"{doc}: {part.field} — {also.get('description', '')}"},
+                                         copy.deepcopy(also.get("transform")), bool(also.get("mandatory")) or also["attribute"] in mandatory))
+        resolved.append(part.field)
+    new.constants = []
+    for attr in ("action_id", "severity_id", "activity_id"):
+        if fam.get(attr) is not None:
+            new.constants.append(Mapping(attr, {"category": "vendor_schema_or_device_configuration", "discriminator_id": "vendor_schema_field_order",
+                                               "evidence_ref": f"{doc}: {family_id} {attr} is fixed by the message/log type"},
+                                         {"constant": fam[attr]}, attr in mandatory))
+    new.envelope_mappings = []
+    for field_name, e in (table.get("envelope_fields") or {}).items():
+        from .plan import EnvelopeMapping
+        new.envelope_mappings.append(EnvelopeMapping(field_name, e["attribute"],
+                                                     {"category": "vendor_schema_or_device_configuration", "discriminator_id": "vendor_schema_field_order",
+                                                      "evidence_ref": f"{doc}: {e.get('description', field_name)}"},
+                                                     copy.deepcopy(e.get("transform")), bool(e.get("mandatory")) or e["attribute"] in mandatory))
+    return new, resolved
+
+
+def vendor_table_meta(vendor: str, family_id: str) -> dict:
+    """Pack-level facts the vendor table declares: source identity, anchors, and the family's routing declaration."""
+    table = load_vendor_table(vendor)
+    fam = (table.get("families") or {}).get(family_id, {})
+    return {"vendor": table.get("vendor"), "product": table.get("product"), "declared_envelope": table.get("declared_envelope", "raw"),
+            "transport_hint": table.get("transport_hint", "file"), "anchors": table.get("anchors", []), "family": fam}

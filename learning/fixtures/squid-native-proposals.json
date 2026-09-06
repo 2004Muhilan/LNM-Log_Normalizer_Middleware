@@ -6,16 +6,141 @@
       "event_class_uid": 4002,
       "event_class_name": "http_activity",
       "slots": {
-        "1": { "candidates": ["time"], "note": "Unix epoch with millis" },
-        "2": { "candidates": ["duration", "http_response.latency"], "note": "small integer, ms-scaled: whole-transaction time or time to first byte" },
-        "3": { "candidates": ["src_endpoint.ip", "dst_endpoint.ip"] },
-        "4": { "candidates": [], "sub_split": "/", "note": "'/'-joined pair: cache disposition and HTTP status" },
-        "5": { "candidates": ["traffic.bytes_out", "traffic.bytes_in", "traffic.bytes"], "note": "single unlabelled counter" },
-        "6": { "candidates": ["http_request.http_method"], "note": "GET, CONNECT" },
-        "7": { "candidates": ["http_request.url.url_string"], "note": "parseable URL" },
-        "8": { "candidates": [], "unmapped_name": "user", "note": "constant '-' in the samples" },
-        "9": { "candidates": [], "sub_split": "/", "note": "hierarchy code and upstream address" },
-        "10": { "candidates": ["http_response.content_type"], "note": "MIME type" }
+        "1": {
+          "candidates": [
+            "time"
+          ],
+          "note": "Unix epoch with millis"
+        },
+        "2": {
+          "candidates": [
+            "duration",
+            "http_response.latency"
+          ],
+          "note": "small integer, ms-scaled: whole-transaction time or time to first byte"
+        },
+        "3": {
+          "candidates": [
+            "src_endpoint.ip",
+            "dst_endpoint.ip"
+          ]
+        },
+        "4": {
+          "candidates": [],
+          "sub_split": "/",
+          "note": "'/'-joined pair: cache disposition and HTTP status"
+        },
+        "5": {
+          "candidates": [
+            "traffic.bytes_out",
+            "traffic.bytes_in",
+            "traffic.bytes"
+          ],
+          "note": "single unlabelled counter"
+        },
+        "6": {
+          "candidates": [
+            "http_request.http_method"
+          ],
+          "note": "GET, CONNECT"
+        },
+        "7": {
+          "candidates": [
+            "http_request.url.url_string"
+          ],
+          "note": "parseable URL"
+        },
+        "8": {
+          "candidates": [],
+          "unmapped_name": "user",
+          "note": "constant '-' in the samples"
+        },
+        "9": {
+          "candidates": [],
+          "sub_split": "/",
+          "note": "hierarchy code and upstream address"
+        },
+        "10": {
+          "candidates": [
+            "http_response.content_type"
+          ],
+          "note": "MIME type"
+        }
+      }
+    },
+    "11": {
+      "event_class_uid": 4002,
+      "event_class_name": "http_activity",
+      "slots": {
+        "1": {
+          "candidates": [
+            "time"
+          ],
+          "note": "Unix epoch with millis"
+        },
+        "2": {
+          "candidates": [
+            "duration",
+            "http_response.latency"
+          ],
+          "note": "small integer, ms-scaled: whole-transaction time or time to first byte"
+        },
+        "3": {
+          "candidates": [
+            "src_endpoint.ip",
+            "dst_endpoint.ip"
+          ]
+        },
+        "4": {
+          "candidates": [],
+          "sub_split": "/",
+          "note": "'/'-joined pair: cache disposition and HTTP status"
+        },
+        "5": {
+          "candidates": [
+            "traffic.bytes_out",
+            "traffic.bytes_in",
+            "traffic.bytes"
+          ],
+          "note": "single unlabelled counter"
+        },
+        "6": {
+          "candidates": [
+            "http_request.http_method"
+          ],
+          "note": "GET, CONNECT"
+        },
+        "7": {
+          "candidates": [
+            "http_request.url.url_string"
+          ],
+          "note": "parseable URL"
+        },
+        "8": {
+          "candidates": [],
+          "unmapped_name": "user",
+          "note": "constant '-' in the samples"
+        },
+        "9": {
+          "candidates": [],
+          "sub_split": "/",
+          "note": "hierarchy code and upstream address"
+        },
+        "10": {
+          "candidates": [
+            "http_response.content_type"
+          ],
+          "note": "MIME type"
+        },
+        "11": {
+          "candidates": [
+            "http_request.length"
+          ],
+          "note": "request size in bytes (a second, wider Squid family: the same logformat plus %>st)"
+        }
+      },
+      "notes": {
+        "second_family": "synthetic 11-slot family for the P6 propagation demo: slots 1-10 identical to the 10-slot family"
       }
     }
   }

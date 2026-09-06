@@ -15,7 +15,7 @@ from .acceptance import Verdict, policy_for
 from .plan import Plan
 from .signing import DEFAULT_KEY as DEFAULT_SIGNING_KEY
 
-PACK_SCHEMA_VERSION = "1.2.0"   # P5: proposal provenance + live signing (additive over 1.1.0)
+PACK_SCHEMA_VERSION = "1.3.0"   # P6: envelope_field mapping source + timestamp transform (additive over 1.2.0)
 
 
 def proposal_provenance_block(prov: dict | None, model_hash: str) -> dict:
@@ -56,7 +56,9 @@ def parser_hash(spec_path: Path) -> str:
 
 def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict], resolutions: list[dict],
               samples: bytes, sample_count: int, operator_id: str, pack_id: str, out_dir: Path, created_at: str,
-              routing_sketch: dict, library_version: str, proposal_provenance: dict | None = None, key_path: Path | None = None) -> Path:
+              routing_sketch: dict, library_version: str, proposal_provenance: dict | None = None, key_path: Path | None = None,
+              family_id: str | None = None, source_meta: dict | None = None, anchors: list[dict] | None = None,
+              anchor_values: dict[str, list[str]] | None = None) -> Path:
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -77,10 +79,12 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
     dsl_hash = sha(spec_bytes)
     p_hash = parser_hash(spec_path)
     family = {
-        "family_id": f"positional-{len(plan.slots)}",
-        "description": f"{plan.event_class_name} family induced from {sample_count} operator-supplied samples and resolved by device configuration.",
+        "family_id": family_id or f"positional-{len(plan.slots)}",
+        "description": (f"{plan.event_class_name} family: structure given by {spec['spec_id']}, fields resolved against the vendor's field-order documentation over {sample_count} samples."
+                        if plan.given_spec is not None else
+                        f"{plan.event_class_name} family induced from {sample_count} operator-supplied samples and resolved by device configuration."),
         "event_class_uid": plan.event_class_uid,
-        "routing_signature": routing_sketch,
+        "routing_signature": {**routing_sketch, **({"l3_anchor_values": [{"anchor_id": k, "values": v} for k, v in anchor_values.items()]} if anchor_values else {})},
         "parser": {"spec_ref": f"specs/{spec['spec_id']}.json", "spec_id": spec["spec_id"], "dsl_hash": dsl_hash, "parser_hash": p_hash},
         "mapping": {"mapping_version": "1.0", "mapping_hash": mapping_hash, "fields": fields, "unmapped": plan.unmapped(),
                     "acceptance_snapshot": {"mandatory_attributes": list(pol["mandatory_attributes"]), "semantic_budget": pol["semantic_budget"]}},
@@ -92,13 +96,13 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
     }
     pack = {
         "schema_version": PACK_SCHEMA_VERSION, "pack_id": pack_id, "pack_version": "1.0", "created_at": created_at,
-        "source": {"source_id": plan.source_id, "vendor": "Squid", "product": "Squid Cache", "declared_envelope": "raw", "transport_hint": "file"},
+        "source": {"source_id": plan.source_id, **(source_meta or {"vendor": "Squid", "product": "Squid Cache", "declared_envelope": "raw", "transport_hint": "file"})},
         "ocsf": {"version": "1.3.0", "pinned_classes": [{"uid": cls["uid"], "name": cls["name"], "table_hash": cls["table_hash"]}]},
         "acceptance": {"policy_version": "1.0.0"},
         "time": {"source_timezone": plan.source_timezone, "timezone_confidence": plan.timezone_confidence},
-        "anchors": [], "tiebreaker_field": None,
+        "anchors": list(anchors or []), "tiebreaker_field": None,
         "families": [family],
-        "provenance": {"generator_version": "ulpf-gen-0.4", "validator_version": "ulpf-val-0.4", "model_hash": plan.model_hash, "discriminator_library_version": library_version,
+        "provenance": {"generator_version": "ulpf-gen-0.6", "validator_version": "ulpf-val-0.6", "model_hash": plan.model_hash, "discriminator_library_version": library_version,
                        "proposal": proposal_provenance_block(proposal_provenance, plan.model_hash)},
         "hashes": {"parser_hash": sha(p_hash.encode()), "dsl_hash": sha(dsl_hash.encode()), "mapping_hash": sha(mapping_hash.encode()), "corpus_hash": sha(samples)},
         "signing": {"authority_id": "ulpf-pack-authority-dev", "algorithm": "ed25519", "signature_file": "pack.json.sig"},

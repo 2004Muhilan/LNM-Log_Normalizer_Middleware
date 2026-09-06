@@ -1,0 +1,83 @@
+# Cisco ASA syslog message reference -> OCSF network_activity (4001). VENDOR SCHEMA evidence: the field
+# names are the draft specs' names (drafts/sufficiency/asa-*.json), which follow the message guide's
+# field order; applying this table resolves every named field with provenance
+# vendor_schema_or_device_configuration (discriminator vendor_schema_field_order). Fields with no OCSF
+# attribute are carried as vendor extensions under `unmapped`.
+vendor: Cisco
+product: ASA
+event_class_uid: 4001
+declared_envelope: rfc3164          # ASA emits syslog; the corpus fixtures are relay-form 3164 with a year
+transport_hint: syslog-udp
+timezone_confidence: unresolved     # the header clock is the device's; zone not declared in the message
+document: "Cisco Secure Firewall ASA Series Syslog Messages (message ids 106023, 106100, 302013, 302014, 305011, 733100)"
+
+# The event time is the syslog header timestamp (the payload carries none): an ENVELOPE-sourced mapping.
+envelope_fields:
+  hostname:
+    attribute: device.hostname
+    description: "syslog header HOSTNAME; the ASA `logging host` path stamps the device's own hostname (or IP when `logging device-id` is unset)"
+  timestamp:
+    attribute: time
+    mandatory: true
+    transform: { kind: timestamp, format: { kind: rfc3164, assume_year: ingest, timezone: source } }
+    description: "syslog header timestamp; ASA stamps it from the device clock (relay-form fixtures carry a year, which the rfc3164 kind accepts)"
+
+# Anchors: the message id is the family discriminator — a DECLARED value domain (the vendor's message ids).
+anchors:
+  - anchor_id: asa-message-id
+    locator: { kind: pattern, pattern: "%(?:ASA|FTD|PIX)-(?:[a-z]+-)?[0-7]-(?P<anchor>[0-9]{6})" }
+    expected_value_domain: { kind: enum, values: ["106023", "106100", "302013", "302014", "302015", "302016", "305011", "305012", "733100"] }
+    admission_basis: declared_domain
+    utility_note: "vendor message catalogue"
+
+# Per-family structural declaration for routing (l2 template = regex-anchored message body).
+families:
+  asa-302013: { anchor_values: ["302013"], l2: template, action_id: 1, severity_id: 1, activity_id: 1 }
+  asa-302014: { anchor_values: ["302014", "302016"], l2: template, action_id: 1, severity_id: 1, activity_id: 2 }
+  asa-106023: { anchor_values: ["106023"], l2: template, action_id: 2, severity_id: 2, activity_id: 6 }
+  asa-305011: { anchor_values: ["305011", "305012"], l2: template, action_id: 1, severity_id: 1, activity_id: 6 }
+  asa-106100: { anchor_values: ["106100"], l2: template, action_id: null, severity_id: 1, activity_id: 6 }
+  asa-733100: { anchor_values: ["733100"], l2: template, action_id: null, severity_id: 3, activity_id: 6 }
+
+fields:
+  msg_id:          { attribute: metadata.event_code, description: "syslog message id" }
+  direction:       { attribute: connection_info.direction, description: "inbound|outbound as the ASA saw it" }
+  proto:           { attribute: connection_info.protocol_name, transform: { kind: lowercase }, description: "TCP/UDP/SCTP/ICMP" }
+  conn_id:         { attribute: connection_info.uid, description: "ASA connection id" }
+  src_if:          { attribute: src_endpoint.interface_name }
+  src_host:        { attribute: src_endpoint.ip, mandatory: true, description: "source address (a hostname when name resolution is on: then hostname, see hostnames.log)" }
+  src_port:        { attribute: src_endpoint.port, transform: { kind: int } }
+  src_mapped_host: { unmapped_name: src_nat_ip, description: "NAT-mapped source; OCSF 1.3 network_activity has no NAT attribute" }
+  src_mapped_port: { unmapped_name: src_nat_port }
+  src_user:        { attribute: src_endpoint.owner.name }
+  dst_if:          { attribute: dst_endpoint.interface_name }
+  dst_host:        { attribute: dst_endpoint.ip, mandatory: true }
+  dst_port:        { attribute: dst_endpoint.port, transform: { kind: int } }
+  dst_mapped_host: { unmapped_name: dst_nat_ip }
+  dst_mapped_port: { unmapped_name: dst_nat_port }
+  dst_user:        { attribute: dst_endpoint.owner.name }
+  user:            { attribute: actor.user.name }
+  src_user_paren:  { unmapped_name: src_user_paren }
+  dst_user_paren:  { unmapped_name: dst_user_paren }
+  duration_hms:    { unmapped_name: duration_hms, description: "h:mm:ss; the DSL has no duration coercion yet" }
+  bytes:           { attribute: traffic.bytes, transform: { kind: int } }
+  teardown_reason: { unmapped_name: teardown_reason }
+  src_annotation:  { unmapped_name: src_annotation }
+  dst_annotation:  { unmapped_name: dst_annotation }
+  icmp_type:       { unmapped_name: icmp_type }
+  icmp_code:       { unmapped_name: icmp_code }
+  acl:             { attribute: firewall_rule.name }
+  acl_hash_1:      { unmapped_name: acl_hash_1 }
+  acl_hash_2:      { unmapped_name: acl_hash_2 }
+  action:          { attribute: action, description: "permitted|denied (106100)" }
+  hit_count:       { attribute: count, transform: { kind: int } }
+  interval:        { unmapped_name: interval }
+  event:           { attribute: activity_name, description: "Built|Teardown (305011)" }
+  nat_type:        { unmapped_name: nat_type }
+  object:          { unmapped_name: object }
+  rate_id:         { unmapped_name: rate_id }
+  burst_rate:      { unmapped_name: burst_rate }
+  burst_rate_max:  { unmapped_name: burst_rate_max }
+  average_rate:    { unmapped_name: average_rate }
+  average_rate_max: { unmapped_name: average_rate_max }
+  cumulative_total: { unmapped_name: cumulative_total }

@@ -200,8 +200,15 @@ func parseTimestamp(f spec.TSFormat, val string, env Env) (int64, string, error)
 		}
 		return t.UnixMilli(), "", nil
 	case "rfc3164":
-		// "Jan  2 15:04:05" — no year, no zone.
+		// "Jan  2 15:04:05" — no year, no zone; relays (and the Beats ASA fixtures) also emit the
+		// year form "Jan  2 2006 15:04:05", which carries its own year and needs no assumption.
+		hasYear := false
 		t, err := time.Parse("Jan _2 15:04:05", val)
+		if err != nil {
+			if t2, err2 := time.Parse("Jan _2 2006 15:04:05", val); err2 == nil {
+				t, err, hasYear = t2, nil, true
+			}
+		}
 		if err != nil {
 			return 0, "", err
 		}
@@ -211,6 +218,9 @@ func parseTimestamp(f spec.TSFormat, val string, env Env) (int64, string, error)
 		}
 		if yy, ok := json0(f.AssumeYear).year(); ok {
 			year = yy
+		}
+		if hasYear {
+			year = t.Year()
 		}
 		loc := time.UTC
 		if env.SourceLocation != nil {
@@ -418,4 +428,12 @@ func parsePattern(f spec.TSFormat, val string, env Env) (int64, string, error) {
 		}
 	}
 	return t.UnixMilli(), "", nil
+}
+
+// ParseTimestamp is the exported timestamp parser for values that do not come from a span — the
+// envelope header timestamp mapped by a 1.3.0 pack (`envelope_field: timestamp`). Same code, same
+// windows, same rollover rule as the coerce op, so both paths agree with the reference executor.
+func ParseTimestamp(f spec.TSFormat, val string, env Env) (int64, error) {
+	ms, _, err := parseTimestamp(f, val, env)
+	return ms, err
 }

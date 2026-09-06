@@ -220,11 +220,19 @@ def parse_timestamp(fmt: dict, val: str, env: "Env") -> tuple[int, str]:
         dt = datetime.fromisoformat(m.group(1) + frac + m.group(3))
         return int(dt.timestamp() * 1000), ""
     if kind == "rfc3164":
-        dt = datetime.strptime(val, "%b %d %H:%M:%S")
+        # "Jan  2 15:04:05" (no year) or the relay form "Jan  2 2006 15:04:05" (year carried; mirrors Go)
+        has_year = False
+        try:
+            dt = datetime.strptime(val, "%b %d %H:%M:%S")
+        except ValueError:
+            dt = datetime.strptime(val, "%b %d %Y %H:%M:%S")
+            has_year = True
         year = env.ingest_time.year if env.ingest_time else datetime.now(timezone.utc).year
         ay = fmt.get("assume_year")
         if isinstance(ay, int):
             year = ay
+        if has_year:
+            year = dt.year
         tz = env.source_tz or timezone.utc
         t = datetime(year, dt.month, dt.day, dt.hour, dt.minute, dt.second, 0, tz)
         if env.ingest_time and t > env.ingest_time + timedelta(hours=48):

@@ -24,7 +24,8 @@ func TestUnwrapRFC5424(t *testing.T) {
 
 func TestUnwrapRFC3164Forms(t *testing.T) {
 	cases := []struct{ raw, host, app, proc, payload string }{
-		{"<189>date=2020-04-23 time=01:16:08 devname=\"fw\" type=\"traffic\"", "", "", "", ""}, // PRI without a header: not 3164 -> none
+		{"<189>date=2020-04-23 time=01:16:08 devname=\"fw\" type=\"traffic\"", "-", "", "", "date=2020-04-23 time=01:16:08 devname=\"fw\" type=\"traffic\""}, // PRI-only (RFC 3164 §4.3.3, FortiGate): envelope is the PRI alone
+		{"date=2020-04-23 time=01:16:08 devname=\"fw\"", "", "", "", ""},                                                                                     // no PRI, no header: none
 		{"<34>Oct 11 22:14:15 mymachine su: 'su root' failed for lonvick on /dev/pts/8", "mymachine", "su", "", "'su root' failed for lonvick on /dev/pts/8"},
 		{"Oct 10 2018 12:34:56 localhost CiscoASA[999]: %ASA-6-302013: Built outbound TCP connection 11757", "localhost", "CiscoASA", "999", "%ASA-6-302013: Built outbound TCP connection 11757"},
 		{"Nov 30 16:09:08 PA-220 1,2018/11/30 16:09:07,012801096514,TRAFFIC,end", "PA-220", "", "", "1,2018/11/30 16:09:07,012801096514,TRAFFIC,end"},
@@ -39,6 +40,12 @@ func TestUnwrapRFC3164Forms(t *testing.T) {
 			continue
 		}
 		got := c.raw[e.PayloadOffset : e.PayloadOffset+e.PayloadLength]
+		if c.host == "-" { // PRI-only: no hostname, priority carried
+			if e.Kind != "rfc3164" || e.Priority == nil || *e.Priority != 189 || e.Hostname != "" || got != c.payload {
+				t.Fatalf("case %d: %+v payload=%q", i, e, got)
+			}
+			continue
+		}
 		if e.Kind != "rfc3164" || e.Hostname != c.host || e.AppName != c.app || e.ProcID != c.proc || got != c.payload {
 			t.Fatalf("case %d: %+v payload=%q", i, e, got)
 		}

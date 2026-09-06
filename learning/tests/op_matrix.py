@@ -136,7 +136,8 @@ vec("coerce-textual-ts", spec("m-coerce-ts2", ws_positional([
     {"step": {"op": "quoted", "open": "(", "close": ")", "escape": "none", "content": cell("d", "text", coerce=coerce("timestamp", formats=[{"kind": "pattern", "pattern": "%Y/%m/%d %H:%M:%S", "timezone": "source"}, {"kind": "rfc3339", "timezone": "in_value"}]))}},
     {"step": {"op": "quoted", "open": "<", "close": ">", "escape": "none", "content": cell("e", "text", coerce=coerce("timestamp", format={"kind": "rfc3164", "assume_year": "ingest", "timezone": "utc"}))}}])),
     ["2024-01-05T10:00:01Z [Jan  5 10:00:01] [05/Jan/2024:10:00:01 +0000] (2024/01/05 10:00:01) <Feb  3 04:05:06>",
-     "2024-01-05T10:00:01.250+02:00 [Jan 15 10:00:01] [5/Jan/2024:6:09:59 -0500] (2021-05-26T16:27:07.000000Z) <Dec 31 23:59:59>"],
+     "2024-01-05T10:00:01.250+02:00 [Jan 15 10:00:01] [5/Jan/2024:6:09:59 -0500] (2021-05-26T16:27:07.000000Z) <Dec 31 23:59:59>",
+     "2024-01-05T10:00:01Z [Oct 10 2018 12:34:56] [05/Jan/2024:10:00:01 +0000] (2024/01/05 10:00:01) <Oct 10 2018 12:34:56>"],
     ["notatime [Jan  5 10:00:01] [05/Jan/2024:10:00:01 +0000] (2024/01/05 10:00:01) <Feb  3 04:05:06>",
      "2024-01-05T10:00:01Z [Jan  5 10:00:01] [05/Jan/2024:10:00:01 +0000] (nope) <Feb  3 04:05:06>"])
 

@@ -39,5 +39,5 @@ S=/tmp/ulpf-p5-fixture; rm -rf "$S" /tmp/ulpf-p5-pack
 (cd learning && python -m ulpf_learn promote --session "$S" --out /tmp/ulpf-p5-pack --pack-id squid-native-emitted | head -1 | sed 's/^/  /') || status=1
 ls /tmp/ulpf-p5-pack/pack.json.sig >/dev/null && echo "  ok: emitted pack carries pack.json.sig" || { echo "  FAIL: emitted pack unsigned"; status=1; }
 runtime/bin/ulpf-runtime verify-pack --pack /tmp/ulpf-p5-pack | sed 's/^/  /' || status=1
-grep -q '"schema_version": "1.2.0"' /tmp/ulpf-p5-pack/pack.json && grep -q '"proposal"' /tmp/ulpf-p5-pack/pack.json && echo "  ok: pack is 1.2.0 with proposal provenance" || { echo "  FAIL: pack not 1.2.0"; status=1; }
+grep -qE '"schema_version": "1\.[23]\.0"' /tmp/ulpf-p5-pack/pack.json && grep -q '"proposal"' /tmp/ulpf-p5-pack/pack.json && echo "  ok: pack is >=1.2.0 with proposal provenance" || { echo "  FAIL: pack lacks proposal provenance"; status=1; }
 exit $status

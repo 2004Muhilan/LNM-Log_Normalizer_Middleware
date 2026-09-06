@@ -9,17 +9,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"ulpf/runtime/contracts"
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/keys"
+	"ulpf/runtime/internal/spec"
 )
 
 type MappingField struct {
 	Path          string          `json:"path,omitempty"`
 	Constant      any             `json:"constant,omitempty"`
+	EnvelopeField string          `json:"envelope_field,omitempty"` // 1.3.0: value from the unwrapped transport envelope
 	OCSFAttribute string          `json:"ocsf_attribute"`
 	Mandatory     bool            `json:"mandatory"`
 	Transform     *Transform      `json:"transform,omitempty"`
@@ -31,6 +34,7 @@ type Transform struct {
 	With    []string       `json:"with,omitempty"`
 	Lookup  map[string]any `json:"lookup,omitempty"`
 	Default any            `json:"default,omitempty"`
+	Format  *spec.TSFormat `json:"format,omitempty"` // 1.3.0: timestamp transform for textual (envelope) values
 }
 
 type Unmapped struct {
@@ -52,10 +56,33 @@ type StructuralLiteral struct {
 	Text      string `json:"text"`
 }
 
+type AnchorValues struct {
+	AnchorID string   `json:"anchor_id"`
+	Values   []string `json:"values"`
+}
+
+type Anchor struct {
+	AnchorID string `json:"anchor_id"`
+	Locator  struct {
+		Kind        string `json:"kind"` // envelope_header | slot | key | pattern
+		SlotIndex   int    `json:"slot_index"`
+		Key         string `json:"key"`
+		Pattern     string `json:"pattern"`
+		HeaderField string `json:"header_field"`
+	} `json:"locator"`
+	Domain struct {
+		Kind    string   `json:"kind"` // enum | pattern
+		Values  []string `json:"values"`
+		Pattern string   `json:"pattern"`
+	} `json:"expected_value_domain"`
+	Status string `json:"anchor_status"`
+}
+
 type RoutingSignature struct {
 	L1               string              `json:"l1_envelope"`
 	L2               string              `json:"l2_structure"`
 	L3AnchorIDs      []string            `json:"l3_anchor_ids"`
+	L3AnchorValues   []AnchorValues      `json:"l3_anchor_values"`
 	L3StructuralLits []StructuralLiteral `json:"l3_structural_literals"`
 	L4               struct {
 		ArityBucket        string   `json:"arity_bucket"`
@@ -92,6 +119,7 @@ type Pack struct {
 		SourceTimezone     *string `json:"source_timezone"`
 		TimezoneConfidence string  `json:"timezone_confidence"`
 	} `json:"time"`
+	Anchors         []Anchor `json:"anchors"`
 	TiebreakerField *string  `json:"tiebreaker_field"`
 	Families        []Family `json:"families"`
 	Signing         struct {
@@ -175,6 +203,9 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 			p.Location = loc
 		}
 	}
+	if err := checkAnchors(&p); err != nil {
+		return nil, fmt.Errorf("pack rejected: %w (fail closed)", err)
+	}
 	for i := range p.Families {
 		f := &p.Families[i]
 		specBytes, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(f.Parser.SpecRef)))
@@ -194,4 +225,42 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 		f.Program = prog
 	}
 	return &p, nil
+}
+
+// checkAnchors enforces what the contract cannot express across objects: every family anchor value
+// names a pack anchor and lies inside that anchor's declared domain. A value outside the domain would
+// let a family claim events the anchor itself calls a domain violation.
+func checkAnchors(p *Pack) error {
+	byID := map[string]*Anchor{}
+	for i := range p.Anchors {
+		byID[p.Anchors[i].AnchorID] = &p.Anchors[i]
+	}
+	for _, f := range p.Families {
+		for _, av := range f.Routing.L3AnchorValues {
+			a, ok := byID[av.AnchorID]
+			if !ok {
+				return fmt.Errorf("family %s: anchor %q is not declared by the pack", f.FamilyID, av.AnchorID)
+			}
+			for _, v := range av.Values {
+				if !a.InDomain(v) {
+					return fmt.Errorf("family %s: anchor %s value %q is outside the declared domain", f.FamilyID, av.AnchorID, v)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// InDomain reports whether v lies in the anchor's declared value domain.
+func (a *Anchor) InDomain(v string) bool {
+	if a.Domain.Kind == "enum" {
+		for _, d := range a.Domain.Values {
+			if d == v {
+				return true
+			}
+		}
+		return false
+	}
+	re, err := regexp.Compile("^(?:" + a.Domain.Pattern + ")$")
+	return err == nil && re.MatchString(v)
 }

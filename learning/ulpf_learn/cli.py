@@ -19,7 +19,9 @@ from .session import Session
 
 def show_status(s: Session):
     st = s.state
-    print(f"source {st['source_id']}  state: {st['state']}  samples: {st['sample_count']}  arity: {st['structure']['arity']}")
+    print(f"source {st['source_id']}  state: {st['state']}  samples: {st['sample_count']}  arity: {st['structure']['arity']}" + (f"  family: {st['family_id']}" if st.get("family_id") else ""))
+    if st.get("propagated"):
+        print(f"propagated: {len(st['propagated'])} slot(s) resolved from {sorted({h['from_family'] for h in st['propagated']})} under the §4.4 key — no request issued for them")
     v = st.get("verdict", {})
     print(f"promotable: {v.get('promotable')}  critical coverage: {v.get('critical_coverage', 0):.2f}  semantic coverage: {v.get('coverage', {}).get('semantic_coverage', 0):.2f}")
     for b in v.get("blockers", []):
@@ -53,7 +55,16 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="ulpf_learn")
     sub = ap.add_subparsers(dest="cmd", required=True)
     o = sub.add_parser("onboard"); o.add_argument("--samples", required=True); o.add_argument("--source-id", required=True); o.add_argument("--operator", required=True); o.add_argument("--session", required=True); o.add_argument("--fixture"); o.add_argument("--vendor", default="squid")
-    o.add_argument("--provider", choices=["fixture", "model"], default="fixture", help="fixture (default; the P3 path, unchanged) or model (P4: llama-server)")
+    o.add_argument("--provider", choices=["fixture", "model", "recorded"], default="fixture", help="fixture (default; the P3 path, unchanged), model (P4: llama-server), or recorded (P6: replay a spike recording of the model's proposals)")
+    o.add_argument("--recording", help="with --provider recorded: spike/results/<machine>/<model>__<backend>__<case>__<mode>.json")
+    o.add_argument("--propagation-store", help="P6: JSON store of resolutions for this operator; hits resolve slots under the §4.4 key before any request is issued")
+    os_ = sub.add_parser("onboard-spec", help="P6: onboard a source whose structure is a given spec (csv/kv/regex drafts); the model labels the spec's fields")
+    for name, kw in (("--samples", {}), ("--spec", {}), ("--source-id", {}), ("--operator", {}), ("--session", {}), ("--vendor", {}), ("--family-id", {})):
+        os_.add_argument(name, required=True, **kw)
+    os_.add_argument("--unwrap-envelope", action="store_true", help="samples still carry their syslog header: strip one level exactly as the runtime does")
+    os_.add_argument("--provider", choices=["fixture", "model", "recorded"], default="recorded"); os_.add_argument("--recording"); os_.add_argument("--fixture")
+    os_.add_argument("--model-id"); os_.add_argument("--server", default="http://127.0.0.1:8080"); os_.add_argument("--mode", choices=["whole", "per-slot"], default="whole"); os_.add_argument("--backend", default="unknown")
+    os_.add_argument("--propagation-store")
     o.add_argument("--model-id", help="manifest id; the weights digest is verified before any call"); o.add_argument("--server", default="http://127.0.0.1:8080")
     o.add_argument("--mode", choices=["whole", "per-slot"], default="whole"); o.add_argument("--backend", default="unknown", help="recorded in provenance, e.g. 'cuda ngl=all' or 'cpu'")
     for name in ("status", "certificates", "review"):
@@ -61,12 +72,18 @@ def main(argv=None) -> int:
     r = sub.add_parser("respond"); r.add_argument("--session", required=True); r.add_argument("--discriminator", required=True); r.add_argument("--input", required=True)
     r.add_argument("--field"); r.add_argument("--attribute"); r.add_argument("--initiator-ip"); r.add_argument("--sample-line")
     pr = sub.add_parser("promote"); pr.add_argument("--session", required=True); pr.add_argument("--out", required=True); pr.add_argument("--pack-id", required=True)
+    mg = sub.add_parser("merge", help="P6: merge promoted single-family packs of one source into a signed source pack (anchors from the vendor table)")
+    mg.add_argument("packs", nargs="+"); mg.add_argument("--out", required=True); mg.add_argument("--pack-id", required=True); mg.add_argument("--vendor"); mg.add_argument("--tiebreaker")
     a = ap.parse_args(argv)
 
-    if a.cmd == "onboard":
-        from .provider import FixtureProvider
+    if a.cmd in ("onboard", "onboard-spec"):
+        from .provider import FixtureProvider, RecordedProvider
         s = Session(Path(a.session))
         prov = FixtureProvider(Path(a.fixture)) if a.fixture else None
+        if a.provider == "recorded":
+            if not a.recording:
+                ap.error("--recording is required with --provider recorded")
+            prov = RecordedProvider(Path(a.recording))
         if a.provider == "model":
             from .model.client import LlamaClient
             from .model.provider import ModelProvider, verified_model_hash
@@ -75,8 +92,20 @@ def main(argv=None) -> int:
             client = LlamaClient(a.server)
             client.wait_ready(60)
             prov = ModelProvider(client, a.model_id, verified_model_hash(a.model_id), mode=a.mode, backend=a.backend)
-        s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor)
+        store = Path(a.propagation_store) if a.propagation_store else None
+        if a.cmd == "onboard":
+            s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor, propagation_store=store)
+        else:
+            s.onboard_spec(Path(a.samples), Path(a.spec), a.source_id, a.operator, a.vendor, a.family_id, prov, a.unwrap_envelope, propagation_store=store)
         show_status(s)
+        return 0
+    if a.cmd == "merge":
+        from .anchors import load_declared
+        from .discriminators import load_vendor_table
+        from .sourcepack import merge
+        anchors = load_declared(load_vendor_table(a.vendor)) if a.vendor else []
+        out = merge([Path(p) for p in a.packs], Path(a.out), a.pack_id, anchors, a.tiebreaker)
+        print("merged:", out)
         return 0
     s = Session.load(Path(a.session))
     if a.cmd == "status":

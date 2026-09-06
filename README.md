@@ -80,6 +80,17 @@ bash scripts/p5-keygen.sh                                     # build runtime, c
 bash scripts/p5-check.sh                                      # P5 exit: suites, signing fail-closed, invariant 2, boundary + witness (Docker), signed fixture demo
 bash scripts/p5-boundary-test.sh                              # two containers: kernel immutable flag vs an unprivileged committer, tamper -> leaf named
 bash scripts/p5-witness-test.sh                               # export a bundle; a fresh container with only ulpf-verify + public key verifies it
+```
+
+Multi-vendor routing (P6). Every onboarded source's pack is loaded into one runtime; the decision DAG
+routes a mixed stream by envelope, surface structure, declared anchors and arity, never by trying parsers:
+
+```bash
+bash scripts/p6-check.sh                                      # P6 exit: suites (DAG, K cap, no-try-all, anchor admission, propagation), invariant 2, four-vendor build when the corpus cache is present
+bash scripts/p6-build-packs.sh                                # onboard ASA/PAN-OS/FortiGate from the corpus cache, merge source packs, mixed stream + ML tuple, discovery, agreement (packs land in /tmp)
+python -m ulpf_learn onboard-spec --samples S --spec drafts/sufficiency/asa-302013.json --vendor cisco-asa --family-id asa-302013 --unwrap-envelope --provider recorded --recording spike/results/... ...
+ulpf-runtime run --pack A --pack B --source-id relay-01 --input mixed.log --evidence EV --out out.jsonl --quarantine q.jsonl --ml-out ml.jsonl
+python learning/tools/discover.py capture.log                # family discovery ranking: clusters by the router's surface, ranked by volume
 runtime/bin/ulpf-committer commit --evidence EV --commit EV/commit --key keys/dev/ulpf-committer-dev.json
 runtime/bin/ulpf-committer daily  --evidence EV --key keys/dev/ulpf-committer-dev.json
 runtime/bin/ulpf-runtime export --evidence EV --event-id ev_... --out bundle/

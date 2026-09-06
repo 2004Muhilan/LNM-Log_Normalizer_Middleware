@@ -15,13 +15,20 @@ import (
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/frame"
+	"ulpf/runtime/internal/mlfeat"
 	"ulpf/runtime/internal/normalize"
 	"ulpf/runtime/internal/pack"
 	"ulpf/runtime/internal/route"
 )
 
 type Options struct {
-	Pack        *pack.Pack
+	Pack  *pack.Pack   // single pack (P2–P5 callers)
+	Packs []*pack.Pack // P6: every onboarded pack of a mixed stream; Pack is appended when set
+	// SourceID is what the evidence record carries as the ingest source. Routing happens AFTER the raw
+	// write, so the record cannot name the routed pack; for a single pack it defaults to that pack's
+	// source_id, for a mixed stream it must be given (the channel's declared source) — raised in P6.
+	SourceID    string
+	ML          io.Writer // ML feature records, JSONL (requirement h); nil disables
 	EvidenceDir string
 	Collector   string
 	Channel     string
@@ -51,6 +58,12 @@ type Stats struct {
 	Quarantined       int            `json:"quarantined"`
 	Enveloped         int            `json:"enveloped"` // frames whose outer syslog envelope was unwrapped
 	Reasons           map[string]int `json:"quarantine_reasons"`
+	// CandidateSets is the distribution of the routing DAG's candidate-set size after L4 (key: size),
+	// over every routed or routing-quarantined frame — the empirical answer to the K=4 question.
+	CandidateSets map[string]int `json:"candidate_set_sizes"`
+	DriftSignals  int            `json:"drift_signals"` // anchor values outside their declared domain
+	MLRecords     int            `json:"ml_records"`
+	ByFamily      map[string]int `json:"emitted_by_family"`
 }
 
 type quarantined struct {
@@ -81,7 +94,21 @@ func Run(in io.Reader, o Options) (Stats, error) {
 // complete received bytes; envelope unwrap (one level: the parser sees the payload, the evidence keeps
 // the envelope); route on the payload; parse; normalize with the envelope recorded in lineage.
 func RunFrames(source Source, o Options) (Stats, error) {
-	st := Stats{Reasons: map[string]int{}}
+	st := Stats{Reasons: map[string]int{}, CandidateSets: map[string]int{}, ByFamily: map[string]int{}}
+	packs := o.Packs
+	if o.Pack != nil {
+		packs = append([]*pack.Pack{o.Pack}, packs...)
+	}
+	if len(packs) == 0 {
+		return st, fmt.Errorf("no packs")
+	}
+	sourceID := o.SourceID
+	if sourceID == "" {
+		if len(packs) != 1 {
+			return st, fmt.Errorf("a mixed stream needs an explicit --source-id for the evidence record")
+		}
+		sourceID = packs[0].Source.SourceID
+	}
 	now := o.Now
 	if now == nil {
 		now = time.Now
@@ -91,15 +118,21 @@ func RunFrames(source Source, o Options) (Stats, error) {
 		return st, err
 	}
 	defer store.Close()
-	router := route.New(o.Pack)
+	router := route.New(packs...)
+	if err := router.Err(); err != nil {
+		return st, err
+	}
 	out := bufio.NewWriter(o.Out)
 	defer out.Flush()
-	var q *bufio.Writer
+	var q, ml *bufio.Writer
 	if o.Quarantine != nil {
 		q = bufio.NewWriter(o.Quarantine)
 		defer q.Flush()
 	}
-	env := dsl.Env{SourceLocation: o.Pack.Location}
+	if o.ML != nil {
+		ml = bufio.NewWriter(o.ML)
+		defer ml.Flush()
+	}
 	quarantine := func(rec evidence.Record, sig, stage, reason string) {
 		st.Quarantined++
 		st.Reasons[stage]++
@@ -111,7 +144,7 @@ func RunFrames(source Source, o Options) (Stats, error) {
 	err = source(func(fr frame.Frame) error {
 		st.Frames++
 		// 1. raw evidence write — durable before anything else looks at the bytes
-		rec, err := store.Append(fr.Raw, fr.Framing, o.Pack.Source.SourceID, o.Collector, o.Channel)
+		rec, err := store.Append(fr.Raw, fr.Framing, sourceID, o.Collector, o.Channel)
 		if err != nil {
 			return err
 		}
@@ -119,7 +152,6 @@ func RunFrames(source Source, o Options) (Stats, error) {
 			out.Flush()
 			os.Exit(137) // kill-test: die after the raw write, before parsing
 		}
-		env.IngestTime = time.UnixMilli(rec.IngestTime)
 		if fr.Framing.TruncationStatus != "none" {
 			quarantine(rec, "", "framing", "truncated or continuation frame retained as evidence, not parsed")
 			return nil
@@ -130,13 +162,22 @@ func RunFrames(source Source, o Options) (Stats, error) {
 		if envl.Kind != "none" {
 			st.Enveloped++
 		}
-		// 3. route: exact signature match or quarantine
-		d := router.Route(payload)
+		var envPtr *frame.Envelope
+		if envl.Kind != "none" {
+			envPtr = &envl
+		}
+		// 3. route: the decision DAG narrows to one family or quarantines; no parser runs here
+		d := router.Route(payload, envPtr)
+		st.CandidateSets[fmt.Sprint(d.Candidates)]++
+		if d.Drift {
+			st.DriftSignals++
+		}
 		if d.Family == nil {
-			quarantine(rec, d.Signature, "routing", d.Reason)
+			quarantine(rec, d.Signature, d.Stage, d.Reason)
 			return nil
 		}
-		// 4. parse
+		env := dsl.Env{SourceLocation: d.Pack.Location, IngestTime: time.UnixMilli(rec.IngestTime)}
+		// 4. parse — the one parser the router chose, once
 		m, perr := d.Family.Program.Parse(payload, env)
 		if perr != nil {
 			quarantine(rec, d.Signature, "tiling", perr.Error())
@@ -148,11 +189,7 @@ func RunFrames(source Source, o Options) (Stats, error) {
 			return nil
 		}
 		// 5. normalize
-		var envPtr *frame.Envelope
-		if envl.Kind != "none" {
-			envPtr = &envl
-		}
-		ev, res, nerr := normalize.Normalize(m, normalize.Context{Pack: o.Pack, Family: d.Family, Record: rec, Signature: d.Signature, ProcessingTime: now(), Envelope: envPtr})
+		ev, res, nerr := normalize.Normalize(m, normalize.Context{Pack: d.Pack, Family: d.Family, Record: rec, Signature: d.Signature, ProcessingTime: now(), Envelope: envPtr})
 		if nerr != nil {
 			quarantine(rec, d.Signature, "normalize", nerr.Error())
 			return nil
@@ -182,6 +219,15 @@ func RunFrames(source Source, o Options) (Stats, error) {
 			return err
 		}
 		st.Emitted++
+		st.ByFamily[d.Pack.PackID+"/"+d.Family.FamilyID]++
+		if ml != nil {
+			// 6. ML feature tuple (requirement h): a projection of the event just emitted
+			fb, _ := json.Marshal(mlfeat.Build(d.Pack, d.Family, m, ev, envPtr, rec.EventID))
+			if _, err := ml.Write(append(fb, '\n')); err != nil {
+				return err
+			}
+			st.MLRecords++
+		}
 		return nil
 	})
 	return st, err

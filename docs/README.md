@@ -10,7 +10,8 @@ once the code has moved on.
 | [P2 — runtime vertical slice on a hand-authored pack](p2-report.md) | accepted; boundary items settled (spec.go verified, usability definition) — §7 | 2026-09-05 |
 | [P3 — learning plane, deterministic half: certificates without a model](p3-report.md) | accepted; boundary items settled (library-decided ambiguity implemented; model and serving runtime decided) — §6 | 2026-09-05 |
 | [P4 — model integration: the model proposes, the machinery decides](p4-report.md) | accepted; model choice provisional (Granite 4.1 8B, pending the laptop run); **demo-laptop measurements outstanding** (see [the runbook](demo-laptop-runbook.md)) | 2026-09-06 |
-| [P5 — evidence log completion: Merkle commitment, the privilege boundary, signing, the witness](p5-report.md) | exit criteria met (two-container kernel boundary, ordering, external witness, fail-closed signing); awaiting verification | 2026-09-06 |
+| [P5 — evidence log completion: Merkle commitment, the privilege boundary, signing, the witness](p5-report.md) | accepted; boundary items settled (`commit_mode` stamped, no private keys in git, signature before contract, root+CAP posture noted) — §5a | 2026-09-06 |
+| [P6 — multi-vendor routing: the DAG, families, propagation, ML emission](p6-report.md) | exit criteria met (mixed stream routed within K=4, anchor-defeating events quarantined, cardinality-only admission refused, propagation live, ML tuple emitted); crosswalk **team review owed**; awaiting verification | 2026-09-06 |
 
 Also here: [Demo laptop runbook](demo-laptop-runbook.md) — what must be true on the GTX 1650 laptop before the P4 spike can run there (driver, `.wslconfig` memory, GPU in Docker, offload knob, CPU floor).
 

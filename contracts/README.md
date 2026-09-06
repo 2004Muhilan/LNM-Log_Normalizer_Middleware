@@ -200,6 +200,33 @@ The golden candidate spec and its span map deliberately stay at 1.0.0 to prove t
 
 Both bumps are additive; 1.0.0 and 1.1.0 documents remain valid and both validators accept all three.
 
+## 1.3.0 (P6) — one additive bump, one draft, raised at the boundary
+
+- **parser-pack 1.3.0**: `mapping.fields[].envelope_field` — a third mapping source beside `path` and
+  `constant`: the value comes from the transport envelope unwrapped at ingest (`timestamp | hostname |
+  app_name | proc_id | msg_id | priority | facility | severity`). Forced by ASA: the payload carries no
+  timestamp, `time` is mandatory for `network_activity`, and the syslog header's clock is the device's — a
+  pack-declared fact with vendor provenance, never a runtime guess. With it, `transform.kind: timestamp`
+  and `transform.format` (a parser-spec `timestamp_format`) so an envelope string can be coerced the same
+  way a payload cell is. Absent when the event arrived without that envelope (`_lineage.absent`, cause
+  `structural`).
+- **parser-pack 1.3.0**: `routing_signature.l3_anchor_values` — which values of each pack anchor route to
+  THIS family (`[{anchor_id, values[]}]`). 1.0.0 had anchors at pack level and `l3_anchor_ids` per family
+  but no place for the family's own values, so the L3 stage of the DAG had nothing to select on. The
+  loader cross-checks every value against the anchor's `expected_value_domain` and refuses the pack
+  otherwise (a family may not claim what its anchor calls a domain violation).
+- **ml-feature 0.1.0 — DRAFT** (`contracts/ml-feature.schema.json`): the ML feature tuple of requirement
+  (h), one record per normalized event: `template_id` (`<pack>/<family>@<parser_hash>`),
+  `parameter_names`/`parameter_vector` (the spec's semantic fields in spec order; null when a field did
+  not participate), `timestamp` (the OCSF `time`), `entity_ids` (a fixed vocabulary of entity-bearing
+  attributes present on the event, never invented). The Python validator accepts it as a sixth kind; the
+  Go loader does not yet. Whether it becomes a frozen sixth contract is a boundary decision.
+- **Envelope unwrap rule added (no schema change):** a PRI followed by no valid TIMESTAMP is an RFC 3164
+  envelope of the PRI alone (§4.3.3), payload everything after it. FortiGate emits exactly this form
+  (`<189>date=...`); before P6 it was `kind: none` and the parser would have seen `<189>`.
+
+1.3.0 is additive; every earlier document remains valid and both validators accept all four versions.
+
 ## Lessons from executing the drafts (P2)
 
 P1 validated the drafts and executed only their regexes; executing them through the compiler

@@ -178,6 +178,13 @@ func unwrap3164(raw []byte) (Envelope, bool) {
 	}
 	// Mmm dd [yyyy] hh:mm:ss  — "Mmm  d" has two spaces for single-digit days
 	if pos+3 > len(raw) || !months[string(raw[pos:pos+3])] || pos+3 >= len(raw) || raw[pos+3] != ' ' {
+		// PRI-only form (RFC 3164 §4.3.3: a PRI followed by no valid TIMESTAMP — the whole remainder is
+		// content). FortiGate emits exactly this: `<189>date=... time=...`. The envelope is the PRI alone;
+		// without a PRI there is no envelope.
+		if e.Priority != nil && pos < len(raw) {
+			e.PayloadOffset, e.PayloadLength = pos, len(raw)-pos
+			return e, true
+		}
 		return Envelope{}, false
 	}
 	tsStart := pos

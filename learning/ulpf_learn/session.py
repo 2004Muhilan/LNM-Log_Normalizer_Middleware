@@ -11,7 +11,10 @@ from pathlib import Path
 
 from .acceptance import evaluate
 from .analyze import analyze
-from .discriminators import apply_labelled_session, apply_logformat, apply_operator_assertion, mandatory_for
+from .discriminators import apply_labelled_session, apply_logformat, apply_operator_assertion, apply_vendor_schema, load_vendor_table, mandatory_for, vendor_table_meta
+from .anchors import load_declared
+from .envelope import payload as envelope_payload
+from .propagation import Store as PropagationStore
 from .emit import emit_pack
 from .induce import induce
 from .library import Library
@@ -62,7 +65,8 @@ class Session:
         }
 
     # ------------------------------------------------------------------ workflow
-    def onboard(self, samples_path: Path, source_id: str, operator_id: str, provider: Provider | None = None, vendor: str = "squid"):
+    def onboard(self, samples_path: Path, source_id: str, operator_id: str, provider: Provider | None = None, vendor: str = "squid",
+                propagation_store: Path | None = None):
         raw = Path(samples_path).read_bytes()
         lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
         self.state = {"source_id": source_id, "operator_id": operator_id, "vendor": vendor, "created_at": now_iso(),
@@ -82,6 +86,57 @@ class Session:
         self.plan = plan_from_proposal(structure, prop, source_id)
         self.state["proposal"] = {"provider": provider.name, "event_class_uid": prop.event_class_uid,
                                   "slots": [{"slot": p.slot_index + 1, "candidates": p.candidates, "note": p.note} for p in prop.slots]}
+        self._propagate(propagation_store)
+        self.analyze_and_evaluate()
+        self.save()
+
+    def _propagate(self, store_path: Path | None):
+        """Resolution propagation (§4.4 key) BEFORE the first analysis: a slot whose key already carries a
+        sufficient resolution for this source needs no certificate and no evidence request."""
+        self.state["propagation_store"] = str(store_path) if store_path else None
+        if not store_path:
+            return
+        store = PropagationStore(store_path)
+        hits = store.apply(self.plan, self.state["source_id"], self.state["structure"]["routing_sketch"])
+        self.state["propagated"] = hits
+        self.log("propagated", slots=len(hits), from_families=sorted({h["from_family"] for h in hits}))
+
+    def onboard_spec(self, samples_path: Path, spec_path: Path, source_id: str, operator_id: str, vendor: str, family_id: str,
+                     provider: Provider | None = None, unwrap_envelope: bool = False, propagation_store: Path | None = None):
+        """P6: onboard a source whose structure is GIVEN by a spec (csv/kv/regex drafts) — the model labels the
+        spec's fields, it does not rebuild the structure (P4 boundary: 'model labels, not specs'). The samples
+        may still carry their syslog envelope; `unwrap_envelope` strips one level exactly as the runtime does."""
+        from .model.structure_from_spec import structure_from_spec
+        raw = Path(samples_path).read_bytes()
+        lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
+        if unwrap_envelope:
+            lines = [envelope_payload(l) for l in lines]
+        spec_bytes = Path(spec_path).read_bytes()
+        spec = json.loads(spec_bytes)
+        self.state = {"source_id": source_id, "operator_id": operator_id, "vendor": vendor, "family_id": family_id, "created_at": now_iso(),
+                      "samples_path": str(samples_path), "spec_path": str(spec_path), "unwrap_envelope": unwrap_envelope, "sample_count": len(lines),
+                      "state": "induced", "timeline": [], "certificates": {}, "resolutions": []}
+        self.log("session_started", samples=len(lines), given_spec=spec["spec_id"])
+        structure, kept = structure_from_spec(spec_bytes, lines)
+        if len(kept) != len(lines):
+            raise RuntimeError(f"{len(lines) - len(kept)} sample(s) do not parse under {spec['spec_id']}; the spec is not a parser for this capture")
+        self.state["structure"] = {"arity": structure.arity, "other_arities": {}, "slots": [asdict(s) for s in structure.slots],
+                                   "routing_sketch": {"l1_envelope": "raw", "l2_structure": _l2_of(spec), "l3_anchor_ids": [], "l3_structural_literals": [],
+                                                      "l4_sketch": {"arity_bucket": str(structure.arity), "token_class_sequence": [s.token_class for s in structure.slots]}}}
+        self.log("induced", arity=structure.arity, families_seen=1, structure_from="given_spec")
+        provider = provider or FixtureProvider(DEFAULT_FIXTURE)
+        if hasattr(provider, "set_samples"):
+            provider.set_samples(lines)
+        t_prop = time.time()
+        prop = provider.propose(structure)
+        self.log("proposed", provider=provider.name, event_class=prop.event_class_uid, seconds=round(time.time() - t_prop, 3))
+        self.state["proposal_provenance"] = prop.notes.get("provenance") if isinstance(prop.notes, dict) else None
+        self.plan = plan_from_proposal(structure, prop, source_id)
+        self.plan.given_spec = spec
+        self.plan.family_id = family_id
+        self.state["proposal"] = {"provider": provider.name, "event_class_uid": prop.event_class_uid,
+                                  "slots": [{"slot": p.slot_index + 1, "candidates": p.candidates, "note": p.note} for p in prop.slots]}
+        self._propagate(propagation_store)
         self.analyze_and_evaluate()
         self.save()
 
@@ -137,6 +192,11 @@ class Session:
             slot_idx = {p.field: s.index for s, p in self.plan.parts()}[field]
             touched = self._resolve_certificates({slot_idx}, discriminator_id, "validated_discriminator", f"{ip} initiated: {line}", "labelled_sample")
             self.state["resolutions"].append({"discriminator_id": discriminator_id, "provenance": "validated_discriminator", "fields": [field], "certificate_ids": touched})
+        elif discriminator_id == "vendor_schema_field_order":
+            new_plan, resolved = apply_vendor_schema(self.plan, self.state["vendor"], self.state["family_id"], mandatory, op, cert_for_slot)
+            self.plan = new_plan
+            touched = self._resolve_certificates(set(range(len(self.plan.slots))), discriminator_id, "vendor_schema_or_device_configuration", evidence, "vendor_document")
+            self.state["resolutions"].append({"discriminator_id": discriminator_id, "provenance": "vendor_schema_or_device_configuration", "fields": resolved, "certificate_ids": touched})
         elif discriminator_id == "operator_assertion":
             self.plan = apply_operator_assertion(self.plan, kw["field"], kw["attribute"], op, evidence, mandatory)
             slot_idx = {p.field: s.index for s, p in self.plan.parts()}[kw["field"]]
@@ -198,9 +258,39 @@ class Session:
         spec = self.plan.spec(f"{self.state['source_id']}-positional-{len(self.plan.slots)}",
                               f"{self.plan.event_class_name} parser for {self.state['source_id']}, resolved by device configuration.")
         samples = Path(self.state["samples_path"]).read_bytes()
+        if self.state.get("unwrap_envelope"):
+            samples = b"".join(envelope_payload(l.rstrip(b"\r")) + b"\n" for l in samples.split(b"\n") if l.strip())
+        source_meta, anchors, routing = None, [], self.state["structure"]["routing_sketch"]
+        if self.state.get("family_id"):
+            meta = vendor_table_meta(self.state["vendor"], self.state["family_id"])
+            source_meta = {"vendor": meta["vendor"], "product": meta["product"], "declared_envelope": meta["declared_envelope"], "transport_hint": meta["transport_hint"]}
+            anchors = load_declared(load_vendor_table(self.state["vendor"]))
+            fam = meta["family"]
+            routing = dict(routing)
+            routing["l1_envelope"] = meta["declared_envelope"]
+            routing["l2_structure"] = fam.get("l2", routing["l2_structure"])
+            routing["l3_anchor_ids"] = [a["anchor_id"] for a in anchors]
+            if fam.get("arity_bucket"):
+                routing["l4_sketch"] = {**routing["l4_sketch"], "arity_bucket": str(fam["arity_bucket"])}
+            # the family's anchor VALUES ride in the family entry (anchor_values), keyed by anchor id
+            av = fam.get("anchor_values")
+            if isinstance(av, dict):
+                anchor_values = {k: list(v) for k, v in av.items()}
+            elif av and anchors:
+                anchor_values = {anchors[0]["anchor_id"]: list(av)}
+            else:
+                anchor_values = {}
+        else:
+            anchor_values = {}
         path = emit_pack(self.plan, spec, verdict, certs, resolutions, samples, self.state["sample_count"], self.state["operator_id"],
-                         pack_id, out_dir, now_iso(), self.state["structure"]["routing_sketch"], self.lib.version,
-                         proposal_provenance=self.state.get("proposal_provenance"))
+                         pack_id, out_dir, now_iso(), routing, self.lib.version,
+                         proposal_provenance=self.state.get("proposal_provenance"), family_id=self.plan.family_id, source_meta=source_meta, anchors=anchors,
+                         anchor_values=anchor_values)
+        if self.state.get("propagation_store"):
+            store = PropagationStore(Path(self.state["propagation_store"]))
+            n = store.record(self.plan, self.state["source_id"], routing, self.plan.family_id or f"positional-{len(self.plan.slots)}", str(self.path))
+            store.save()
+            self.log("propagation_recorded", slots=n)
         self.state["state"] = "promoted"
         self.state["pack_path"] = str(path)
         self.log("promoted", pack=str(path))
@@ -210,7 +300,18 @@ class Session:
 
     def _samples(self) -> list[bytes]:
         raw = Path(self.state["samples_path"]).read_bytes()
-        return [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
+        lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
+        if self.state.get("unwrap_envelope"):
+            lines = [envelope_payload(l) for l in lines]   # the parser sees the payload, exactly as the runtime unwraps it
+        return lines
+
+
+def _l2_of(spec: dict) -> str:
+    root = spec["root"]
+    if isinstance(root, list):   # a step sequence (the ASA regex drafts): a template family
+        return "template"
+    op = root["op"]
+    return {"positional": "positional", "csv": "csv", "kv": "kv", "regex": "template", "json": "json"}.get(op, "mixed")
 
 
 def plan_from_proposal(structure, prop, source_id: str) -> Plan:
@@ -235,10 +336,12 @@ def _plan_to_json(p: Plan) -> dict:
 
 
 def _plan_from_json(d: dict) -> Plan:
+    from .plan import EnvelopeMapping
     slots = []
     for s in d["slots"]:
         parts = [Part(pp["field"], pp["cls"], pp["kind"], pp["coerce"], pp["null_values"],
                       [Mapping(**m) for m in pp["mappings"]], pp["unmapped_name"], pp["candidates"], pp["proposed_by"]) for pp in s["parts"]]
         slots.append(Slot(s["index"], s["token_class"], parts, s["split"], s["samples"]))
     return Plan(d["source_id"], d["event_class_uid"], d["event_class_name"], slots, d["null_values"],
-                [Mapping(**m) for m in d["constants"]], d["source_timezone"], d["timezone_confidence"], d["proposed_by"], d["model_hash"])
+                [Mapping(**m) for m in d["constants"]], d["source_timezone"], d["timezone_confidence"], d["proposed_by"], d["model_hash"],
+                d.get("given_spec"), d.get("family_id"), [EnvelopeMapping(**e) for e in d.get("envelope_mappings", [])])

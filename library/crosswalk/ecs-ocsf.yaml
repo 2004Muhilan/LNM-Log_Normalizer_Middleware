@@ -1,0 +1,103 @@
+# ECS -> OCSF 1.3 crosswalk for the four reference vendors (plan §5.2; built in P6, consumed by P8).
+#
+# WHAT THIS IS. The corpus `-expected.json` files are one production parser's (Filebeat's) interpretation
+# of each line, in ECS. To measure AGREEMENT with that reference — never "accuracy" — each ECS field must
+# be named in OCSF terms. That naming is itself semantic labelling, done here by hand with the vendor
+# mapping knowledge at hand, so that a crosswalk error can be adjudicated as a crosswalk error and never
+# masquerade as a parser error.
+#
+# STATUS: drafted in P6; **team review is an exit criterion and is recorded in the P6 report as owed**,
+# not as done. Every row carries a note where the two schemas do not mean the same thing.
+#
+# Row shape: ecs -> ocsf, `compare` says how values are compared (exact | ip | int | lower | epoch_ms |
+# set-of-known-mismatch), `note` explains the semantic gap. `ocsf: null` = ECS field with no OCSF 1.3
+# counterpart in the pinned classes (reported as "reference-only", never as disagreement).
+crosswalk_version: "0.1.0"
+ocsf_version: "1.3.0"
+ecs_version_note: "Filebeat 8.x ECS as emitted by the beats modules in corpus/catalogue.json"
+
+rows:
+  # ---- endpoints
+  - { ecs: source.ip,                 ocsf: src_endpoint.ip,              compare: ip }
+  - { ecs: source.port,               ocsf: src_endpoint.port,            compare: int }
+  - { ecs: source.address,            ocsf: null,                         note: "ECS carries ip-or-hostname here; OCSF splits ip / hostname" }
+  - { ecs: source.domain,             ocsf: src_endpoint.hostname,        compare: lower }
+  - { ecs: source.user.name,          ocsf: src_endpoint.owner.name,      compare: exact }
+  - { ecs: source.nat.ip,             ocsf: null,                         note: "OCSF 1.3 network_activity has no NAT endpoint; ULPF carries it under unmapped.src_nat_ip" }
+  - { ecs: source.nat.port,           ocsf: null,                         note: "as above; unmapped.src_nat_port" }
+  - { ecs: source.bytes,              ocsf: traffic.bytes_out,            compare: int, note: "ECS source.bytes = bytes sent BY the source; OCSF bytes_out is from the initiator: same direction for a client-initiated flow" }
+  - { ecs: source.packets,            ocsf: traffic.packets_out,          compare: int }
+  - { ecs: destination.ip,            ocsf: dst_endpoint.ip,              compare: ip }
+  - { ecs: destination.port,          ocsf: dst_endpoint.port,            compare: int }
+  - { ecs: destination.address,       ocsf: null,                         note: "see source.address" }
+  - { ecs: destination.domain,        ocsf: dst_endpoint.hostname,        compare: lower }
+  - { ecs: destination.user.name,     ocsf: dst_endpoint.owner.name,      compare: exact }
+  - { ecs: destination.nat.ip,        ocsf: null,                         note: "unmapped.dst_nat_ip" }
+  - { ecs: destination.nat.port,      ocsf: null,                         note: "unmapped.dst_nat_port" }
+  - { ecs: destination.bytes,         ocsf: traffic.bytes_in,             compare: int }
+  - { ecs: destination.packets,       ocsf: traffic.packets_in,           compare: int }
+  - { ecs: observer.ingress.interface.name, ocsf: src_endpoint.interface_name, compare: exact, note: "ASA/PAN-OS ingress = the interface the source arrived on" }
+  - { ecs: observer.egress.interface.name,  ocsf: dst_endpoint.interface_name, compare: exact }
+  - { ecs: observer.ingress.zone,     ocsf: src_endpoint.zone,            compare: exact, note: "PAN-OS from-zone" }
+  - { ecs: observer.egress.zone,      ocsf: dst_endpoint.zone,            compare: exact }
+
+  # ---- time
+  - { ecs: "@timestamp",              ocsf: time,                         compare: epoch_ms, note: "Filebeat resolves a year-less syslog header with ITS ingest clock; ULPF with the pack's assume_year. Compare month/day/time when years differ (known mismatch class: year_assumption)" }
+  - { ecs: event.start,               ocsf: start_time,                   compare: epoch_ms }
+  - { ecs: event.duration,            ocsf: duration,                     compare: int, note: "ECS nanoseconds; OCSF milliseconds — the comparer scales" }
+
+  # ---- network / connection
+  - { ecs: network.transport,         ocsf: connection_info.protocol_name, compare: lower }
+  - { ecs: network.iana_number,       ocsf: connection_info.protocol_num,  compare: int }
+  - { ecs: network.direction,         ocsf: connection_info.direction,    compare: lower, note: "ECS inbound/outbound/internal/external; OCSF Inbound/Outbound/Lateral/Unknown — compare lower-cased first two only" }
+  - { ecs: network.bytes,             ocsf: traffic.bytes,                compare: int }
+  - { ecs: network.packets,           ocsf: traffic.packets,              compare: int }
+  - { ecs: network.application,       ocsf: app_name,                     compare: lower, note: "PAN-OS application" }
+  - { ecs: network.community_id,      ocsf: null }
+  - { ecs: cisco.asa.connection_id,   ocsf: connection_info.uid,          compare: exact }
+  - { ecs: panw.panos.flow_id,        ocsf: connection_info.uid,          compare: exact }
+  - { ecs: fortinet.firewall.sessionid, ocsf: connection_info.uid,        compare: exact }
+
+  # ---- action / outcome
+  - { ecs: event.action,              ocsf: action,                       compare: lower, note: "vendor verb kept verbatim on both sides for ASA (built/teardown) — not an enum comparison" }
+  - { ecs: event.outcome,             ocsf: action_id,                    compare: set-of-known-mismatch, note: "ECS success/failure/unknown vs OCSF Allowed(1)/Denied(2)/Other(99): success~1, failure~2; anything else is a semantic gap, not a disagreement" }
+  - { ecs: event.code,                ocsf: metadata.event_code,          compare: suffix, note: "ADJUDICATED (P6, ASA): the reference carries the bare id `302013`; ULPF carries the vendor tag `%ASA-6-302013` as the draft spec captures it — the same fact at two granularities, compared by suffix. A split of the tag into severity digit and id is a spec refinement, not a parser disagreement" }
+  - { ecs: event.severity,            ocsf: severity_id,                  compare: set-of-known-mismatch, note: "ECS carries the syslog severity number (0–7); OCSF severity_id is an enum 0–6/99 the pack declares per family: never numerically comparable" }
+  - { ecs: rule.name,                 ocsf: firewall_rule.name,           compare: exact }
+  - { ecs: rule.id,                   ocsf: firewall_rule.uid,            compare: exact }
+
+  # ---- HTTP / proxy (Squid, 4002)
+  - { ecs: http.request.method,       ocsf: http_request.http_method,     compare: exact }
+  - { ecs: url.original,              ocsf: http_request.url.url_string,  compare: exact }
+  - { ecs: http.response.status_code, ocsf: http_response.code,           compare: int }
+  - { ecs: http.response.bytes,       ocsf: http_response.length,         compare: int, note: "Squid %<st is the reply size to the client" }
+  - { ecs: http.response.mime_type,   ocsf: null,                         note: "OCSF 1.3 http_response has no content_type; ULPF carries unmapped.mime_type" }
+  - { ecs: user.name,                 ocsf: actor.user.name,              compare: exact }
+  - { ecs: squid.hierarchy_code,      ocsf: null,                         note: "vendor extension, unmapped" }
+  - { ecs: squid.request_status,      ocsf: null,                         note: "vendor extension (TCP_MISS etc.), unmapped" }
+
+  # ---- device / observer
+  - { ecs: observer.hostname,         ocsf: device.hostname,              compare: lower, note: "PAN-OS device_name; FortiGate devname; ASA from the syslog header" }
+  - { ecs: observer.serial_number,    ocsf: device.uid,                   compare: exact, note: "PAN-OS serial / FortiGate devid" }
+  - { ecs: observer.vendor,           ocsf: metadata.product.vendor_name, compare: lower }
+  - { ecs: observer.product,          ocsf: metadata.product.name,        compare: lower, note: "reference says 'Cisco ASA' / 'Palo Alto Networks'; pack says the vendor table's product — a naming convention gap, not a disagreement" }
+
+  # ---- reference-only (Filebeat enrichments with no source in the line)
+  - { ecs: event.category,            ocsf: null, note: "derived taxonomy" }
+  - { ecs: event.type,                ocsf: null, note: "derived taxonomy" }
+  - { ecs: event.kind,                ocsf: null }
+  - { ecs: event.dataset,             ocsf: null }
+  - { ecs: event.module,              ocsf: null }
+  - { ecs: related.ip,                ocsf: null, note: "aggregation of every ip on the event" }
+  - { ecs: related.user,              ocsf: null }
+  - { ecs: related.hosts,             ocsf: null }
+  - { ecs: source.geo.*,              ocsf: null, note: "GeoIP enrichment, not in the line" }
+  - { ecs: destination.geo.*,         ocsf: null }
+  - { ecs: source.as.*,               ocsf: null }
+  - { ecs: destination.as.*,          ocsf: null }
+  - { ecs: log.level,                 ocsf: null, note: "syslog severity as text; see event.severity" }
+  - { ecs: log.source.address,        ocsf: null, note: "collector-side fact" }
+  - { ecs: tags,                      ocsf: null }
+  - { ecs: fileset.name,              ocsf: null }
+  - { ecs: input.type,                ocsf: null }
+  - { ecs: service.type,              ocsf: null }

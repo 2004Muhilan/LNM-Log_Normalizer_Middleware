@@ -75,7 +75,10 @@ func main() {
 		fmt.Printf("pack %s v%s: %d families verified (dsl_hash, parser_hash, contract); %s\n", p.PackID, p.PackVersion, len(p.Families), sigState)
 	case "run":
 		fs := flag.NewFlagSet("run", flag.ExitOnError)
-		dir := fs.String("pack", "", "pack directory")
+		var dirs packList
+		fs.Var(&dirs, "pack", "pack directory (repeat for a mixed stream: every onboarded source)")
+		sourceID := fs.String("source-id", "", "evidence-record source id for a mixed stream (defaults to the single pack's source_id)")
+		mlPath := fs.String("ml-out", "", "ML feature records JSONL (requirement h): (template_id, parameter_vector, timestamp, entity_ids)")
 		input := fs.String("input", "", "input file (use - for stdin)")
 		evDir := fs.String("evidence", "", "evidence store directory")
 		outPath := fs.String("out", "-", "normalized JSONL output (- for stdout)")
@@ -90,8 +93,15 @@ func main() {
 		contractsDir, pinned := commonFlags(fs)
 		trust, allowUnsigned := signingFlags(fs)
 		fs.Parse(os.Args[2:])
-		p, err := pack.Load(*dir, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
-		die(err)
+		if len(dirs) == 0 {
+			die(fmt.Errorf("at least one --pack is required"))
+		}
+		var packs []*pack.Pack
+		for _, d := range dirs {
+			p, err := pack.Load(d, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
+			die(err)
+			packs = append(packs, p)
+		}
 		var in io.Reader = os.Stdin
 		if *listen == "" && *input != "-" {
 			f, err := os.Open(*input)
@@ -116,7 +126,14 @@ func main() {
 		if *channel == "" {
 			*channel = "file:" + *input
 		}
-		o := pipeline.Options{Pack: p, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: out, Quarantine: q, FailAfterRawWrite: *failAfter}
+		var mlw io.Writer
+		if *mlPath != "" {
+			f, err := os.Create(*mlPath)
+			die(err)
+			defer f.Close()
+			mlw = f
+		}
+		o := pipeline.Options{Packs: packs, SourceID: *sourceID, ML: mlw, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: out, Quarantine: q, FailAfterRawWrite: *failAfter}
 		if *fixedClock > 0 {
 			t := time.UnixMilli(*fixedClock).UTC()
 			o.Now = func() time.Time { return t }
@@ -126,6 +143,7 @@ func main() {
 			o.NewID = func(time.Time) string { n++; return fmt.Sprintf("ev_%026d", n) }
 		}
 		var st pipeline.Stats
+		var err error
 		if *listen != "" {
 			// syslog over UDP: one datagram per frame; every received byte is evidence, the envelope is
 			// unwrapped after the raw write, the payload is routed and parsed.
@@ -174,6 +192,12 @@ func main() {
 		usage()
 	}
 }
+
+// packList is a repeatable --pack flag.
+type packList []string
+
+func (p *packList) String() string     { return strings.Join(*p, ",") }
+func (p *packList) Set(v string) error { *p = append(*p, v); return nil }
 
 // signingFlags: since P5 a pack must carry a valid detached signature by an authority in the trust store.
 // --allow-unsigned exists for development only and is loud about it.

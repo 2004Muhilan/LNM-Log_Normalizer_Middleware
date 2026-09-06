@@ -42,6 +42,16 @@ class Slot:
 
 
 @dataclass
+class EnvelopeMapping:
+    """1.3.0: an attribute whose value comes from the transport envelope (ASA's time is the syslog header)."""
+    envelope_field: str
+    attribute: str
+    provenance: dict
+    transform: dict | None = None
+    mandatory: bool = False
+
+
+@dataclass
 class Plan:
     source_id: str
     event_class_uid: int
@@ -53,6 +63,9 @@ class Plan:
     timezone_confidence: str = "unresolved"
     proposed_by: str = "fixture"
     model_hash: str = "none:fixture"
+    given_spec: dict | None = None          # P6: a hand-authored spec (csv/kv/regex) — the plan maps its fields, it does not rebuild the structure
+    family_id: str | None = None
+    envelope_mappings: list[EnvelopeMapping] = field(default_factory=list)
 
     def parts(self):
         for s in self.slots:
@@ -60,6 +73,8 @@ class Plan:
                 yield s, p
 
     def spec(self, spec_id: str, description: str) -> dict:
+        if self.given_spec is not None:
+            return copy.deepcopy(self.given_spec)
         slots = []
         for s in self.slots:
             if s.split is None:
@@ -85,6 +100,11 @@ class Plan:
                 out.append(row)
         for m in self.constants:
             row = {"constant": m.transform["constant"] if m.transform else None, "ocsf_attribute": m.attribute, "mandatory": m.mandatory, "provenance": copy.deepcopy(m.provenance)}
+            out.append(row)
+        for e in self.envelope_mappings:
+            row = {"envelope_field": e.envelope_field, "ocsf_attribute": e.attribute, "mandatory": e.mandatory, "provenance": copy.deepcopy(e.provenance)}
+            if e.transform:
+                row["transform"] = copy.deepcopy(e.transform)
             out.append(row)
         return out
 

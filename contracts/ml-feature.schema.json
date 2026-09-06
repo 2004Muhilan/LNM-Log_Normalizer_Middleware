@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ulpf.local/contracts/ml-feature.schema.json",
+  "title": "ULPF ML feature record",
+  "description": "DRAFT 0.1.0 (P6) — raised at the P6 boundary as a candidate sixth contract, not frozen. One record per normalized event, emitted alongside the OCSF JSONL (requirement h): the tuple (template_id, parameter_vector, timestamp, entity_ids). It is a projection of the normalized event and the span map — the routed family as the template, the parser's semantic fields in spec order as the parameters, the OCSF time, and the entity-bearing OCSF attributes — and carries no interpretation of its own. Runtime-produced; validated by both stacks like every other boundary document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "source_id", "class_uid", "template_id", "parameter_vector", "parameter_names", "timestamp", "entity_ids"],
+  "properties": {
+    "schema_version": { "type": "string", "enum": ["0.1.0"] },
+    "event_id": { "type": "string", "pattern": "^ev_[0-9A-HJKMNP-TV-Z]{10,26}$" },
+    "source_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "class_uid": { "type": "integer", "minimum": 0 },
+    "template_id": {
+      "type": "string",
+      "description": "<pack_id>/<family_id>@<parser_hash>: the structure the event was routed to, pinned to the parser that produced the parameters.",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}/[a-z0-9][a-z0-9._-]{0,127}@sha256:[0-9a-f]{64}$"
+    },
+    "parameter_names": { "type": "array", "maxItems": 4096, "items": { "type": "string", "maxLength": 256 } },
+    "parameter_vector": {
+      "type": "array",
+      "description": "Same length and order as parameter_names: the coerced value, else the string value, else null when the field did not participate in this event.",
+      "maxItems": 4096,
+      "items": { "type": ["string", "integer", "number", "boolean", "null"] }
+    },
+    "timestamp": { "type": "integer", "description": "Event time, epoch milliseconds (the OCSF `time`)." },
+    "entity_ids": {
+      "type": "object",
+      "description": "Entity-bearing attributes present on the event, by a fixed short name. Absent entities are omitted, never invented.",
+      "additionalProperties": false,
+      "properties": {
+        "src_ip": { "type": "string" }, "dst_ip": { "type": "string" },
+        "src_host": { "type": "string" }, "dst_host": { "type": "string" },
+        "user": { "type": "string" }, "src_user": { "type": "string" }, "dst_user": { "type": "string" },
+        "device": { "type": "string" }, "rule": { "type": "string" }, "session": { "type": ["string", "integer"] }
+      }
+    }
+  }
+}

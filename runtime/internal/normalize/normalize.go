@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/frame"
 	"ulpf/runtime/internal/pack"
@@ -85,6 +86,34 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 			present[f.OCSFAttribute] = true
 			continue
 		}
+		if f.EnvelopeField != "" {
+			// 1.3.0: the value comes from the transport envelope unwrapped at ingest (ASA's syslog header
+			// timestamp is the event time; the payload carries none). Absent when there was no envelope.
+			raw, ok := envelopeValue(ctx.Envelope, f.EnvelopeField)
+			if !ok {
+				mapped[f.OCSFAttribute] = "@envelope." + f.EnvelopeField
+				continue
+			}
+			var v any = raw
+			if f.Transform != nil && f.Transform.Kind == "timestamp" && f.Transform.Format != nil {
+				ms, err := dsl.ParseTimestamp(*f.Transform.Format, raw, dsl.Env{SourceLocation: ctx.Pack.Location, IngestTime: time.UnixMilli(ctx.Record.IngestTime)})
+				if err != nil {
+					mapped[f.OCSFAttribute] = "@envelope." + f.EnvelopeField
+					opaque["@envelope."+f.EnvelopeField] = true
+					continue
+				}
+				v = ms
+			} else if f.Transform != nil {
+				var okT bool
+				v, okT = transform(f.Transform, v, strs)
+				if !okT {
+					continue
+				}
+			}
+			setPath(out, f.OCSFAttribute, v)
+			present[f.OCSFAttribute] = true
+			continue
+		}
 		v, ok := vals[f.Path]
 		if !ok && !(f.Transform != nil && f.Transform.Kind == "compose_datetime") {
 			continue
@@ -126,10 +155,15 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 		}
 	}
 	out["type_uid"] = int64(ctx.Family.EventClassUID)*100 + activity
-	out["metadata"] = map[string]any{
-		"version": ctx.Pack.OCSF.Version,
-		"product": map[string]any{"vendor_name": ctx.Pack.Source.Vendor, "name": ctx.Pack.Source.Product},
+	// metadata: the pack may have mapped attributes under it (metadata.event_code, metadata.logged_time);
+	// the mechanical derivations are added beside them, never over them (found by the P6 agreement tool).
+	meta, _ := out["metadata"].(map[string]any)
+	if meta == nil {
+		meta = map[string]any{}
 	}
+	meta["version"] = ctx.Pack.OCSF.Version
+	meta["product"] = map[string]any{"vendor_name": ctx.Pack.Source.Vendor, "name": ctx.Pack.Source.Product}
+	out["metadata"] = meta
 	unmapped := map[string]any{}
 	for _, u := range ctx.Family.Mapping.Unmapped {
 		if v, ok := vals[u.Path]; ok {
@@ -273,6 +307,38 @@ func toInt64(v any) (int64, bool) {
 		return n, err == nil
 	}
 	return 0, false
+}
+
+// envelopeValue reads one header field of the unwrapped envelope as a string.
+func envelopeValue(e *frame.Envelope, field string) (string, bool) {
+	if e == nil || e.Kind == "none" {
+		return "", false
+	}
+	switch field {
+	case "timestamp":
+		return e.Timestamp, e.Timestamp != "" && e.Timestamp != "-"
+	case "hostname":
+		return e.Hostname, e.Hostname != "" && e.Hostname != "-"
+	case "app_name":
+		return e.AppName, e.AppName != "" && e.AppName != "-"
+	case "proc_id":
+		return e.ProcID, e.ProcID != "" && e.ProcID != "-"
+	case "msg_id":
+		return e.MsgID, e.MsgID != "" && e.MsgID != "-"
+	case "priority":
+		if e.Priority != nil {
+			return strconv.Itoa(*e.Priority), true
+		}
+	case "facility":
+		if e.Facility != nil {
+			return strconv.Itoa(*e.Facility), true
+		}
+	case "severity":
+		if e.Severity != nil {
+			return strconv.Itoa(*e.Severity), true
+		}
+	}
+	return "", false
 }
 
 // setPath sets a dotted OCSF attribute path, creating nested objects.

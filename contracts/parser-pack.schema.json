@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "pack_id", "pack_version", "created_at", "source", "ocsf", "acceptance", "time", "anchors", "tiebreaker_field", "families", "provenance", "hashes", "signing"],
   "properties": {
-    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds provenance.proposal and is additive over 1.1.0; earlier documents remain valid." },
+    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0", "1.3.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds provenance.proposal; 1.3.0 (P6) adds envelope-sourced mapping fields and the timestamp transform; every bump is additive and earlier documents remain valid." },
     "pack_id": { "$ref": "#/$defs/slug" },
     "pack_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
     "created_at": { "$ref": "#/$defs/rfc3339" },
@@ -208,10 +208,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["ocsf_attribute", "mandatory", "provenance"],
-      "oneOf": [ { "required": ["path"] }, { "required": ["constant"] } ],
+      "oneOf": [ { "required": ["path"] }, { "required": ["constant"] }, { "required": ["envelope_field"] } ],
       "properties": {
         "path": { "$ref": "#/$defs/field_path" },
         "constant": { "description": "1.1.0. A pack-declared constant value for the attribute (e.g. severity_id for a source that carries no severity). Requires provenance like any mapped field; never a derivation.", "type": ["string", "integer", "number", "boolean"] },
+        "envelope_field": { "description": "1.3.0 (P6). The value comes from the transport envelope unwrapped at ingest (P5 _lineage.envelope), not from the payload: ASA payloads carry no timestamp, so `time` (mandatory for network_activity) is the syslog header's — a pack-declared fact with provenance, never a runtime guess. Absent when the event arrived without that envelope.", "type": "string", "enum": ["timestamp", "hostname", "app_name", "proc_id", "msg_id", "priority", "facility", "severity"] },
         "ocsf_attribute": { "$ref": "#/$defs/ocsf_attribute" },
         "mandatory": { "type": "boolean" },
         "provenance": {
@@ -245,7 +246,19 @@
           "additionalProperties": false,
           "required": ["kind"],
           "properties": {
-            "kind": { "type": "string", "enum": ["none", "epoch_ms", "int", "float", "lowercase", "compose_datetime", "lookup"] },
+            "kind": { "type": "string", "enum": ["none", "epoch_ms", "int", "float", "lowercase", "compose_datetime", "lookup", "timestamp"] },
+            "format": {
+              "type": "object",
+              "description": "1.3.0. timestamp only: how to parse a textual value (an envelope header timestamp) — the parser-spec timestamp_format subset implemented identically in both stacks.",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": { "type": "string", "enum": ["epoch_s", "epoch_ms", "epoch_us", "epoch_ns", "epoch_s_frac", "epoch_auto", "rfc3339", "rfc3164", "pattern"] },
+                "pattern": { "type": "string", "maxLength": 128 },
+                "assume_year": { "oneOf": [ { "const": "ingest" }, { "type": "integer", "minimum": 1970, "maximum": 9999 } ] },
+                "timezone": { "type": "string", "enum": ["in_value", "source", "utc"] }
+              }
+            },
             "with": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/field_path" } },
             "lookup": { "type": "object", "maxProperties": 4096, "additionalProperties": { "type": ["string", "integer"] } },
             "default": { "description": "lookup only: value emitted when the span value is not a key. Absent means an unmatched value is emitted as absent.", "type": ["string", "integer"] }
@@ -276,6 +289,12 @@
             "l1_envelope": { "$ref": "#/$defs/l1" },
             "l2_structure": { "$ref": "#/$defs/l2" },
             "l3_anchor_ids": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/slug" } },
+            "l3_anchor_values": {
+              "type": "array",
+              "description": "1.3.0 (P6). The values of each pack anchor that route to THIS family (an ASA family owns message ids 302014 and 302016; PAN-OS TRAFFIC owns the log type TRAFFIC). Every anchor_id must be one of l3_anchor_ids and every value must lie in that anchor's expected_value_domain; the L3 stage of the routing DAG selects families by these values and never by trying parsers.",
+              "maxItems": 64,
+              "items": { "type": "object", "additionalProperties": false, "required": ["anchor_id", "values"], "properties": { "anchor_id": { "$ref": "#/$defs/slug" }, "values": { "type": "array", "minItems": 1, "maxItems": 4096, "uniqueItems": true, "items": { "type": "string", "maxLength": 256 } } } }
+            },
             "l3_structural_literals": { "type": "array", "maxItems": 64, "items": { "type": "object", "additionalProperties": false, "required": ["slot_index", "text"], "properties": { "slot_index": { "type": "integer", "minimum": 0 }, "text": { "type": "string", "maxLength": 256 } } } },
             "l4_sketch": {
               "type": "object",

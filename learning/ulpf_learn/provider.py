@@ -54,3 +54,33 @@ class FixtureProvider(Provider):
         slots = [SlotProposal(int(k) - 1, v.get("candidates", []), v.get("note", ""), v.get("unmapped_name"), v.get("sub_split"))
                  for k, v in sorted(fx["slots"].items(), key=lambda kv: int(kv[0]))]
         return Proposal(fx["event_class_uid"], fx["event_class_name"], slots, "fixture", self.fixture.get("model_hash", "none:fixture"), fx.get("notes", {}))
+
+
+class RecordedProvider(Provider):
+    """Replays proposals the model made in a recorded spike run (spike/results/<machine>/<model>__<backend>__<case>__<mode>.json).
+    Keyed by the spec's field names, so the same recording labels the same given spec on any machine — the
+    model's judgement, reproduced without the GPU; provenance names the recording and the model digest. It is
+    the P6 onboarding path for the vendor families (the live path is --provider model, unchanged)."""
+
+    name = "recorded"
+
+    def __init__(self, result_path: Path):
+        self.result = json.loads(Path(result_path).read_text(encoding="utf-8"))
+        self.path = str(result_path)
+        rows = self.result["judgement"]["rows"]
+        self.by_field = {r["field"]: r for r in rows}
+
+    def propose(self, structure: Structure) -> Proposal:
+        slots = []
+        for obs in structure.slots:
+            row = self.by_field.get(obs.name or "")
+            if row is None:
+                slots.append(SlotProposal(obs.index, [], "not in the recording"))
+                continue
+            slots.append(SlotProposal(obs.index, list(row.get("proposal") or []), row.get("note", ""),
+                                      None if row.get("label") != "unmapped" else (obs.name or None)))
+        uid = self.result["event_class_uid"]
+        name = {4001: "network_activity", 4002: "http_activity", 4003: "dns_activity"}.get(uid, str(uid))
+        prov = dict(self.result.get("provenance") or {})
+        prov.update({"recording": self.path, "recorded_on": self.result.get("machine")})
+        return Proposal(uid, name, slots, "model", self.result["model_hash"], {"provenance": prov})

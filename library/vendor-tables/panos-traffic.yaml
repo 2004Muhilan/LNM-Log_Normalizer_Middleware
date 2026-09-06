@@ -1,0 +1,88 @@
+# Palo Alto PAN-OS TRAFFIC log field reference -> OCSF network_activity (4001). VENDOR SCHEMA evidence
+# (the PAN-OS syslog field order documentation, 8.x–10.x; the draft spec declares 65 cells and the
+# extra/missing policies for the 46/75/105-cell versions).
+vendor: Palo Alto Networks
+product: PAN-OS
+event_class_uid: 4001
+declared_envelope: rfc3164
+transport_hint: syslog-udp
+timezone_confidence: unresolved
+document: "PAN-OS Administrator's Guide — Syslog Field Descriptions, Traffic Log Fields"
+
+anchors:
+  - anchor_id: panos-log-type
+    locator: { kind: slot, slot_index: 3 }            # CSV cell 4 (0-based 3): TRAFFIC | THREAT | SYSTEM | ...
+    expected_value_domain: { kind: enum, values: ["TRAFFIC", "THREAT", "SYSTEM", "CONFIG", "USERID", "HIPMATCH", "GLOBALPROTECT", "CORRELATION", "DECRYPTION"] }
+    admission_basis: declared_domain
+    utility_note: "vendor log-type catalogue; cell 4 of every PAN-OS syslog line"
+
+families:
+  panos-traffic: { anchor_values: ["TRAFFIC"], l2: csv, arity_bucket: "46-105", severity_id: 1, activity_id: 6 }
+
+fields:
+  receive_time:      { attribute: metadata.logged_time, description: "management-plane receive time" }
+  serial_number:     { attribute: device.uid }
+  type:              { attribute: metadata.log_name }
+  subtype:           { attribute: activity_name }
+  generated_time:    { attribute: time, mandatory: true, description: "event time on the dataplane" }
+  src_ip:            { attribute: src_endpoint.ip, mandatory: true }
+  dst_ip:            { attribute: dst_endpoint.ip, mandatory: true }
+  nat_src_ip:        { unmapped_name: nat_src_ip }
+  nat_dst_ip:        { unmapped_name: nat_dst_ip }
+  rule_name:         { attribute: firewall_rule.name }
+  src_user:          { attribute: src_endpoint.owner.name }
+  dst_user:          { attribute: dst_endpoint.owner.name }
+  application:       { attribute: app_name }
+  virtual_system:    { unmapped_name: virtual_system }
+  src_zone:          { attribute: src_endpoint.zone }
+  dst_zone:          { attribute: dst_endpoint.zone }
+  inbound_interface: { attribute: src_endpoint.interface_name }
+  outbound_interface: { attribute: dst_endpoint.interface_name }
+  log_action:        { unmapped_name: log_action }
+  session_id:        { attribute: connection_info.uid }
+  repeat_count:      { attribute: count, transform: { kind: int } }
+  src_port:          { attribute: src_endpoint.port, transform: { kind: int } }
+  dst_port:          { attribute: dst_endpoint.port, transform: { kind: int } }
+  nat_src_port:      { unmapped_name: nat_src_port }
+  nat_dst_port:      { unmapped_name: nat_dst_port }
+  flags:             { unmapped_name: flags }
+  protocol:          { attribute: connection_info.protocol_name }
+  action:            { attribute: action, mandatory: false,
+                       also: [{ attribute: action_id, mandatory: true, transform: { kind: lookup, lookup: { allow: 1, deny: 2, drop: 2, "drop-all-packets": 2, "reset-client": 2, "reset-server": 2, "reset-both": 2, "block-url": 2, "block-ip": 2 }, default: 99 }, description: "PAN-OS action mapped onto the action_id enum (Allowed/Denied/Other)" }] }
+  bytes:             { attribute: traffic.bytes, transform: { kind: int } }
+  bytes_sent:        { attribute: traffic.bytes_out, transform: { kind: int } }
+  bytes_received:    { attribute: traffic.bytes_in, transform: { kind: int } }
+  packets:           { attribute: traffic.packets, transform: { kind: int } }
+  start_time:        { attribute: start_time }
+  elapsed_time:      { attribute: duration, transform: { kind: int } }
+  category:          { unmapped_name: url_category }
+  sequence_number:   { unmapped_name: sequence_number }
+  action_flags:      { unmapped_name: action_flags }
+  src_country:       { attribute: src_endpoint.location.country }
+  dst_country:       { attribute: dst_endpoint.location.country }
+  packets_sent:      { attribute: traffic.packets_out, transform: { kind: int } }
+  packets_received:  { attribute: traffic.packets_in, transform: { kind: int } }
+  session_end_reason: { unmapped_name: session_end_reason }
+  dg_hierarchy_level_1: { unmapped_name: dg_hierarchy_level_1 }
+  dg_hierarchy_level_2: { unmapped_name: dg_hierarchy_level_2 }
+  dg_hierarchy_level_3: { unmapped_name: dg_hierarchy_level_3 }
+  dg_hierarchy_level_4: { unmapped_name: dg_hierarchy_level_4 }
+  virtual_system_name: { unmapped_name: virtual_system_name }
+  device_name:       { attribute: device.name }
+  action_source:     { unmapped_name: action_source }
+  src_vm_uuid:       { unmapped_name: src_vm_uuid }
+  dst_vm_uuid:       { unmapped_name: dst_vm_uuid }
+  tunnel_id_imsi:    { unmapped_name: tunnel_id_imsi }
+  monitor_tag_imei:  { unmapped_name: monitor_tag_imei }
+  parent_session_id: { unmapped_name: parent_session_id }
+  parent_start_time: { unmapped_name: parent_start_time }
+  tunnel_type:       { unmapped_name: tunnel_type }
+  sctp_association_id: { unmapped_name: sctp_association_id }
+  sctp_chunks:       { unmapped_name: sctp_chunks }
+  sctp_chunks_sent:  { unmapped_name: sctp_chunks_sent }
+  sctp_chunks_received: { unmapped_name: sctp_chunks_received }
+  future_use_1: { unmapped_name: future_use_1 }
+  future_use_2: { unmapped_name: future_use_2 }
+  future_use_3: { unmapped_name: future_use_3 }
+  future_use_4: { unmapped_name: future_use_4 }
+  future_use_5: { unmapped_name: future_use_5 }
