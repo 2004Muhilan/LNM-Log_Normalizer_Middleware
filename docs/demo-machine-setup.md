@@ -1,10 +1,15 @@
-# Demo laptop runbook — GTX 1650 4 GB, 16 GB RAM, Windows + WSL2 + Docker Desktop
+# Demo machine setup — what must be true on the machine before the live demo runs
+
+**Two demo documents, two jobs.** This one is about the *machine*: requirements, the checks, and every
+finding from setting up the GTX 1650 laptop (4 GB VRAM, 16 GB RAM, Windows 11 + WSL2 + Docker Desktop).
+Read it once, when preparing a machine. [demo-runbook.md](demo-runbook.md) is about *presenting*: the
+six steps, what to say and click, the fallback per step. Read that on the day.
 
 The demo machine is the constraint: every latency figure that reaches a slide is measured here, not on
 the development desktop. This runbook is what has to be true on the laptop before `scripts/p4-spike.sh`
 can run, in the order the problems bite. Nothing here is optional; each step has a check.
 
-**Revised 2026-09-06 after the first setup run on the actual laptop** (hostname `MSI`, i5-10500H 6c/12t,
+**Revised 2026-09-06 after the first setup run on the actual laptop** (i5-10500H 6c/12t,
 16 GB, GTX 1650 4 GB, Windows 11, WSL2 kernel 6.6.87, Docker Desktop 29.2). Sections marked *measured*
 are what that run found; the rest is the procedure as originally written where it still holds. The
 short version: **the driver is the blocker (§1), the WSL cap bit exactly as predicted (§2), weights must
@@ -147,7 +152,7 @@ export DOCKER_CONFIG=/tmp/ulpf-dockercfg      # per shell; every check script be
 ### 3c. Invoking from Windows
 
 Git Bash rewrites `/mnt/c/...` arguments into `C:/Program Files/Git/mnt/c/...`. From a Git Bash shell use
-`MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu -- bash /mnt/c/VSCode/sih2026-ulpf/scripts/<script>.sh`; from
+`MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu -- bash /mnt/c/<path-to-repo>/scripts/<script>.sh`; from
 PowerShell the plain form in the README works. Background jobs started inside a `wsl.exe -- bash -c`
 call die when the call returns; use `setsid -f` and a log file for anything longer than a few minutes.
 `/mnt/c` also produced one transient `No such file or directory` on `scripts/keys-bootstrap.sh` during a

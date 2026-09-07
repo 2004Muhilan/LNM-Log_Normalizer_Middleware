@@ -6,12 +6,16 @@ that calls the same CLIs the phase checks call and copies its artifacts into `~/
 them, decides nothing. Every step runs and reads fine in a terminal without it. Nothing here needs the
 network: the model server, the witness container and the UI are all local.
 
-**Machine:** the GTX 1650 laptop, WSL2 at its default 7.7 GB cap, driver 616.64. Measured on it, twice in a
-row, on 2026-09-07 (§5).
+**Two demo documents, two jobs.** This one is about *presenting*. Machine requirements, the driver and
+WSL findings, weights on ext4, the port collision, the model configuration and the measured model
+figures are in [demo-machine-setup.md](demo-machine-setup.md) — prepare the machine with that first.
+Measured here: the GTX 1650 laptop, WSL2 at its default 7.7 GB cap, driver 616.64, twice in a row on
+2026-09-07 (§5).
 
 ## 1. Before the judges walk in (T-30 min)
 
-Open two WSL terminals in the repo (`cd /mnt/c/VSCode/sih2026-ulpf`) and a browser window on the projector.
+The machine is prepared per [demo-machine-setup.md](demo-machine-setup.md). Open two WSL terminals in the
+repository root and a browser window on the projector.
 
 ```bash
 bash demo/llama-server.sh start          # the 4B on the GPU, 20/33 layers, 8k context; ~10 s (PTX cache warm)
@@ -27,7 +31,8 @@ Keys on the UI: `1` certificate review, `2` tamper proof, `3` live flow, `4` dis
 Close other GPU users (browser tabs with video, anything with hardware acceleration). The 4B leaves ~1 GB
 of VRAM headroom; the 8B would not.
 
-If `preflight.sh` fails a line, fix that line before anything else — the table in §6 says how.
+If `preflight.sh` fails a line, fix that line before anything else — §4 and §6 here, and the failure
+table in [demo-machine-setup.md](demo-machine-setup.md) §7, say how.
 
 ## 2. The sequence (≈2 min 40 s of machine time; you talk over step 2)
 
@@ -119,5 +124,5 @@ visible to Docker; llama-server on 8081 with `--n-gpu-layers 20 --ctx-size 8192`
 a real completion from it; the witness image; port 6514 free; the UI serving index and state; memory
 headroom. Exit 1 on any FAIL, and writes `~/ulpf-demo/preflight.json`.
 
-Ports: 8081 model server (container), 8765 UI, 6514 the mixed stream's TCP listener. Port 8080 belongs
-to a Jenkins service on this laptop — never use it.
+Ports: 8081 model server (container), 8765 UI, 6514 the mixed stream's TCP listener. Port 8080 was
+already taken on the demo laptop (a Jenkins service) — the demo never uses it.

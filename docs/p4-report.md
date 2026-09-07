@@ -38,7 +38,7 @@ of the weights → loaded fail-closed by the Go engine. The fixture path runs un
 - `models/manifest.json`, `learning/tools/models.py` (`list/fetch/verify/install/serve`), `learning/tools/hf_tree.py`, `scripts/fetch-models.sh`.
 - `learning/Dockerfile` — `llama-build` (llama.cpp `b10819`, CUDA 12.8.1, `CMAKE_CUDA_ARCHITECTURES=75-real;120-real`), `llama` (server image, 5.8 GB), `learning` (Python + llama-server + one digest-verified model from a bind-mounted cache, verified again at start). `scripts/build-llama-image.sh`.
 - Spike: `spike/cases/*.json` (five cases with team-authored ground truth and expected certificate classes), `learning/tools/spike.py` (`run`, `grammar`, `wholespec`, `cases`, `summarize`; starts one container per model, records machine, offload split, VRAM delta, digest, decoding, per-slot judgements), `scripts/p4-spike.sh`, results under `spike/results/<machine>/`.
-- `scripts/invariant2-check.sh`, `scripts/p4-check.sh`, `scripts/llama-logprobe.sh`, `docs/demo-laptop-runbook.md`.
+- `scripts/invariant2-check.sh`, `scripts/p4-check.sh`, `scripts/llama-logprobe.sh`, `docs/demo-machine-setup.md`.
 - Executor alignment: `learning/tests/op_matrix.py` + `test_op_matrix.py` (§3.3), `learning/tools/op_matrix_diff.py`.
 - Analyzer: a request with no certificate when nothing is ambiguous but mandatory fields rest on the provider alone (§5.1).
 
@@ -86,7 +86,7 @@ emitted. Whole-spec emission was still measured (§4.5), as the plan's literal d
   Silent misconfiguration therefore shows in the data; the explicit override is `--ngl N` / `ULPF_NGL`.
 - **WSL2 memory on the 16 GB laptop is the day-of risk**: the default cap is ~8 GB, which does not hold a
   9B (5.6 GB mmapped, the non-offloaded part resident) plus Docker. `.wslconfig` with `memory=12GB` is
-  documented with a check in `docs/demo-laptop-runbook.md`; the 4B does not need it.
+  documented with a check in `docs/demo-machine-setup.md`; the 4B does not need it.
 - **CPU-only floor** is the same image with `--device none`; measured on the desktop in §4.3; the laptop
   run is in the runbook as step 5 and must be done before the GPU numbers.
 - The Windows→WSL path mangling that bit the shell in P1–P3 bit Docker volume paths too (`/models` became
@@ -214,7 +214,7 @@ loop: 100% in every configuration — the loop does its job — at the price of 
 
 ### 4.2 Demo laptop — GTX 1650 4 GB, 16 GB RAM
 
-**Not measured in this phase**: the laptop was not available to this session. `docs/demo-laptop-runbook.md`
+**Not measured in this phase**: the laptop was not available to this session. `docs/demo-machine-setup.md`
 is the procedure; `bash scripts/p4-spike.sh laptop-1650 gpu` writes `spike/results/laptop-1650/` and
 `spike.py summarize` merges both machines into one table. Until that run exists, **no onboarding latency
 figure is quotable anywhere.** The desktop numbers in §4.1 bound the answer from above only for VRAM fit

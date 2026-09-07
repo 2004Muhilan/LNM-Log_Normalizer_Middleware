@@ -25,3 +25,12 @@ models/cache/
 keys/dev/
 keys/trust/*-dev.pub.json
 contracts/golden/squid-native/pack.json.sig
+
+# the live demo's state and the replay capture/zip carry Elastic-licensed fixture lines (corpus/README.md):
+# they are produced locally (demo/reset.sh, demo/replay/capture.sh, demo/replay/build.sh) and never committed
+demo-replay.zip
+demo-replay/
+demo/replay/capture/
+demo/replay/state-real/
+ulpf-demo/
+ulpf-demo-capture/

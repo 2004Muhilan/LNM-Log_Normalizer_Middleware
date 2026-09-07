@@ -27,7 +27,7 @@ test now bootstraps a fresh venv and asserts it (passed on the laptop against th
 `models.py fetch` treated a closed connection as completion; it now knows the expected length and resumes.
 The top-level README said five contracts.
 
-**Laptop measurements** (`docs/demo-laptop-runbook.md` §5–6, `spike/results/laptop-1650/`): the CPU floor and
+**Laptop measurements** (`docs/demo-machine-setup.md` §5–6, `spike/results/laptop-1650/`): the CPU floor and
 the GPU figures for both candidate models are in the runbook and in the demo-shape recommendation delivered
 with this report; the P4 report's "outstanding" status is closed by those files, and its model choice
 remains provisional until the team reads the numbers.
