@@ -1,5 +1,12 @@
 # Byte-exact checkouts on every platform: dsl_hash and corpus_hash are sha256 over file bytes,
 # so CRLF conversion on a Windows clone would silently break the golden vectors.
 * text=auto eol=lf
+# Hash-bearing fixtures are BYTES: no eol conversion in either direction, so a working copy whose bytes differ
+# from the blob (a CRLF file written by a Windows tool) shows up in `git status` instead of being normalised
+# silently at commit while the working copy keeps the CR (found 2026-09-20: step 5 gave 92/9 instead of 98/3).
+contracts/golden/** -text
+learning/fixtures/** -text
+drafts/** -text
+*.log -text
 *.png binary
 *.gz binary

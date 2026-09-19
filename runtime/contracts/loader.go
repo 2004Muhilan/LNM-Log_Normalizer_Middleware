@@ -37,7 +37,7 @@ var Kinds = []Kind{ParserSpec, SpanMap, Certificate, ParserPack, NormalizedEvent
 
 // Supported lists the contract versions this runtime build understands.
 var Supported = map[Kind][]string{
-	ParserSpec: {"1.0.0", "1.1.0"}, SpanMap: {"1.0.0", "1.1.0"}, Certificate: {"1.0.0"}, ParserPack: {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}, NormalizedEvent: {"1.0.0", "1.1.0", "1.2.0"},
+	ParserSpec: {"1.0.0", "1.1.0"}, SpanMap: {"1.0.0", "1.1.0"}, Certificate: {"1.0.0"}, ParserPack: {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}, NormalizedEvent: {"1.0.0", "1.1.0", "1.2.0", "1.3.0"},
 }
 
 var ErrUnsupportedVersion = errors.New("unsupported schema_version")

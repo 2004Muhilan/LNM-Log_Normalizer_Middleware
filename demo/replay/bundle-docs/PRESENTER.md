@@ -1,8 +1,8 @@
 # Presenter notes — replay bundle
 
-**The sentence, if asked whether this is live:** "This is a replay of a run recorded on our demo laptop
+**The sentence, if asked whether this is live:** "This is a replay of a run recorded on our demo machine (<<MACHINE>>)
 on <<RUN_ID>>; the times on screen are the real ones, the replay is compressed. The live version needs the
-GPU and the model server; this laptop has neither." The badge in the corner says REPLAY the whole time.
+GPU and the model server; this machine has neither." The badge in the corner says REPLAY the whole time.
 Do not present the replay as live — the system's whole posture is not claiming more than it proves.
 
 ## Real timings of the recorded run (shown in the badge as each step plays)
@@ -21,7 +21,7 @@ Replay windows: step 2 → 18 s (the model's 116–125 s of thinking is what is 
    ranks by volume: the onboarding order. Rank 11 is a PAN-OS line whose log type is outside the declared
    domain: already flagged, no parser has run."
 2. **Live onboarding of Squid** (screen 1, plays 18 s). "Six unseen Squid lines. Structure is induced
-   deterministically; the model — a 4B running locally on the laptop's GPU under a grammar — is asked only
+   deterministically; the model — a 4B running locally on the demo machine's GPU under a grammar — is asked only
    what the ten slots mean. It proposed; the library named the rivals for three of them: timestamp
    (six temporal candidates), client IP (source or destination), the bytes counter (request or response).
    It did not pick. One question, the cheapest that resolves everything: the device's logformat line.

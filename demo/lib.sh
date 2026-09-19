@@ -23,7 +23,10 @@ DEMO_MODELS_DIR="${ULPF_DEMO_MODELS_DIR:-$HOME/ulpf-models}"
 LLAMA_IMAGE="${ULPF_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}"
 LLAMA_PORT="${ULPF_LLAMA_PORT:-8081}"
 LLAMA_NAME="ulpf-demo-llama"
+# 20 layers on the GPU on EVERY machine: the offload split changes the 4B's labels, hence the certificates on
+# stage (20 -> pos_1/pos_3/pos_5, the set the runbook narrates; 33/33 -> pos_1/pos_3/pos_4). Pre-flight pins it.
 LLAMA_NGL="${ULPF_LLAMA_NGL:-20}"
+DEMO_NGL_PINNED=20
 LLAMA_CTX="${ULPF_LLAMA_CTX:-8192}"
 # step 2's provider: model (live, the demo) | fixture (the P3 path: team-authored proposals; the one-flag
 # fallback when the GPU path stalls — say so on stage)
@@ -31,6 +34,14 @@ DEMO_PROVIDER="${ULPF_DEMO_PROVIDER:-model}"
 UI_PORT="${ULPF_UI_PORT:-8765}"
 TCP_PORT="${ULPF_DEMO_TCP_PORT:-6514}"
 STATUS="$STATE/status.json"
+
+# the machine label recorded in provenance.proposal.backend: the GPU's name (or the hostname without one)
+machine_label() {
+  local g; g=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+  [ -n "$g" ] || g="cpu-$(hostname)"
+  echo "$g" | tr '[:upper:]' '[:lower:]' | sed -E 's/nvidia |geforce //g; s/[^a-z0-9]+/-/g; s/^-|-$//g'
+}
+MACHINE_LABEL="${ULPF_MACHINE_LABEL:-$(machine_label)}"
 
 learn() { (cd "$ROOT/learning" && python -m ulpf_learn "$@"); }
 

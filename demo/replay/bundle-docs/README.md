@@ -25,7 +25,7 @@ Open **http://localhost:8765/** and press **1** to start step 1. Full screen (F1
 
 The UI follows the running step automatically. Each step's artifacts appear when its replay window ends;
 step 5's event stream plays out line by line; step 2 is compressed to 18 s while the badge shows the
-real 145 s it took live.
+real <<STEP2_SECONDS>> s it took live (recorded on: <<MACHINE>>).
 
 ## What is inside
 
@@ -41,7 +41,7 @@ real 145 s it took live.
 `real/bin/` holds static Linux x86-64 binaries of the runtime, the committer and the verifier. They
 need nothing else. This runs the mixed stream through the real runtime with the recorded packs, then
 commits, verifies, exports, verifies the bundle in-process (the witness *container* is the only thing
-replaced), flips a byte and verifies again — on this laptop, on any newline-delimited capture you give it:
+replaced), flips a byte and verifies again — on this machine, on any newline-delimited capture you give it:
 
 ```bash
 bash real/run-real.sh                       # the recorded mixed capture

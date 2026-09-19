@@ -16,7 +16,7 @@ echo "=== golden vectors (regenerated, signed by the dev pack authority) + contr
 python contracts/golden/tools/build_vectors.py || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
 echo "=== runtime suite"
-(cd runtime && go test ./... 2>&1 | grep -vE "no test files") || status=1
+(cd runtime && go test -count=1 ./... 2>&1 | grep -vE "no test files") || status=1
 echo "=== learning-plane suite"
 (cd learning && python -m pytest -q 2>&1 | tail -2) || status=1
 echo "=== signed pack loads; unsigned/untrusted refused"

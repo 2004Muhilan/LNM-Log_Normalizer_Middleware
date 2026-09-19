@@ -23,11 +23,11 @@ echo "=== python: golden walk + pytest"
 (cd learning && python -m pytest -q 2>&1 | tail -3) || status=1
 
 echo "=== go: full test suite (includes corpus replay when corpus/cache is present)"
-(cd runtime && go test ./... 2>&1 | tail -25) || status=1
+(cd runtime && go test -count=1 ./... 2>&1 | tail -25) || status=1
 
 echo "=== go: replay + kill-test detail"
-(cd runtime && go test ./internal/dsl/ -run 'Replay|Synthetic' -v 2>&1 | grep -E "^(=== RUN|--- (PASS|FAIL|SKIP))" | grep -E "PASS|FAIL|SKIP" | sed 's/^ *//' | sort | uniq -c)
-(cd runtime && go test ./internal/pipeline/ -run 'Kill|Quarantine|Golden' -v 2>&1 | grep -E "^--- (PASS|FAIL)")
+(cd runtime && go test -count=1 ./internal/dsl/ -run 'Replay|Synthetic' -v 2>&1 | grep -E "^(=== RUN|--- (PASS|FAIL|SKIP))" | grep -E "PASS|FAIL|SKIP" | sed 's/^ *//' | sort | uniq -c)
+(cd runtime && go test -count=1 ./internal/pipeline/ -run 'Kill|Quarantine|Golden' -v 2>&1 | grep -E "^--- (PASS|FAIL)")
 
 if [ "${ULPF_SKIP_DOCKER:-0}" != "1" ]; then
   echo "=== container: test stage, then runtime image"

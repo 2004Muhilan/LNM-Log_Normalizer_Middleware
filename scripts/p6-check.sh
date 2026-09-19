@@ -17,13 +17,13 @@ echo "=== golden vectors (regenerated, signed) + contract suites"
 python contracts/golden/tools/build_vectors.py || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
 echo "=== runtime suite"
-(cd runtime && go test ./... 2>&1 | grep -vE "no test files") || status=1
+(cd runtime && go test -count=1 ./... 2>&1 | grep -vE "no test files") || status=1
 echo "=== learning-plane suite"
 (cd learning && python -m pytest -q 2>&1 | tail -2) || status=1
 echo "=== invariant 2 (build inspection)"
 bash scripts/invariant2-check.sh | tail -2 || status=1
 echo "=== invariant 6 (static): the router never parses; the pipeline parses once, after routing"
-(cd runtime && go test ./internal/route/ -run TestStaticNoTryAllPath -v 2>&1 | grep -E "^(--- |ok|FAIL)") || status=1
+(cd runtime && go test -count=1 ./internal/route/ -run TestStaticNoTryAllPath -v 2>&1 | grep -E "^(--- |ok|FAIL)") || status=1
 if [ -f corpus/cache/beats-cisco-asa/asa.log ]; then
   echo "=== four-vendor build, mixed stream, propagation, discovery, agreement (corpus cache present)"
   bash scripts/p6-build-packs.sh 2>&1 | grep -E "PASS|FAIL|stats:|candidate-set|quarantined \[|propagated|11-slot metrics|records,|^p6-build" | sed 's/^/  /'

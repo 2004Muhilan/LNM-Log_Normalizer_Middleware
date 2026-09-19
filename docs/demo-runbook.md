@@ -21,8 +21,22 @@ repository root and a browser window on the projector.
 bash demo/llama-server.sh start          # the 4B on the GPU, 20/33 layers, 8k context; ~10 s (PTX cache warm)
 python3 demo/serve-ui.py &               # http://localhost:8765  (once; it survives resets)
 bash demo/reset.sh                       # clean state, dev keys, vendor packs rebuilt from the corpus (~25 s)
-bash demo/preflight.sh                   # 15 checks; must end "PRE-FLIGHT: all clear"
+bash demo/preflight.sh                   # 17 checks; must end "PRE-FLIGHT: all clear"
 ```
+
+**The offload split is part of the script, on every machine.** Step 2's certificate set depends on how many
+layers of the 4B sit on the GPU (measured on both machines, 2026-09-20; same weights by digest, same prompt,
+same seed; each split is byte-stable across repeats and restarts):
+
+| `--n-gpu-layers` | certificates in step 2 | after the logformat answer |
+|---|---|---|
+| **20** (the demo; `ULPF_LLAMA_NGL` default; pinned by pre-flight) | **pos_1** timestamp (`temporal_role`), **pos_3** client IP (`endpoint_orientation`), **pos_5** bytes counter (`request_response_role`) | all three resolved |
+| 33 of 33 (what a 16 GB card would do if left to `auto`) | pos_1, pos_3, **pos_4** `TCP_MISS/200` (`action_outcome`) — no bytes-counter card | pos_1 and pos_3 resolved; **pos_4 stays `ambiguous`**: the logformat splits the slot into `cache_result`/`status_code`, neither among that certificate's survivors; the pack still promotes |
+
+The narration in §2 is written against **20**. Pre-flight fails on any other value; a measurement run sets
+`ULPF_DEMO_NGL_UNPINNED=1` and the check says so loudly. Step 2 at 20 layers: ~145 s on the GTX 1650 laptop,
+~80 s on the RTX 5060 Ti desktop. Pre-flight also fails on a working copy with CRLF files
+(`git ls-files --eol`): a Windows-side checkout once turned step 5's 98 emitted / 3 quarantined into 92 / 9.
 
 Browser: `http://localhost:8765/`. Full screen (F11). It shows "step 2 has not run" — that is correct.
 Keys on the UI: `1` certificate review, `2` tamper proof, `3` live flow, `4` discovery, `F` toggles
@@ -55,8 +69,10 @@ The terminal prints the timings at the end; the UI header shows them per step.
 
 **Drift and healing** (say, do not build): the two quarantined drift lines in step 5 are the detection
 (P6: anchor value outside its declared domain → `routing_drift`, counted, bytes retained). Healing is the
-same path as step 2 run by hand: `bash demo/run.sh 2 2` with the new samples in `SAMPLES`. The automatic
-loop is designed (P8) and not built; say so plainly if asked.
+same path as step 2 run by hand — **but not `bash demo/run.sh 2 2` after a full run**: step 2 onboards the
+same `source_id` with the same propagation store, finds its own earlier resolution under the §4.4 key and
+shows **zero certificates** (correct behaviour — the evidence is already held — and a flat demo). See
+"Showing healing" below for what to run instead.
 
 ## 3. What the UI screens show
 
@@ -88,7 +104,7 @@ loop is designed (P8) and not built; say so plainly if asked.
 | 5 | no gap record | peer B's silence needs the runtime alive > 4 s after B's last frame; at `ULPF_DEMO_RATE=12` the stream lasts ~8 s. Lower the rate: `ULPF_DEMO_RATE=8 bash demo/run.sh 5 5`. |
 | 6 | witness (Docker) fails | the verdict is also computable in-process: `runtime/bin/ulpf-verify bundle --bundle ~/ulpf-demo/step6/bundle-event --trust keys/trust`. Say the container is the point but the maths is the same binary. |
 | 6 | "DEVELOPMENT checkpoint" line worries a judge | Correct and honest: the segments here are SEALED, not kernel-IMMUTABLE, because the store runs unprivileged in the demo; the checkpoint says so in its signed `commit_mode`. The kernel-flag version is `bash scripts/p5-boundary-test.sh` (two containers, capability split) — run it in Q&A, ≈40 s. |
-| Q&A | "does it work on an unseen format?" | `bash demo/run.sh 2 2` with `SAMPLES=/path/to/their/lines` exported first (`export SAMPLES=...`): same path, live, ~2 min. If the structure is not positional (kv/csv) the induced structure still shows; certificates may differ. |
+| Q&A | "does it work on an unseen format?" | (as written this shows zero certificates after a full run, and `demo/lib.sh` sets `SAMPLES` unconditionally — use the onboarding CLI directly with a fresh `--source-id` and `--session`, see "Showing healing") `bash demo/run.sh 2 2` with `SAMPLES=/path/to/their/lines` exported first (`export SAMPLES=...`): same path, live, ~2 min. If the structure is not positional (kv/csv) the induced structure still shows; certificates may differ. |
 
 Recorded proposals for Squid: the P4/P6 recorded provider replays proposals *by field name* and the
 induced Squid slots are unnamed, so it cannot replay the 4B's Squid recording without a small provider
@@ -126,3 +142,29 @@ headroom. Exit 1 on any FAIL, and writes `~/ulpf-demo/preflight.json`.
 
 Ports: 8081 model server (container), 8765 UI, 6514 the mixed stream's TCP listener. Port 8080 was
 already taken on the demo laptop (a Jenkins service) — the demo never uses it.
+
+## Showing healing (raised 2026-09-20; described, not built)
+
+What a judge should see is *drift detected → the same onboarding path → the quarantined lines now flow*, and
+the honest version of that uses only what exists:
+
+1. **The detection is already on screen**: step 5's two `routing_drift` quarantines (and the one in-domain,
+   unowned `%ASA-6-302015`, which is the better healing subject — it is a real family the corpus contains,
+   not a synthetic violation).
+2. **Heal by onboarding the unowned family, not by re-onboarding Squid.** `302015` is a new L3 anchor value,
+   so the §4.4 key differs and propagation cannot pre-empt it: the session shows certificates and a request.
+   By hand: `grep '%ASA-6-302015' corpus/cache/beats-cisco-asa/asa.log > /tmp/asa-302015.log`, then
+   `python -m ulpf_learn onboard-spec --samples /tmp/asa-302015.log --spec drafts/sufficiency/asa-302013.json
+   --vendor cisco-asa --family-id asa-302015 --unwrap-envelope --provider model …`, answer with
+   `vendor_schema_field_order`, promote, `merge` into the ASA source pack. **Not verified end to end**: the
+   302013 draft's regex pins the message id, so a 302015 draft spec (a copy with the id changed — "Built
+   outbound UDP" has the same shape) and a `families:` row in `library/vendor-tables/cisco-asa.yaml` are
+   needed first. That is a small, reviewable change and it is the missing piece of a healing demo.
+3. **Replay the quarantine**: re-run step 5 (`bash demo/run.sh 5 5`) with the healed pack — the `302015` line
+   routes and emits, quarantined drops from 3 to 2, and the evidence log shows the original bytes were
+   retained throughout. The two genuine domain violations stay quarantined, which is the point.
+
+If Squid itself must be the subject (a changed `logformat`), the flat result is avoided only with a **fresh
+`--source-id`** or a fresh propagation store — and saying why: propagation is keyed to the source, and a
+source whose format changed is, for evidence purposes, a new structure under the same source, which is what
+versioned corrections (invariant 8) exist to record.

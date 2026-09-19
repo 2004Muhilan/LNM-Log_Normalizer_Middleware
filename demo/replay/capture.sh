@@ -17,4 +17,8 @@ done
 # the state the UI reads, minus what the replay never needs (the P6 build's own outputs and logs)
 rsync -a --exclude 'p6/ev*' --exclude 'p6/s-*' --exclude 'p6/*.txt' --exclude 'p6/packs' --exclude 'p6-build.log' --exclude '*/session' --exclude 'step3/session-fixture' "$STATE/" "$CAP/state/"
 cp "$STATUS" "$CAP/status.json"
+python3 - "$CAP/machine.json" "$MACHINE_LABEL" "$LLAMA_NGL" "$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)" <<'EOF'
+import json, sys
+json.dump({"label": sys.argv[2], "ngl": sys.argv[3], "gpu": sys.argv[4] or None}, open(sys.argv[1], "w"), indent=1)
+EOF
 echo "capture: $(du -sh "$CAP" | cut -f1) in $CAP"

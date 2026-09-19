@@ -4,4 +4,4 @@ set -uo pipefail
 source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/../runtime"
 export ULPF_ROOT="$(cd .. && pwd)"
-go test "${1:-./...}" 2>&1 | tail -${2:-15}
+go test -count=1 "${1:-./...}" 2>&1 | tail -${2:-15}

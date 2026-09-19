@@ -10,7 +10,7 @@ mkdir -p "$STATE/packs"
 args=(--samples "$SAMPLES" --source-id squid-proxy-01 --operator op-014 --session "$S" --propagation-store "$STATE/propagation.json")
 if [ "$DEMO_PROVIDER" = "model" ]; then
   curl -s -m 3 "http://127.0.0.1:$LLAMA_PORT/health" | grep -q ok || step_fail "llama-server not up on $LLAMA_PORT (fallback: ULPF_DEMO_PROVIDER=fixture)"
-  args+=(--provider model --model-id "$DEMO_MODEL" --server "http://127.0.0.1:$LLAMA_PORT" --mode whole --backend "cuda ngl=$LLAMA_NGL laptop-1650")
+  args+=(--provider model --model-id "$DEMO_MODEL" --server "http://127.0.0.1:$LLAMA_PORT" --mode whole --backend "cuda ngl=$LLAMA_NGL $MACHINE_LABEL")
 else
   args+=(--provider fixture)
 fi

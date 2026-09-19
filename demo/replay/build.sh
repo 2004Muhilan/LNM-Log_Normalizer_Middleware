@@ -19,13 +19,21 @@ cp "$HERE/serve.py" "$B/serve.py"
 cp "$HERE/bundle-docs/README.md" "$HERE/bundle-docs/PRESENTER.md" "$HERE/bundle-docs/NOTICE.md" "$B/"
 cp "$HERE/bundle-docs/ELASTIC-LICENSE.txt" "$B/ELASTIC-LICENSE.txt"
 # the recording's own figures into PRESENTER.md
-python3 - "$B/capture/status.json" "$B/PRESENTER.md" <<'EOF'
-import json, sys
-st = json.load(open(sys.argv[1])); rows = []
+python3 - "$B/capture" "$B/PRESENTER.md" "$B/README.md" <<'EOF'
+import json, os, sys
+cap = sys.argv[1]
+st = json.load(open(f"{cap}/status.json")); rows = []
 for k in sorted(st["steps"], key=int):
     s = st["steps"][k]; rows.append(f"| {k} | {s.get('title','')} | {s.get('seconds',0):.1f} s |")
-txt = open(sys.argv[2]).read().replace("<<TIMINGS>>", "\n".join(rows)).replace("<<RUN_ID>>", st.get("run_id", "?"))
-open(sys.argv[2], "w").write(txt)
+m = json.load(open(f"{cap}/machine.json")) if os.path.exists(f"{cap}/machine.json") else {}
+machine = m.get("gpu") or m.get("label") or "the recording machine"
+step2 = f"{st['steps'].get('2', {}).get('seconds', 0):.0f}"
+for path in sys.argv[2:]:
+    txt = open(path).read()
+    for k, v in (("<<TIMINGS>>", "\n".join(rows)), ("<<RUN_ID>>", st.get("run_id", "?")), ("<<MACHINE>>", machine), ("<<STEP2_SECONDS>>", step2)):
+        txt = txt.replace(k, v)
+    assert "<<" not in txt, f"unsubstituted placeholder in {path}"
+    open(path, "w").write(txt)
 EOF
 if [ "${2:-}" != "--no-binaries" ]; then
   mkdir -p "$B/real/bin" "$B/real/root/ocsf" "$B/real/keys/dev" "$B/real/keys/trust"

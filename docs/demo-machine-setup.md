@@ -1,8 +1,11 @@
 # Demo machine setup — what must be true on the machine before the live demo runs
 
 **Two demo documents, two jobs.** This one is about the *machine*: requirements, the checks, and every
-finding from setting up the GTX 1650 laptop (4 GB VRAM, 16 GB RAM, Windows 11 + WSL2 + Docker Desktop).
-Read it once, when preparing a machine. [demo-runbook.md](demo-runbook.md) is about *presenting*: the
+finding from setting up **both** machines — the GTX 1650 laptop (4 GB VRAM, 16 GB RAM) and the RTX 5060 Ti
+desktop (16 GB VRAM, 48 GB RAM), both Windows 11 + WSL2 + Docker Desktop. **§A is the two-machine summary:
+which settings are universal, which are one machine's constraint, and what behaves differently between
+them.** §0–§7 are the laptop's setup log as measured; read them when a laptop-class machine is being
+prepared. Read this document once, when preparing a machine. [demo-runbook.md](demo-runbook.md) is about *presenting*: the
 six steps, what to say and click, the fallback per step. Read that on the day.
 
 The demo machine is the constraint: every latency figure that reaches a slide is measured here, not on
@@ -15,6 +18,140 @@ are what that run found; the rest is the procedure as originally written where i
 short version: **the driver is the blocker (§1), the WSL cap bit exactly as predicted (§2), weights must
 live on the WSL ext4 disk (§2a), port 8080 is taken (§3a), Docker Hub is locked out by a stale login (§3b),
 and the CPU floor is 434 s for the Squid session (§5).** *Revised again 2026-09-07:* the driver was updated (616.64, CUDA 13.4) and the GPU figures for both candidate models are in §5a.
+
+## A. Two machines, side by side (added 2026-09-20, after the first desktop run of P7 and the demo)
+
+The desktop last built P6; the fix pass, P7, the demo and the replay bundle were built on the laptop and ran
+on the desktop for the first time on 2026-09-20. Everything below was measured on that run.
+
+### A.1 Settings: universal, or one machine's constraint
+
+| Setting | Laptop (GTX 1650, 4 GB / 16 GB RAM) | Desktop (RTX 5060 Ti, 16 GB / 48 GB RAM) | Verdict |
+|---|---|---|---|
+| Weights served from WSL ext4 (`~/ulpf-models`), never `/mnt/c` | required — the 8B never loaded over `/mnt/c` (§2a) | kept: `demo/preflight.sh` enforces ext4 and `demo/llama-server.sh` reads `~/ulpf-models`; copy 33 s (4B) / 66 s (8B), digests verified on the copy | **universal** (pre-flight fails without it) |
+| `--n-gpu-layers 20 --ctx 8192` (`ULPF_LLAMA_NGL`, `ULPF_LLAMA_CTX`; defaults in `demo/lib.sh`) | required for the 8B; the demo default for the 4B (20/33 layers) | **not needed**: `ULPF_LLAMA_NGL=99` puts 33/33 layers on the card (2.6 GB model + 256 MiB KV; ~3.1 GB VRAM delta of 16 GB). **But the offload split changes the model's labels — see A.3 before changing it for a demo** | laptop constraint, with a consequence |
+| `.wslconfig` `memory=10GB` | sized against 16 GB host RAM | none present; WSL default is 23 GB of 48, 22 GB available — nothing to set | laptop constraint |
+| Port 8081 instead of 8080 | Jenkins holds 8080 in the distro | 8080 and 8081 both free; the demo default 8081 is harmless and was kept | laptop constraint, harmless default |
+| llama image | upstream `ghcr.io/ggml-org/llama.cpp:server-cuda` (b10820; the demo default `ULPF_LLAMA_IMAGE`) | upstream image **not present**; the local build `ulpf-llama` (b10819, `ARCHS = 750,1200`) is — run with `ULPF_LLAMA_IMAGE=ulpf-llama`. Same entrypoint and flags; starts in ~10 s, no PTX JIT | per machine — with the default, `llama-server.sh start` would pull 7 GB here |
+| `DOCKER_CONFIG=/tmp/ulpf-dockercfg` (empty config; `demo/lib.sh` sets it) | required — stale Docker Hub login (§3b) | not required (no stale login) and harmless; anonymous pulls work | laptop constraint, harmless default |
+| Driver | 616.64 after the update (§1) | 595.79 — already ≥ R570 | universal requirement, met on both |
+| P7 load-test sizes (`ULPF_LOAD_*` in `p7-check.sh`) | 3,000 conns / 32 MiB / 400 idle, chosen against ~6 GB free | same sizes pass; far larger sizes run — see A.4 | laptop constraint |
+
+Desktop invocation used for every figure below:
+
+```bash
+export ULPF_LLAMA_IMAGE=ulpf-llama ULPF_LLAMA_NGL=99      # ULPF_LLAMA_CTX stays 8192
+mkdir -p ~/ulpf-models && cp models/cache/Qwen3.5-4B-Q4_K_M.gguf ~/ulpf-models/
+bash demo/llama-server.sh start && (setsid -f python3 demo/serve-ui.py) && bash demo/reset.sh && bash demo/preflight.sh
+```
+
+Pre-flight: 15/15 clear on the desktop (20 s). Its `gpu visible to docker` check pulls
+`nvidia/cuda:12.1.1-base-ubuntu22.04` (340 MB, docker.io) the first time on a machine — a network
+dependency inside pre-flight that a venue without a link would hit (it falls back to host `nvidia-smi`).
+
+### A.2 Demo timings
+
+| step | laptop (4B, 20/33 layers, upstream image) | desktop (4B, 33/33 layers, `ulpf-llama`) |
+|---|---|---|
+| 1 discovery | 0.4 s | 0.4–0.5 s |
+| 2 live onboarding | **141–149 s** (model ≈ 116 s) | **35.2–36.5 s** (model proposal 14.2–15.1 s; seven runs, 35.2–36.6 s) — and **80–81 s with `--n-gpu-layers 20`** on the same card (model 58.8–59.7 s) |
+| 3 unresolved | 0.5 s | 0.5–0.6 s |
+| 4 propagation | ~2 s | 2.1–2.2 s |
+| 5 mixed stream | 8–10 s | 9.9 s (rate-paced by the sender, not by the machine) |
+| 6 tamper | ~2 s | 2.0–2.1 s |
+| total | 153–161 s | **50.9–51.6 s** |
+| reset / pre-flight | 24 s / 15 s | 26–28 s / 20 s |
+
+`twice.sh` on the desktop: 50.9 s and 51.1 s, no manual repair. Step 2 is the only step the GPU moves.
+Server-side on the desktop: prompt eval ~3,200–3,400 tokens/s (laptop ~115); generation 79 tokens/s on the
+class call but **12 tokens/s on the grammar-heavy label call** (laptop 9–11) — consistent with the label call being
+bound by grammar-constrained sampling on the CPU rather than by the GPU (not profiled), which would explain why a card eight times larger buys 4×
+on step 2, not 8×. Only steps 1–6 are comparable across machines; nothing else in the demo is GPU-bound.
+
+### A.3 Machine-dependent behaviour found (raised on 2026-09-20; fix pass of the same day noted per item)
+
+*Fix pass:* item 1 — `ULPF_LLAMA_NGL=20` is now pinned by pre-flight on every machine and the runbook states the
+dependence; item 2 — the label is derived from the GPU name (`demo/lib.sh: machine_label`); item 3 — pre-flight
+fails on CRLF working copies and hash-bearing paths are `-text` in `.gitattributes`, so `git status` shows the
+divergence; item 4 — the loader accepts 1.3.0 and **every `go test` in the check scripts and the Dockerfile runs
+with `-count=1`** (eight test files in five packages read outside the module; uncached costs 4.6–5.5 s against
+2.7 s cached); item 5 — unchanged (transient). The `run-real.sh` summary line and the bundle docs' machine
+and step-2 figures are fixed (substituted at build).
+
+1. **The certificates shown on stage depend on the offload split.** Same weights (digest-verified), same
+   prompt, same seed, same image, same card: with `--n-gpu-layers 20` the 4B labels slot 5
+   `http_response.length` and the session shows **pos_1, pos_3, pos_5** (the laptop's three cards — timestamp,
+   client IP, bytes counter; the runbook's script). With all 33 layers on the GPU it leaves slot 5 unlabelled,
+   labels slot 4 `status`, and the session shows **pos_1, pos_3, pos_4** (`action_outcome`). Each
+   configuration is byte-stable across repeats and restarts (P4's finding — determinism is scoped to backend
+   and decoding — now also scoped to the *layer split*). Two consequences for a desktop demo: the runbook's
+   step-2 narration ("the bytes counter") does not match the third card; and `cert_…_pos4` **stays
+   `ambiguous` in the promoted session** — the logformat splits slot 4 into `cache_result`/`status_code`,
+   neither of which is among that certificate's survivors, so nothing resolves it, while the pack still
+   promotes (the slot's mappings carry device-configuration provenance). The evidence request and the single
+   answer that resolves it are the same on both machines (the packs were not compared byte for byte). **To present the laptop's three cards on the desktop,
+   run with `ULPF_LLAMA_NGL=20`** (step 2 then takes ~80 s).
+2. **`demo/steps/2-onboard.sh` records `--backend "cuda ngl=$LLAMA_NGL laptop-1650"`** — the machine label
+   is hardcoded, so a pack promoted on the desktop carries `laptop-1650` in `provenance.proposal.backend`.
+3. **Working-tree CRLF on the desktop.** Five files created on this machine during P6 by Python on Windows
+   (`learning/fixtures/squid-native-11.log`, `squid-native-proposals.json`, `tests/op_matrix.py`,
+   `ulpf_learn/envelope.py`, `ulpf_learn/session.py`) were CRLF on disk while the committed blobs are LF
+   (`.gitattributes eol=lf` normalises at commit and never rewrites the working copy; `git status` was clean).
+   The laptop, a fresh clone, had LF. Effect: step 5 on the desktop first ran **92 emitted / 9 quarantined**
+   — the six 11-slot Squid lines failed at parse (`value "412\r" does not match token class integer`) because
+   the TCP octet-counted path carries the bytes as sent, while file input strips the CR (which is why
+   `p6-build-packs.sh` never noticed). After re-checking-out the five files (`git ls-files --eol | grep
+   w/crlf` → none) step 5 gives the laptop's **98 emitted / 3 quarantined**. Check on any Windows-side
+   working copy: `git ls-files --eol | grep w/crlf` must print nothing.
+4. **`TestGoldenVectors` fails on the desktop and cannot have run on the laptop.** P7 regenerated
+   `contracts/golden/squid-native/normalized/line1.json` at lineage 1.3.0 and added 1.3.0 to the Python
+   validator, but `runtime/contracts/loader.go` still lists normalized-event `1.0.0–1.2.0`. `go test ./...`
+   therefore fails in `p1-check.sh` … `p7-check.sh` and in the container test stage (`p2-check.sh`). On the
+   laptop it reported `ok (cached)`: the golden vectors live outside the `runtime/` module root, and Go's
+   test cache does not re-check files outside the module — demonstrated here (pass with the P6 golden,
+   restore the P7 golden byte for byte → still `ok (cached)`; `-count=1` → FAIL). The desktop's cache had
+   aged out, so it ran the test. Every other section of all seven checks passes. **Not fixed** — it is a
+   one-line contract-loader change plus a decision on whether the check scripts should run the contract
+   suite with `-count=1`.
+5. **`p5-witness-test.sh` failed once** (`open /bundle/bundle.json: no such file or directory`, both
+   container runs of one invocation — the bind mount of a just-created `/tmp` directory came up empty), on
+   the first Docker activity after 13 idle days; then passed 8/8 standalone and 3/3 inside `p5-check.sh`.
+   Transient, same family as the laptop's `/mnt/c` hiccup (§3c): re-run before believing it.
+
+Found in passing, not machine-dependent: `demo/replay/real/run-real.sh` line 54 prints its step-5 summary
+with `\"` inside a single-quoted `python3 -c` f-string — a `SyntaxError` on any Python (the run continues,
+rc 0, only the summary line is lost); re-running step 2 alone after a full run (`demo/run.sh 2 2`, the
+runbook's Q&A suggestion) finds step 2's own resolution in `propagation.json` and shows **zero
+certificates**; `bundle-docs/README.md`, `PRESENTER.md` and `serve.py` say "145 s" and "recorded on our demo
+laptop" whatever machine built the bundle (the timings table is substituted correctly: 35.2 s here).
+
+### A.4 P7 load tests at desktop scale (16 threads, 22.9 GB available, `ulimit -n` 10,240)
+
+| size (conns / MiB / idle) | flood | oversized message | idle peers |
+|---|---|---|---|
+| 3,000 / 32 / 400 (laptop sizes) | pass — 64 served at peak, 2,925 refused, heap +8 MiB (bound 32) | 512 / 513 pieces, heap +0 MiB | pass |
+| 10,000 / 256 / 2,000 | pass — heap +12 MiB | 4,096 / 4,097 pieces, heap +0–1 MiB | pass |
+| 13,000 and 16,000 conns | pass — heap +11 / +18 MiB | — | — |
+| 20,000, 25,000, 40,000 conns | **accounting assertion fails** (accepted + refused ≈ 8.6–14.5 k of N); the heap bound was not breached | 1,024 MiB → 16,384 / 16,385 pieces, heap +4–5 MiB, 14 s | 20,000 idle peers pass (34 s) |
+
+What the larger sizes say that the laptop run could not: (a) the oversized-message bound is flat — heap
+growth stays in single MiB from 32 MiB to 1 GiB, so it is bounded by the frame cap as asserted, not by
+luck at a small size; (b) the flood test's heap growth **rises with the connection count** (8 → 12 → 18 MiB)
+because client and server share one test process and `HeapInuse` counts the clients' buffers too — the
+32 MiB bound is a bound on the whole harness and would eventually be crossed by the client side, not the
+server; (c) above ~16–20 k simultaneous dials the kernel's accept queue overflows (`somaxconn` 4096;
+`TcpExtListenOverflows` 191,877 after these runs) and the clients' 2 s dial timeout expires — a harness
+ceiling, not a server failure; raising `ulimit -n` to 200,000 changed nothing. Invariant 7's asserted
+bounds held at every size where the harness could deliver the load.
+
+### A.5 Replay bundle on the desktop
+
+`capture.sh` 85 s, `build.sh` 8 s → `~/demo-replay.zip`, 8.2 MB, 312 entries. Tested from a clean extract
+with the repository absent: a container with `--network none`, no repository mount, only the zip (extracted
+with `python3 -m zipfile`): index, `app.js`, `replay.js`, `style.css` and `/state/status.json` served;
+`PRESENTER.md` carries this run's timings; real mode ran steps 5 and 6 with the bundled static binaries
+(gap record, verify OK, in-process witness OK ×2, tamper named leaf 0, verify FAIL as intended), apart from
+the summary-line `SyntaxError` above.
 
 ## 0. What the two machines share — and what changed on the laptop
 
@@ -299,4 +436,7 @@ running the server by hand and passing `--server http://127.0.0.1:8081` to the s
 | `the provided PTX was compiled with an unsupported toolchain` | driver's JIT older than the image's CUDA | §1 — the upstream image carries PTX for sm_75 |
 | very slow first request | prompt processing on CPU for the non-offloaded layers; PTX JIT on the upstream image | expected; onboarding is once per source; mount the compute cache (§6) |
 | `No such file or directory` for a script that exists, on `/mnt/c` | transient 9p hiccup | re-run (§3c) |
+| step 5 shows `quarantine reasons: {"parse": 6, …}` and 92 emitted instead of 98 | CRLF working copy of `learning/fixtures/squid-native-11.log` on a Windows-side checkout | `git ls-files --eol \| grep w/crlf`; delete and `git checkout --` each listed file (§A.3.3) |
+| `TestGoldenVectors/squid-native/normalized/line1.json … unsupported schema_version "1.3.0"` | Go loader not updated for normalized-event 1.3.0; hidden on a warm Go test cache | open — §A.3.4 |
+| step 2 shows a different third certificate than the runbook describes | the offload split changes the 4B's labels | `ULPF_LLAMA_NGL=20` for the laptop's set (§A.3.1) |
 | `.part` left in `models/cache` with `DIGEST MISMATCH` after a short download | the server closed the connection early; `models.py fetch` treats EOF as complete | re-run `fetch` — it resumes with a Range request; loop until `verified sha256` |

@@ -7,7 +7,7 @@ Replays one recorded run of the six-step demo (capture/) through the unchanged d
 reads files under /state/ exactly as it does live; this server decides which files are visible
 according to a replay clock: a step's artifacts appear when its replay window ends, step 5's event
 stream is revealed line by line over its window, and status.json reports each step's REAL measured
-duration while the replay itself is compressed (step 2: ~145 s live, replayed in 18 s).
+duration while the replay itself is compressed (step 2: its real duration from status.json, replayed in 18 s).
 
 Controls (from the UI, via replay.js): 1–6 jump to a step, n/→ next, p/← previous, space pause/resume,
 t terminal output, s cycle screens. The same controls exist as HTTP endpoints under /replay/.

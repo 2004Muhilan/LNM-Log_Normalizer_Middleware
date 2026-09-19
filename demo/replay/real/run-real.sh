@@ -51,7 +51,12 @@ wait $RTPID; rc=$?
 "$VF" gaps --evidence "$STATE/ev" --trust "$TRUST" --json > "$STATE/step5/gaps.json" 2>/dev/null
 [ $rc -eq 0 ] || { cat "$STATE/step5/runtime.err"; exit 1; }
 grep -E '^\{' "$STATE/step5/runtime.err" | tail -1 > "$STATE/step5/stats.json"
-python3 -c 'import json,sys; st=json.load(open(sys.argv[1])); print(f"frames {st[\"frames\"]}  emitted {st[\"emitted\"]}  quarantined {st[\"quarantined\"]}  drift {st[\"drift_signals\"]}  gap records {st[\"gap_records\"]} {st[\"gap_kinds\"]}"); print("by family:", json.dumps(st["emitted_by_family"]))' "$STATE/step5/stats.json" | tee "$STATE/step5/summary.txt"
+python3 - "$STATE/step5/stats.json" <<'EOF' | tee "$STATE/step5/summary.txt"
+import json, sys
+st = json.load(open(sys.argv[1]))
+print("frames {frames}  emitted {emitted}  quarantined {quarantined}  drift {drift_signals}  gap records {gap_records} {gap_kinds}".format(**st))
+print("by family:", json.dumps(st["emitted_by_family"]))
+EOF
 "$VF" gaps --evidence "$STATE/ev" --trust "$TRUST" | tee "$STATE/step5/gaps.txt"
 mark 5 done "Mixed stream: four packs, one runtime (real)" "$(python3 -c 'import sys,time; print(round(time.time()-float(sys.argv[1]),1))' "$t0")"
 echo "================ step 6 (REAL on this machine): commit, verify, export, in-process witness, tamper"

@@ -22,9 +22,9 @@ FROM build AS test
 # Missing since P5 — found on the demo laptop 2026-09-06, where the stage had never been rebuilt: eight
 # pack/pipeline tests failed on "authority not in the trust store". keys/dev (private) is never copied.
 # Corpus-backed tests skip when corpus/cache is absent; mount it read-only to include them:
-#   docker run --rm -v "$PWD/corpus/cache:/src/corpus/cache:ro" <image-id> go test ./... -run Replay
+#   docker run --rm -v "$PWD/corpus/cache:/src/corpus/cache:ro" <image-id> go test -count=1 ./... -run Replay
 COPY keys/trust ./keys/trust
-RUN cd runtime && go vet ./... && go test ./...
+RUN cd runtime && go vet ./... && go test -count=1 ./...
 
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 COPY --from=build /out/ulpf-runtime /ulpf-runtime

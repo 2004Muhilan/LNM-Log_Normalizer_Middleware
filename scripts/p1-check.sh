@@ -16,9 +16,9 @@ echo "=== python: pytest ==="
 (cd learning && python -m pytest -q 2>&1 | tail -15) || status=1
 
 echo "=== go: mod tidy + test ==="
-(cd runtime && go mod tidy && go test ./... 2>&1 | tail -40) || status=1
+(cd runtime && go mod tidy && go test -count=1 ./... 2>&1 | tail -40) || status=1
 
 echo "=== go: golden walk (verbose names) ==="
-(cd runtime && go test ./contracts/ -run TestGoldenVectors -v 2>&1 | grep -E "^(=== RUN|--- (PASS|FAIL)|\s+---)" | grep -E "FAIL|PASS" | sed 's/^ *//' | sort | uniq -c | head -60)
+(cd runtime && go test -count=1 ./contracts/ -run TestGoldenVectors -v 2>&1 | grep -E "^(=== RUN|--- (PASS|FAIL)|\s+---)" | grep -E "FAIL|PASS" | sed 's/^ *//' | sort | uniq -c | head -60)
 
 exit $status

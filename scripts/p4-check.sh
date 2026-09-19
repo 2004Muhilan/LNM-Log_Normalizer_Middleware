@@ -16,7 +16,7 @@ echo "=== golden vectors + contract suites"
 python contracts/golden/tools/build_vectors.py || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
 echo "=== runtime suite"
-(cd runtime && go test ./... 2>&1 | grep -vE "no test files") || status=1
+(cd runtime && go test -count=1 ./... 2>&1 | grep -vE "no test files") || status=1
 echo "=== learning-plane suite (incl. op-coverage matrix, model provider with fake server)"
 (cd learning && python -m pytest -q 2>&1 | tail -3) || status=1
 echo "=== invariant 2 (build inspection)"

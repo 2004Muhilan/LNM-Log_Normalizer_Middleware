@@ -8,7 +8,7 @@ This is a direct send to a teammate for a replayed demonstration, not a public r
 runtime, committer and verifier), `real/root/contracts`, `real/root/ocsf/pinned` (pinned OCSF 1.3.0 class
 tables derived from the OCSF schema, Apache License 2.0), and everything under `capture/` that the system
 produced (sessions, certificates, packs, evidence records, checkpoints, terminal output). The dev signing
-keys under `real/keys/` are demo-grade keys generated on the demo laptop; they sign nothing outside this
+keys under `real/keys/` are demo-grade keys generated on the machine that built this bundle; they sign nothing outside this
 demo.
 
 ## Elastic Beats module test fixtures — Elastic License 2.0
