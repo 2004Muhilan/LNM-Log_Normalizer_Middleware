@@ -29,15 +29,20 @@ fi
 echo "=== (a) Go binary: static, no dynamic loader"
 if file "$BIN" | grep -q "statically linked"; then echo "  ok: statically linked"; else echo "  FAIL: not static"; file "$BIN"; status=1; fi
 
+if [ "${ULPF_SKIP_DOCKER:-0}" = "1" ]; then
+  echo "=== (b) runtime image filesystem: SKIPPED (ULPF_SKIP_DOCKER=1) — invariant 2 is NOT verified on the image"; SKIPPED_B=1
+fi
 if [ "${ULPF_SKIP_DOCKER:-0}" != "1" ]; then
   echo "=== (b) runtime image filesystem"
-  docker image inspect ulpf-runtime >/dev/null 2>&1 || docker build -q -f runtime/Dockerfile --target runtime -t ulpf-runtime . >/dev/null
+  # always build: the layer cache makes it cheap, and an existing image may predate the source (it was only built when absent)
+  DOCKER_BUILDKIT=1 docker build -q -f runtime/Dockerfile --target runtime -t ulpf-runtime . >/dev/null || { echo "  FAIL: runtime image did not build"; status=1; }
   cid=$(docker create ulpf-runtime)
   tmp=$(mktemp -d)
   docker export "$cid" | tar -tf - > "$tmp/files.txt"
   docker rm "$cid" >/dev/null
   n=$(wc -l < "$tmp/files.txt")
   echo "  files in image: $n"
+  [ "$n" -gt 0 ] || { echo "  FAIL: empty file list — the image was not inspected (docker create/export failed)"; status=1; }
   if grep -Eiq '\.gguf$|\.safetensors$|\.onnx$|\.pt$|\.bin$|libllama|libggml|libcuda|libcublas|libtorch|python3|site-packages|/venv/' "$tmp/files.txt"; then
     echo "  FAIL: weights/inference/python present:"; grep -Ei '\.gguf$|\.safetensors$|\.onnx$|\.pt$|\.bin$|libllama|libggml|libcuda|libcublas|libtorch|python3|site-packages|/venv/' "$tmp/files.txt" | head; status=1
   else
@@ -46,5 +51,5 @@ if [ "${ULPF_SKIP_DOCKER:-0}" != "1" ]; then
   echo "  image size: $(docker image inspect ulpf-runtime --format '{{.Size}}' | awk '{printf "%.1f MB", $1/1048576}')"
   rm -rf "$tmp"
 fi
-[ $status -eq 0 ] && echo "INVARIANT 2: PASS (by build inspection)" || echo "INVARIANT 2: FAIL"
+[ $status -eq 0 ] && echo "INVARIANT 2: PASS (by build inspection${SKIPPED_B:+; BINARY ONLY — image part skipped})" || echo "INVARIANT 2: FAIL"
 exit $status

@@ -185,7 +185,7 @@ func VerifyBundle(bundleDir string, trust keys.TrustStore) ([]Finding, error) {
 	}
 	sig, err := os.ReadFile(filepath.Join(bundleDir, b.CheckpointFile+".sig"))
 	if err != nil {
-		return append(findings, Finding{"checkpoint", "signature file missing"}), nil
+		return append(findings, Finding{"checkpoint", "signature file missing"}), errors.New("bundle does not verify")
 	}
 	var ck Checkpoint
 	if err := json.Unmarshal(cb, &ck); err != nil {
@@ -213,11 +213,11 @@ func VerifyBundle(bundleDir string, trust keys.TrustStore) ([]Finding, error) {
 		db, err := os.ReadFile(filepath.Join(bundleDir, b.DailyFile))
 		dsig, err2 := os.ReadFile(filepath.Join(bundleDir, b.DailyFile+".sig"))
 		if err != nil || err2 != nil {
-			return append(findings, Finding{"daily", "daily root or its signature missing"}), nil
+			return append(findings, Finding{"daily", "daily root or its signature missing"}), errors.New("bundle does not verify")
 		}
 		var dk Checkpoint
 		if json.Unmarshal(db, &dk) != nil {
-			return append(findings, Finding{"daily", "unparseable"}), nil
+			return append(findings, Finding{"daily", "unparseable"}), errors.New("bundle does not verify")
 		}
 		if err := trust.Verify(dk.AuthorityID, db, strings.TrimSpace(string(dsig))); err != nil {
 			findings = append(findings, Finding{"daily", "signature: " + err.Error()})

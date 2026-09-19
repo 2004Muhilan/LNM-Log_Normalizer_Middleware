@@ -58,7 +58,7 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
               samples: bytes, sample_count: int, operator_id: str, pack_id: str, out_dir: Path, created_at: str,
               routing_sketch: dict, library_version: str, proposal_provenance: dict | None = None, key_path: Path | None = None,
               family_id: str | None = None, source_meta: dict | None = None, anchors: list[dict] | None = None,
-              anchor_values: dict[str, list[str]] | None = None) -> Path:
+              anchor_values: dict[str, list[str]] | None = None, pack_version: str = "1.0") -> Path:
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -95,7 +95,7 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
         "sample_provenance": {"tier": 1, "operator_id": operator_id, "sample_count": sample_count, "corpus_hash": sha(samples)},
     }
     pack = {
-        "schema_version": PACK_SCHEMA_VERSION, "pack_id": pack_id, "pack_version": "1.0", "created_at": created_at,
+        "schema_version": PACK_SCHEMA_VERSION, "pack_id": pack_id, "pack_version": pack_version, "created_at": created_at,
         "source": {"source_id": plan.source_id, **(source_meta or {"vendor": "Squid", "product": "Squid Cache", "declared_envelope": "raw", "transport_hint": "file"})},
         "ocsf": {"version": "1.3.0", "pinned_classes": [{"uid": cls["uid"], "name": cls["name"], "table_hash": cls["table_hash"]}]},
         "acceptance": {"policy_version": "1.0.0"},

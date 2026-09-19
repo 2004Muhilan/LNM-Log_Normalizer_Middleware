@@ -59,7 +59,10 @@ func main() {
 		for _, f := range findings {
 			fmt.Printf("FINDING %s: %s\n", f.Where, f.Detail)
 		}
-		if err != nil {
+		if err != nil || len(findings) > 0 { // a finding is a failure even if the library returned no error (it once did: a missing .sig printed VERIFY: OK)
+			if err == nil {
+				err = fmt.Errorf("%d finding(s)", len(findings))
+			}
 			fmt.Println("VERIFY: FAIL —", err)
 			os.Exit(1)
 		}

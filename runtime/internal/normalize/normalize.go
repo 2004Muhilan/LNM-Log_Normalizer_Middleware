@@ -28,6 +28,10 @@ type Context struct {
 	ProcessingTime time.Time
 	Envelope       *frame.Envelope // the innermost unwrapped envelope, when there was one (1.2.0; the device's own header on a relay chain)
 	Chain          *frame.Chain    // P7 (1.3.0): every envelope removed, when more than one
+	// P8 (invariant 8): a correction is normalization@vN with derived_from naming the version it corrects.
+	// Zero means the live path: version 1, derived from nothing.
+	NormalizationVersion int
+	DerivedFrom          int
 }
 
 // Absent records a mapped mandatory attribute that has no value in this event, with its cause.
@@ -201,7 +205,7 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 		"processing_time":       ctx.ProcessingTime.UnixMilli(),
 		"source_timezone":       ctx.Pack.Time.SourceTimezone,
 		"timezone_confidence":   ctx.Pack.Time.TimezoneConfidence,
-		"normalization_version": 1,
+		"normalization_version": normVersion(ctx),
 		"framing": map[string]any{
 			"method":                  ctx.Record.Framing.Method,
 			"raw_prefix":              base64.StdEncoding.EncodeToString(ctx.Record.Framing.RawPrefix),
@@ -211,6 +215,12 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 			"truncation_status":       ctx.Record.Framing.TruncationStatus,
 			"framing_confidence":      ctx.Record.Framing.FramingConfidence,
 		},
+	}
+	if ctx.NormalizationVersion > 1 {
+		if ctx.DerivedFrom < 1 || ctx.DerivedFrom >= ctx.NormalizationVersion {
+			return nil, res, fmt.Errorf("normalization@v%d must be derived_from an earlier version, got %d (invariant 8)", ctx.NormalizationVersion, ctx.DerivedFrom)
+		}
+		lineage["derived_from"] = ctx.DerivedFrom
 	}
 	if len(res.Absent) > 0 {
 		lineage["absent"] = res.Absent
@@ -361,4 +371,11 @@ func setPath(out map[string]any, path string, v any) {
 		cur = next
 	}
 	cur[parts[len(parts)-1]] = v
+}
+
+func normVersion(ctx Context) int {
+	if ctx.NormalizationVersion > 1 {
+		return ctx.NormalizationVersion
+	}
+	return 1
 }

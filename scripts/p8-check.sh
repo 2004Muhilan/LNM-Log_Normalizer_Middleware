@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# P8 exit checks. Everything P7 checks (scripts/p7-check.sh, which now fails on unformatted Go, builds a fresh
+# runtime image for invariant 2 and refuses an empty image listing), then:
+#   - invariant 8 by NAME and by COUNT: the named tests must each print --- PASS (a renamed test cannot pass silently);
+#   - NO SILENT SKIPS: the Go and Python suites are run verbosely and every skip is printed; with the corpus cache
+#     present and the binaries built, the expected number of skips is ZERO and anything else fails;
+#   - the witness fails closed on a bundle without its signature (p5-witness-test.sh step 6);
+#   - requirement (k), no egress: the final runtime image normalizes the golden samples with --network none and the
+#     VALUES are checked (6 events, line 1's client address and URL), not only that something came out;
+#   - the container test stage (it had only ever been invoked by p2-check.sh).
+# Docker is REQUIRED here: ULPF_SKIP_DOCKER is refused, because a P8 pass without the image checks is not a P8 pass.
+set -uo pipefail
+source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
+cd "$(dirname "$(readlink -f "$0")")/.."
+export ULPF_ROOT="$PWD"
+status=0
+[ "${ULPF_SKIP_DOCKER:-0}" = "1" ] && { echo "p8-check refuses ULPF_SKIP_DOCKER=1"; exit 1; }
+[ -f corpus/cache/beats-cisco-asa/asa.log ] || { echo "p8-check needs the corpus cache (corpus/README.md): without it five replay tests and the four-vendor build skip"; exit 1; }
+
+echo "=== P7 checks (all of them)"
+bash scripts/p7-check.sh > /tmp/p8-p7.log 2>&1; rc=$?
+grep -aE "^p7-check:|INVARIANT 2|^FAIL|: FAIL" /tmp/p8-p7.log | sed 's/^/  /'
+[ $rc -eq 0 ] || { status=1; echo "  p7-check FAILED (full log: /tmp/p8-p7.log)"; }
+
+echo "=== invariant 8 (named tests, each must PASS by name)"
+NAMED="TestNoWritePathToAnExistingVersion TestVerifyFindsAnAlteredVersion TestStaticNoRewritePath TestCorrectionEmitsV2AndNeverTouchesV1 TestExportBundleVerifiesWithOnlyTheTrustStore"
+out=$(cd runtime && go test -count=1 ./internal/lake/ ./internal/pipeline/ ./internal/checkpoint/ -run "^($(echo $NAMED | tr ' ' '|'))\$" -v 2>&1)
+for t in $NAMED; do
+  if echo "$out" | grep -q "^--- PASS: $t "; then echo "  PASS $t"; else echo "  FAIL $t (did not run or did not pass)"; status=1; fi
+done
+
+echo "=== no silent skips"
+gskips=$(cd runtime && go test -count=1 ./... -v 2>&1 | grep -E "^\s*--- SKIP" | grep -v "TestKillHelper")
+pskips=$(cd learning && python -m pytest -q -rs 2>&1 | grep -E "^SKIPPED" )
+if [ -n "$gskips$pskips" ]; then echo "$gskips" | sed 's/^/  GO   /'; echo "$pskips" | sed 's/^/  PY   /'; echo "  FAIL: tests skipped with the corpus present and the binaries built"; status=1; else echo "  ok: zero skipped tests (Go, excluding the kill-test helper process; Python)"; fi
+
+echo "=== witness fails closed (tamper named, untampered bundle refused without the key, missing signature refused)"
+bash scripts/p5-witness-test.sh > /tmp/p8-witness.log 2>&1; rc=$?
+grep -aE "^  ok|  FAIL:|P5 WITNESS" /tmp/p8-witness.log | sed 's/^/  /'
+[ $rc -eq 0 ] && [ "$(grep -c '^  ok' /tmp/p8-witness.log)" -eq 3 ] || { echo "  FAIL: witness test (expected 3 ok lines)"; status=1; }
+
+echo "=== requirement (k): the final runtime image, no network, values checked"
+DOCKER_BUILDKIT=1 docker build -q -f runtime/Dockerfile --target runtime -t ulpf-runtime . >/dev/null || { echo "  FAIL: image build"; status=1; }
+events=$(docker run --rm --network none -v "$PWD/contracts/golden/squid-native:/pack:ro" -v "$PWD/ocsf/pinned:/ocsf/pinned:ro" -v "$PWD/keys/trust:/keys/trust:ro" \
+  --tmpfs /ev:uid=65532 ulpf-runtime run --pack /pack --input /pack/samples/access.log --evidence /ev --out - 2>/tmp/p8-k.err); rc=$?
+python3 - "$rc" <<EOF || status=1
+import json, sys
+rc = int(sys.argv[1])
+lines = [json.loads(l) for l in """$events""".splitlines() if l.startswith("{")]
+ok = rc == 0 and len(lines) == 6 and lines[0]["src_endpoint"]["ip"] == "10.20.14.62" and lines[0]["http_request"]["url"]["url_string"] == "http://example.com/index.html" and all(l["_lineage"]["normalization_version"] == 1 for l in lines)
+print(f"  {'ok' if ok else 'FAIL'}: rc={rc}, {len(lines)} events from the image with --network none; line 1 client {lines[0]['src_endpoint']['ip'] if lines else None}")
+sys.exit(0 if ok else 1)
+EOF
+echo "  image: $(docker image inspect ulpf-runtime --format '{{.Size}}' | awk '{printf "%.1f MB", $1/1048576}'), user $(docker image inspect ulpf-runtime --format '{{.Config.User}}')"
+
+echo "=== container test stage (fresh, not quiet about what it is)"
+DOCKER_BUILDKIT=1 docker build -q -f runtime/Dockerfile --target test -t ulpf-runtime-test . >/dev/null && echo "  container test stage: PASS (note: the five corpus replay tests SKIP inside the image — corpus/cache is never copied into a build context)" || { echo "  container test stage: FAIL"; status=1; }
+
+echo "p8-check: $([ $status = 0 ] && echo PASS || echo FAIL)"
+exit $status

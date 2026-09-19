@@ -11,7 +11,7 @@ export ULPF_ROOT="$PWD"
 status=0
 bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)
 echo "=== build (runtime, committer, verify)"
-(cd runtime && gofmt -l ./internal ./cmd ./contracts && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime && go build -o bin/ulpf-committer ./cmd/ulpf-committer && go build -o bin/ulpf-verify ./cmd/ulpf-verify) || status=1
+(cd runtime && [ -z "$(gofmt -l ./internal ./cmd ./contracts | tee /dev/stderr)" ] && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime && go build -o bin/ulpf-committer ./cmd/ulpf-committer && go build -o bin/ulpf-verify ./cmd/ulpf-verify) || status=1
 echo "=== golden vectors (regenerated, signed by the dev pack authority) + contract suites"
 python contracts/golden/tools/build_vectors.py || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
@@ -24,6 +24,7 @@ runtime/bin/ulpf-runtime verify-pack --pack contracts/golden/squid-native | sed 
 runtime/bin/ulpf-runtime verify-pack --pack contracts/golden/squid-native --trust /nonexistent >/dev/null 2>&1 && { echo "  FAIL: untrusted authority accepted"; status=1; } || echo "  ok: untrusted authority refused (fail closed)"
 echo "=== invariant 2 (build inspection)"
 bash scripts/invariant2-check.sh | tail -2 || status=1
+[ "${ULPF_SKIP_DOCKER:-0}" = "1" ] && echo "=== DOCKER STAGES SKIPPED (ULPF_SKIP_DOCKER=1): container/boundary/witness checks did NOT run"
 if [ "${ULPF_SKIP_DOCKER:-0}" != "1" ]; then
   echo "=== privilege boundary (two containers, kernel immutable flag)"
   bash scripts/p5-boundary-test.sh 2>&1 | grep -E "FAIL|BOUNDARY:|VERIFY:|tampered leaf" | sed 's/^/  /'

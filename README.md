@@ -93,7 +93,7 @@ bash scripts/p1-check.sh                                      # then p2 … p7: 
 Start with **[ulpf-implementation-plan.md](ulpf-implementation-plan.md)** (v1.6): §1 the settled stack,
 §2 the eight invariants and the test that enforces each, §3 the six frozen contracts, §4 the decisions
 register, §11 the divergence log — every place the build departed from the plan, with the report that
-carries the reasoning. Then the **[phase reports](docs/README.md)** P1–P7: each ends with "what was
+carries the reasoning. Then the **[phase reports](docs/README.md)** P1–P8 (P8 is the closing account, with the [test-coverage audit](docs/p8-test-audit.md)): each ends with "what was
 tried and rejected" and "what the next phase inherits"; they are the project's memory.
 
 | If you want to change… | Read | Then run |
@@ -104,6 +104,7 @@ tried and rejected" and "what the next phase inherits"; they are the project's m
 | evidence, checkpoints, signing, the witness | P5 report; `runtime/internal/{evidence,checkpoint,merkle}` | `scripts/p5-check.sh` (needs Docker for the capability boundary) |
 | routing, families, propagation, ML tuple | P6 report; `runtime/internal/route`, `library/` | `scripts/p6-check.sh` (four-vendor build needs the corpus cache) |
 | transports, framing, envelopes, gap records | P7 report; `runtime/internal/{frame,gap}` | `scripts/p7-check.sh` (invariant 7 under load, sized to the machine) |
+| versioned corrections (invariant 8), the audit, effort figures | P8 report; `runtime/internal/lake`, `pipeline/renormalize.go`, `learning/tools/effort.py` | `scripts/p8-check.sh` (needs corpus + Docker; zero skips; named tests by name); `bash demo/run.sh 7 7` |
 
 The contracts are frozen: a change is a version bump, a same-commit golden-vector update and green
 suites on both stacks, recorded in `contracts/README.md`. Anything that touches an invariant or a settled
@@ -124,7 +125,7 @@ decision is *raised* in the phase report, not absorbed.
 | `keys/` | Trust-store layout; dev key pairs are generated locally by `scripts/keys-bootstrap.sh`, never committed |
 | `spike/` | The P4 model spike: cases with team-authored ground truth, results per machine |
 | `demo/` | The live demo (steps, reset, pre-flight, UI) and the replay-bundle builder |
-| `docs/` | Phase reports P1–P7, the demo machine setup, the presenter's runbook |
+| `docs/` | Phase reports P1–P8, the test-coverage audit, the demo machine setup, the presenter's runbook |
 | `scripts/` | Bootstrap and the `pN-check.sh` scripts — each phase's exit criteria as a command |
 
 ## Fixtures and licences

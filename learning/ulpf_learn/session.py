@@ -241,7 +241,10 @@ class Session:
             }
         return touched
 
-    def promote(self, out_dir: Path, pack_id: str) -> Path:
+    def promote(self, out_dir: Path, pack_id: str, pack_version: str = "1.0") -> Path:
+        """pack_version > 1.0 is a CORRECTION of an already promoted family (P8, invariant 8): the same session,
+        a retained certificate resolved by new evidence, a new pack version. The runtime re-derives the affected
+        events from the evidence under it as normalization@v2 (`ulpf-runtime renormalize`); v1 is never rewritten."""
         verdict, _ = self.analyze_and_evaluate()
         if not verdict.promotable:
             raise RuntimeError("not promotable: " + "; ".join(verdict.blockers))
@@ -285,7 +288,7 @@ class Session:
         path = emit_pack(self.plan, spec, verdict, certs, resolutions, samples, self.state["sample_count"], self.state["operator_id"],
                          pack_id, out_dir, now_iso(), routing, self.lib.version,
                          proposal_provenance=self.state.get("proposal_provenance"), family_id=self.plan.family_id, source_meta=source_meta, anchors=anchors,
-                         anchor_values=anchor_values)
+                         anchor_values=anchor_values, pack_version=pack_version)
         if self.state.get("propagation_store"):
             store = PropagationStore(Path(self.state["propagation_store"]))
             n = store.record(self.plan, self.state["source_id"], routing, self.plan.family_id or f"positional-{len(self.plan.slots)}", str(self.path))

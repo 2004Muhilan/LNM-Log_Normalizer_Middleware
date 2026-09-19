@@ -60,6 +60,9 @@ echo "=== 4. root WITHOUT the capability tries the same"
 docker run --rm --user 0 -v "$VOL:/ev" alpine:3.20 sh -c '
   f=/ev/seg_00000.raw; r=0
   (echo tamper >> $f) 2>/dev/null && { echo "  FAIL: root appended"; r=1; } || echo "  ok: root append refused"
+  (: > $f) 2>/dev/null && { echo "  FAIL: root truncated"; r=1; } || echo "  ok: root truncate refused"
+  mv $f $f.moved 2>/dev/null && { echo "  FAIL: root renamed"; r=1; } || echo "  ok: root rename refused"
+  rm -f $f 2>/dev/null; [ -s $f ] && echo "  ok: root delete refused (file still there, non-empty)" || { echo "  FAIL: root deleted or emptied the segment"; r=1; }
   chattr -i $f 2>/dev/null; lsattr $f | grep -q -- "----i" && echo "  ok: root cannot clear the flag without CAP_LINUX_IMMUTABLE" || { echo "  FAIL: root cleared the flag"; r=1; }
   exit $r' || status=1
 

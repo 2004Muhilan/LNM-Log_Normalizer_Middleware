@@ -10,7 +10,7 @@ bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit
 export ULPF_ROOT="$PWD"
 
 echo "=== go: fmt/vet/build runtime binary"
-(cd runtime && gofmt -l ./internal ./cmd ./contracts && go vet ./... && mkdir -p bin && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
+(cd runtime && [ -z "$(gofmt -l ./internal ./cmd ./contracts | tee /dev/stderr)" ] && go vet ./... && mkdir -p bin && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
 
 echo "=== golden vectors (parser_hash from the compiler; normalized golden from the pipeline)"
 python contracts/golden/tools/build_vectors.py || status=1
@@ -29,6 +29,7 @@ echo "=== go: replay + kill-test detail"
 (cd runtime && go test -count=1 ./internal/dsl/ -run 'Replay|Synthetic' -v 2>&1 | grep -E "^(=== RUN|--- (PASS|FAIL|SKIP))" | grep -E "PASS|FAIL|SKIP" | sed 's/^ *//' | sort | uniq -c)
 (cd runtime && go test -count=1 ./internal/pipeline/ -run 'Kill|Quarantine|Golden' -v 2>&1 | grep -E "^--- (PASS|FAIL)")
 
+[ "${ULPF_SKIP_DOCKER:-0}" = "1" ] && echo "=== DOCKER STAGES SKIPPED (ULPF_SKIP_DOCKER=1): container/boundary/witness checks did NOT run"
 if [ "${ULPF_SKIP_DOCKER:-0}" != "1" ]; then
   echo "=== container: test stage, then runtime image"
   docker build -q -f runtime/Dockerfile --target test -t ulpf-runtime-test . >/dev/null && echo "container test stage: PASS" || { echo "container test stage: FAIL"; status=1; }

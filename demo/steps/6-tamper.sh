@@ -17,6 +17,7 @@ ULPF_COMMIT_SEALED=1 "$CM" commit --evidence "$EV" --key keys/dev/ulpf-committer
 "$CM" daily --evidence "$EV" --key keys/dev/ulpf-committer-dev.json | tee "$D/daily.txt"
 echo "--- verify before"
 "$VF" evidence --evidence "$EV" --trust keys/trust | tee "$D/verify-before.txt"
+grep -q "VERIFY: OK — [1-9]" "$D/verify-before.txt" || step_fail "evidence did not verify BEFORE the tamper (or zero checkpoints)"
 echo "--- export: one event and the silence gap record; the witness verifies both with only the public key"
 EVID=$(python3 -c 'import json,sys; print([json.loads(l) for l in open(sys.argv[1])][3]["event_id"])' "$EV/seg_00000.idx.jsonl")
 GAPID=$(python3 -c 'import json,sys; rs=[json.loads(l) for l in open(sys.argv[1])]; print(next(r["event_id"] for r in rs if r["record"]["kind"]=="silence"))' "$STATE/step5/gaps.json")
@@ -45,7 +46,8 @@ print(f"byte {off} of {os.path.basename(raw)}: 0x{orig:02x} -> 0x{b[off]:02x}")
 EOF
 echo "--- verify after"
 "$VF" evidence --evidence "$EV" --trust keys/trust | tee "$D/verify-after.txt"
-grep -q "tampered leaf" "$D/verify-after.txt" || step_fail "verifier did not name the leaf"
+grep -q "tampered leaf 0 " "$D/verify-after.txt" || step_fail "verifier did not name leaf 0 (the first event of the segment holds byte $OFF)"
+grep -q "VERIFY: FAIL" "$D/verify-after.txt" || step_fail "verifier did not FAIL after the tamper"
 echo "--- gap records after the tamper"
 "$VF" gaps --evidence "$EV" --trust keys/trust | tee "$D/gaps-after.txt"
 "$VF" gaps --evidence "$EV" --trust keys/trust --json > "$D/gaps-after.json" 2>/dev/null

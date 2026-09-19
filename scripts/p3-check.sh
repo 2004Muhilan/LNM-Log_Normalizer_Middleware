@@ -9,7 +9,7 @@ export ULPF_ROOT="$PWD"
 status=0
 bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)
 echo "=== runtime build"
-(cd runtime && gofmt -l ./internal ./cmd ./contracts && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
+(cd runtime && [ -z "$(gofmt -l ./internal ./cmd ./contracts | tee /dev/stderr)" ] && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
 echo "=== golden vectors + contract suites"
 python contracts/golden/tools/build_vectors.py || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1

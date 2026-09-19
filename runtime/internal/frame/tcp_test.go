@@ -113,7 +113,7 @@ func TestTCPConnectionFloodHoldsMemoryCap(t *testing.T) {
 // growth is bounded by the frame cap, not by the message size — the test keeps no piece, so what it
 // measures is the framer's own buffering.
 func TestTCPOversizedMessageIsBoundedAndRetained(t *testing.T) {
-	mb := envInt("ULPF_LOAD_MB", 4)
+	mb := envInt("ULPF_LOAD_MB", 32) // the heap bound below is 16 MiB: a 4 MiB default could not breach it even if the framer buffered everything
 	maxEvent := 64 << 10
 	big := bytes.Repeat([]byte("y"), mb<<20)
 	for _, mode := range []string{"octet", "newline"} {

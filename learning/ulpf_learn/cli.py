@@ -72,8 +72,9 @@ def main(argv=None) -> int:
     r = sub.add_parser("respond"); r.add_argument("--session", required=True); r.add_argument("--discriminator", required=True); r.add_argument("--input", required=True)
     r.add_argument("--field"); r.add_argument("--attribute"); r.add_argument("--initiator-ip"); r.add_argument("--sample-line")
     pr = sub.add_parser("promote"); pr.add_argument("--session", required=True); pr.add_argument("--out", required=True); pr.add_argument("--pack-id", required=True)
+    pr.add_argument("--pack-version", default="1.0", help="P8: > 1.0 promotes a CORRECTION of an already promoted family (then `ulpf-runtime renormalize`)")
     mg = sub.add_parser("merge", help="P6: merge promoted single-family packs of one source into a signed source pack (anchors from the vendor table)")
-    mg.add_argument("packs", nargs="+"); mg.add_argument("--out", required=True); mg.add_argument("--pack-id", required=True); mg.add_argument("--vendor")
+    mg.add_argument("packs", nargs="+"); mg.add_argument("--out", required=True); mg.add_argument("--pack-id", required=True); mg.add_argument("--vendor"); mg.add_argument("--pack-version")
     a = ap.parse_args(argv)
 
     if a.cmd in ("onboard", "onboard-spec"):
@@ -104,7 +105,7 @@ def main(argv=None) -> int:
         from .discriminators import load_vendor_table
         from .sourcepack import merge
         anchors = load_declared(load_vendor_table(a.vendor)) if a.vendor else []
-        out = merge([Path(p) for p in a.packs], Path(a.out), a.pack_id, anchors)
+        out = merge([Path(p) for p in a.packs], Path(a.out), a.pack_id, anchors, pack_version=a.pack_version)
         print("merged:", out)
         return 0
     s = Session.load(Path(a.session))
@@ -117,7 +118,7 @@ def main(argv=None) -> int:
         s.respond(a.discriminator, text, field=a.field, attribute=a.attribute, initiator_ip=a.initiator_ip, sample_line=a.sample_line)
         show_status(s)
     elif a.cmd == "promote":
-        p = s.promote(Path(a.out), a.pack_id)
+        p = s.promote(Path(a.out), a.pack_id, a.pack_version)
         print("promoted:", p)
         print("metrics:", json.dumps(s.metrics()))
     elif a.cmd == "review":

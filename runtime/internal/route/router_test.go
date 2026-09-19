@@ -222,6 +222,30 @@ func TestStaticNoTryAllPath(t *testing.T) {
 	if !regexp.MustCompile(`(?s)router\.Route(Chain)?\(.*d\.Family\.Program\.Parse\(`).Match(pipe) { // P7: RouteChain is the chain-aware entry
 		t.Fatal("the single Parse call must be on the family the router chose, after Route")
 	}
+	// P8: the correction path (renormalize.go) is the runtime's only other parser call site, and it is held to the
+	// same rule — exactly one Parse, on the family the router chose, after the routing decision.
+	ren, err := os.ReadFile(filepath.Join("..", "pipeline", "renormalize.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(regexp.MustCompile(`\.Program\.Parse\(`).FindAllIndex(ren, -1)); n != 1 {
+		t.Fatalf("renormalize.go must call Program.Parse exactly once (found %d)", n)
+	}
+	if !regexp.MustCompile(`(?s)router\.RouteChain\(.*d\.Family\.Program\.Parse\(`).Match(ren) {
+		t.Fatal("renormalize.go: the single Parse call must be on the routed family, after RouteChain")
+	}
+	// and no other non-test file of the pipeline package calls a parser at all
+	files, _ := filepath.Glob(filepath.Join("..", "pipeline", "*.go"))
+	for _, f := range files {
+		base := filepath.Base(f)
+		if strings.HasSuffix(base, "_test.go") || base == "pipeline.go" || base == "renormalize.go" {
+			continue
+		}
+		b, _ := os.ReadFile(f)
+		if regexp.MustCompile(`\.Parse\(`).Match(b) {
+			t.Fatalf("%s calls a parser: only pipeline.go and renormalize.go may, once each, after routing", base)
+		}
+	}
 	// no loop over packs or families reaches a Parse
 	if regexp.MustCompile(`(?s)for _, [a-z]+ := range [a-zA-Z.]*(Packs|Families)[^\n]*\n[^\n]*Parse`).Match(pipe) {
 		t.Fatal("a loop over packs/families followed by Parse is a try-all path")

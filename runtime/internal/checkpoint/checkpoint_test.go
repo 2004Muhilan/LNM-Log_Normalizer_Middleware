@@ -200,9 +200,33 @@ func TestExportBundleVerifiesWithOnlyTheTrustStore(t *testing.T) {
 	if err == nil || len(f) == 0 || f[0].Where != "event.raw" {
 		t.Fatalf("tampered bundle accepted: %v %v", f, err)
 	}
-	// an untrusted authority -> refused
-	if f, err := VerifyBundle(out, keys.TrustStore{Dir: t.TempDir()}); err == nil || len(f) == 0 {
-		t.Fatal("bundle verified without a trusted key")
+	// an untrusted authority -> refused, FOR THAT REASON, on an UNTAMPERED bundle (this check used to run on the
+	// bundle tampered above, where the event.raw finding alone satisfied it — it could not fail)
+	clean := t.TempDir()
+	if _, err := Export(dir, "", recs[2].EventID, clean); err != nil {
+		t.Fatal(err)
+	}
+	f, err = VerifyBundle(clean, keys.TrustStore{Dir: t.TempDir()})
+	if err == nil || len(f) == 0 {
+		t.Fatalf("a bundle verified without a trusted key: %v %v", f, err)
+	}
+	for _, x := range f { // checkpoint and daily signatures, both for the missing authority — and nothing else
+		if !strings.Contains(x.Detail, "trust store") {
+			t.Fatalf("an untampered bundle must be refused for the missing authority and nothing else: %+v", x)
+		}
+	}
+	// a bundle whose signature file is missing must FAIL, not pass with a finding (the witness once printed VERIFY: OK)
+	for _, victim := range []string{b.CheckpointFile + ".sig", b.DailyFile + ".sig"} {
+		d := t.TempDir()
+		if _, err := Export(dir, "", recs[2].EventID, d); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(d, victim)); err != nil {
+			t.Fatal(err)
+		}
+		if f, err := VerifyBundle(d, trust(t, key)); err == nil || len(f) == 0 {
+			t.Fatalf("bundle without %s verified: %v %v", victim, f, err)
+		}
 	}
 }
 

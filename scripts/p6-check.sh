@@ -12,7 +12,7 @@ export ULPF_ROOT="$PWD"
 status=0
 bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }
 echo "=== build (runtime, committer, verify)"
-(cd runtime && gofmt -l ./internal ./cmd ./contracts && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime && go build -o bin/ulpf-committer ./cmd/ulpf-committer && go build -o bin/ulpf-verify ./cmd/ulpf-verify) || status=1
+(cd runtime && [ -z "$(gofmt -l ./internal ./cmd ./contracts | tee /dev/stderr)" ] && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime && go build -o bin/ulpf-committer ./cmd/ulpf-committer && go build -o bin/ulpf-verify ./cmd/ulpf-verify) || status=1
 echo "=== golden vectors (regenerated, signed) + contract suites"
 python contracts/golden/tools/build_vectors.py || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1

@@ -26,6 +26,7 @@ import (
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/frame"
+	"ulpf/runtime/internal/lake"
 	"ulpf/runtime/internal/pack"
 	"ulpf/runtime/internal/pipeline"
 )
@@ -81,6 +82,7 @@ func main() {
 		var dirs packList
 		fs.Var(&dirs, "pack", "pack directory (repeat for a mixed stream: every onboarded source)")
 		sourceID := fs.String("source-id", "", "evidence-record source id for a mixed stream (defaults to the single pack's source_id)")
+		lakeDir := fs.String("lake", "", "versioned lake directory (invariant 8): normalized events are ALSO sealed there as normalization@v1 (exclusive create, read-only, sha256 manifest); corrections go through `renormalize`")
 		mlPath := fs.String("ml-out", "", "ML feature records JSONL (requirement h): (template_id, parameter_vector, timestamp, entity_ids)")
 		input := fs.String("input", "", "input file (use - for stdin)")
 		evDir := fs.String("evidence", "", "evidence store directory")
@@ -146,7 +148,18 @@ func main() {
 			defer f.Close()
 			mlw = f
 		}
-		o := pipeline.Options{Packs: packs, SourceID: *sourceID, ML: mlw, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: out, Quarantine: q, FailAfterRawWrite: *failAfter,
+		var outW io.Writer = out
+		var lakeW *lake.Writer
+		if *lakeDir != "" {
+			// invariant 8: the live path seals normalization@v1; it can never reopen it (lake.Create is exclusive)
+			lw, err := lake.Create(*lakeDir, 1, 0, "ingest", time.Now())
+			die(err)
+			for _, p := range packs {
+				lw.AddPack(p.PackID + "@" + p.PackVersion)
+			}
+			lakeW, outW = lw, io.MultiWriter(out, lw)
+		}
+		o := pipeline.Options{Packs: packs, SourceID: *sourceID, ML: mlw, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: outW, Quarantine: q, FailAfterRawWrite: *failAfter,
 			MaxEventBytes: *maxEvent, NoDebatch: *noDebatch, SilenceAfter: *silence}
 		var multi *frame.Multiline
 		if *mlStart != "" {
@@ -235,7 +248,75 @@ func main() {
 			st, err = pipeline.Run(in, o)
 			die(err)
 		}
+		if lakeW != nil {
+			m, err := lakeW.Close()
+			die(err)
+			fmt.Fprintf(os.Stderr, "lake: sealed normalization@v1, %d events, %s\n", m.Events, m.SHA256)
+		}
 		json.NewEncoder(os.Stderr).Encode(st)
+	case "renormalize":
+		// Invariant 8: a correction. Re-derives the affected events from the EVIDENCE under the corrected
+		// packs and seals them as the next normalization version with derived_from; prior versions are read, never written.
+		fs := flag.NewFlagSet("renormalize", flag.ExitOnError)
+		var dirs packList
+		fs.Var(&dirs, "pack", "corrected pack directory (repeat: every pack of the stream)")
+		evDir := fs.String("evidence", "", "evidence store directory (the raw bytes every version derives from)")
+		lakeDir := fs.String("lake", "", "versioned lake directory")
+		reason := fs.String("reason", "", "why this version exists (the certificate resolved, the pack version applied)")
+		contractsDir, pinned := commonFlags(fs)
+		trust, allowUnsigned := signingFlags(fs)
+		fs.Parse(os.Args[2:])
+		if len(dirs) == 0 || *evDir == "" || *lakeDir == "" || *reason == "" {
+			die(fmt.Errorf("renormalize needs --pack, --evidence, --lake and --reason"))
+		}
+		var packs []*pack.Pack
+		for _, d := range dirs {
+			p, err := pack.Load(d, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
+			die(err)
+			packs = append(packs, p)
+		}
+		st, err := pipeline.Renormalize(pipeline.RenormOptions{Packs: packs, EvidenceDir: *evDir, LakeDir: *lakeDir, Reason: *reason})
+		die(err)
+		json.NewEncoder(os.Stdout).Encode(st)
+	case "lake":
+		// lake verify --lake DIR | lake get --lake DIR --event-id ID   (every version of one event)
+		if len(os.Args) < 3 {
+			usage()
+		}
+		fs := flag.NewFlagSet("lake", flag.ExitOnError)
+		lakeDir := fs.String("lake", "", "versioned lake directory")
+		eventID := fs.String("event-id", "", "event id (get)")
+		fs.Parse(os.Args[3:])
+		switch os.Args[2] {
+		case "verify":
+			ms, findings := lake.Verify(*lakeDir)
+			for _, m := range ms {
+				from := "ingest"
+				if m.DerivedFrom > 0 {
+					from = fmt.Sprintf("derived_from v%d", m.DerivedFrom)
+				}
+				fmt.Printf("normalization@v%d: %d events, %s, %s — %s\n", m.Version, m.Events, from, m.SHA256, m.Reason)
+			}
+			for _, f := range findings {
+				fmt.Printf("FINDING v%d: %s\n", f.Version, f.Problem)
+			}
+			if len(findings) > 0 || len(ms) == 0 {
+				fmt.Printf("LAKE: FAIL — %d finding(s) over %d version(s)\n", len(findings), len(ms))
+				os.Exit(1)
+			}
+			fmt.Printf("LAKE: OK — %d version(s), every version byte-identical to what was sealed\n", len(ms))
+		case "get":
+			evs, err := lake.Get(*lakeDir, *eventID)
+			die(err)
+			if len(evs) == 0 {
+				die(fmt.Errorf("event %s is in no version", *eventID))
+			}
+			for _, e := range evs {
+				os.Stdout.Write(append(e, '\n'))
+			}
+		default:
+			usage()
+		}
 	case "export":
 		// One-command evidence export: raw bytes + lineage record + inclusion proof + signed checkpoint.
 		fs := flag.NewFlagSet("export", flag.ExitOnError)
@@ -335,6 +416,6 @@ func die(err error) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ulpf-runtime compile|verify-pack|run|reconstruct [flags]")
+	fmt.Fprintln(os.Stderr, "usage: ulpf-runtime compile|parse|verify-pack|run|renormalize|lake verify|lake get|export|reconstruct [flags]")
 	os.Exit(2)
 }

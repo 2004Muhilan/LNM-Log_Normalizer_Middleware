@@ -20,7 +20,7 @@ def sha(b: bytes) -> str:
     return "sha256:" + hashlib.sha256(b).hexdigest()
 
 
-def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict], key_path: Path = DEFAULT_KEY) -> Path:
+def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict], key_path: Path = DEFAULT_KEY, pack_version: str | None = None) -> Path:
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -53,6 +53,8 @@ def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict
     pack = dict(base)
     pack["schema_version"] = PACK_SCHEMA_VERSION
     pack["pack_id"] = pack_id
+    if pack_version:
+        pack["pack_version"] = pack_version   # a corrected family inside: the source pack's version moves with it
     pack["families"] = families
     pack["anchors"] = anchors
     pack.pop("tiebreaker_field", None)   # dropped at the P6 boundary; older single-family packs may still carry it as null

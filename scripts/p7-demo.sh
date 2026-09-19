@@ -78,8 +78,9 @@ for r in recs:
 trunc = sum(1 for r in recs if r["framing"]["truncation_status"] != "none")
 gaps = [r for r in recs if r["framing"]["method"] == "gap_record"]
 print(f"  records={len(recs)} methods={methods} flagged_pieces={trunc} gap_records={len(gaps)} reconstruct_byte_exact={ok}")
-print("  octet capture:", "PASS" if ok and methods.get("octet_count", 0) >= 10 and methods.get("newline") == 1 and trunc >= 6 and len(gaps) == 1 else "FAIL")
-sys.exit(0 if ok and len(gaps) == 1 else 1)
+passed = ok and methods.get("octet_count", 0) >= 10 and methods.get("newline") == 1 and trunc >= 6 and len(gaps) == 1
+print("  octet capture:", "PASS" if passed else "FAIL")
+sys.exit(0 if passed else 1)   # one condition for the verdict and the status (they used to differ)
 EOF
 
 echo "=== 2. a batched JSON array dropped into the pull directory: N independently hashed events"

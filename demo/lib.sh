@@ -5,6 +5,7 @@
 # phase checks call and copies their artifacts into the state directory for the UI.
 # shellcheck disable=SC2034
 source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
+set -o pipefail   # every step sources this: without it `cmd | tee file || step_fail` tested tee, never cmd (P8 audit)
 export DOCKER_CONFIG="${DOCKER_CONFIG:-/tmp/ulpf-dockercfg}"
 [ -f "$DOCKER_CONFIG/config.json" ] || { mkdir -p "$DOCKER_CONFIG"; echo '{}' > "$DOCKER_CONFIG/config.json"; }
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"

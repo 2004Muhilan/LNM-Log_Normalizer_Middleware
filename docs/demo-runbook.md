@@ -143,6 +143,18 @@ headroom. Exit 1 on any FAIL, and writes `~/ulpf-demo/preflight.json`.
 Ports: 8081 model server (container), 8765 UI, 6514 the mixed stream's TCP listener. Port 8080 was
 already taken on the demo laptop (a Jenkins service) — the demo never uses it.
 
+## Step 7 — versioned correction (P8; optional, after the six)
+
+`bash demo/run.sh 7 7` after a full run, ~4 s, terminal only (no UI screen). The retained certificate from
+step 4 is resolved by the device's full logformat (`… %>st`); the family is promoted as pack 1.1; the runtime
+re-derives the six affected events **from the evidence log** as `normalization@v2` with `derived_from: 1`;
+v1's sha256 is shown identical before and after; both versions of one event are printed
+(`http_request.length: "412"` → `traffic.bytes_in: 412`); a shell append and a runtime re-creation of v1 are
+shown refused. Because step 6 left a byte flipped, step 7 **first shows the correction refused over altered
+evidence**, restores the byte from step 6's record, re-verifies, then corrects — say: "a correction is
+derived from the evidence, never from the previous interpretation, so it will not run over tampered
+evidence." Needs a reset before it can run again: a version is never rewritten.
+
 ## Showing healing (raised 2026-09-20; described, not built)
 
 What a judge should see is *drift detected → the same onboarding path → the quarantined lines now flow*, and
