@@ -1,0 +1,66 @@
+{
+ "note": "The DECLARED replay mix (plan §5.3). The corpus fixtures carry no traffic-volume distribution, so every mix below is a STATED ASSUMPTION, not a measurement, and must be labelled as such wherever a coverage figure is quoted. What is measured: the pool line counts (corpus/catalogue.json), what the runtime makes usable of each replayed stream, and the onboarding decisions in the session records. A team with a real capture replaces the weights here and regenerates (scripts/p8-coverage.sh); nothing else changes.",
+ "frames_per_stream": 2000,
+ "strata": [
+  {"id": "asa-302013", "source": "cisco-asa", "class": "connection", "pool": [{"file": "corpus/cache/beats-cisco-asa/asa.log", "include": "%ASA-6-302013:"}]},
+  {"id": "asa-302014", "source": "cisco-asa", "class": "connection", "pool": [{"file": "corpus/cache/beats-cisco-asa/asa.log", "include": "%ASA-6-30201[46]:"}]},
+  {"id": "asa-302015", "source": "cisco-asa", "class": "connection", "pool": [{"file": "corpus/cache/beats-cisco-asa/asa.log", "include": "%ASA-6-302015:"}]},
+  {"id": "asa-106023", "source": "cisco-asa", "class": "connection", "pool": [{"file": "corpus/cache/beats-cisco-asa/asa.log", "include": "%ASA-4-106023:"}]},
+  {"id": "asa-305011", "source": "cisco-asa", "class": "connection", "pool": [{"file": "corpus/cache/beats-cisco-asa/asa.log", "include": "%ASA-6-30501[12]:"}]},
+  {"id": "asa-long-tail", "source": "cisco-asa", "class": "other", "pool": [
+    {"file": "corpus/cache/beats-cisco-asa/additional_messages.log"}, {"file": "corpus/cache/beats-cisco-asa/sample.log"}, {"file": "corpus/cache/beats-cisco-asa/asa-fix.log"},
+    {"file": "corpus/cache/beats-cisco-asa/non-canonical.log"}, {"file": "corpus/cache/beats-cisco-asa/asa_missing_groups.log"}, {"file": "corpus/cache/beats-cisco-asa/not-ip.log"},
+    {"file": "corpus/cache/beats-cisco-asa/hostnames.log"}, {"file": "corpus/cache/beats-cisco-asa/filtered.log"}, {"file": "corpus/cache/beats-cisco-asa/dap_records.log"}]},
+  {"id": "panos-traffic", "source": "paloalto-panos", "class": "connection", "pool": [{"file": "corpus/cache/beats-panw-panos/traffic.log"}]},
+  {"id": "panos-traffic-other-layouts", "source": "paloalto-panos", "class": "connection", "pool": [
+    {"file": "corpus/cache/beats-panw-panos/pan_inc_traffic.log"}, {"file": "corpus/cache/beats-panw-panos/pan_inc_traffic_ietf.log"}, {"file": "corpus/cache/beats-panw-panos/traffic_nanos_time.log"}]},
+  {"id": "panos-threat", "source": "paloalto-panos", "class": "other", "pool": [{"file": "corpus/cache/beats-panw-panos/threat.log"}, {"file": "corpus/cache/beats-panw-panos/pan_inc_threat.log"}]},
+  {"id": "panos-other", "source": "paloalto-panos", "class": "other", "pool": [
+    {"file": "corpus/cache/beats-panw-panos/pan_inc_other.log"}, {"file": "corpus/cache/beats-panw-panos/global_protect.log"}, {"file": "corpus/cache/beats-panw-panos/userid.log"}, {"file": "corpus/cache/beats-panw-panos/hipmatch.log"}]},
+  {"id": "fortigate-traffic", "source": "fortinet-fortigate", "class": "connection", "pool": [{"file": "corpus/cache/beats-fortinet-firewall/traffic.log"}]},
+  {"id": "fortigate-utm", "source": "fortinet-fortigate", "class": "other", "pool": [{"file": "corpus/cache/beats-fortinet-firewall/utm.log"}]},
+  {"id": "fortigate-event", "source": "fortinet-fortigate", "class": "other", "pool": [{"file": "corpus/cache/beats-fortinet-firewall/event.log"}, {"file": "corpus/cache/beats-fortinet-firewall/event-nul.log"}]},
+  {"id": "squid-native", "source": "squid", "class": "connection", "pool": [{"file": "corpus/cache/beats-squid-log/access1.log"}]},
+  {"id": "squid-custom-logformat", "source": "squid", "class": "connection", "pool": [{"file": "corpus/cache/beats-squid-log/generated.log"}]},
+  {"id": "squid-trace-sample", "source": "squid", "class": "connection", "ours": true, "pool": [{"file": "contracts/golden/squid-native/samples/access.log"}]},
+  {"id": "squid-native-11-synthetic", "source": "squid", "class": "connection", "ours": true, "pool": [{"file": "learning/fixtures/squid-native-11.log"}]}
+ ],
+ "mixes": [
+  {"id": "corpus-lines",
+   "label": "every corpus line weighted equally",
+   "assumption": "Traffic is distributed like the fixture files: each of the 1,316 four-vendor corpus lines carries the same weight. Known to be false as a traffic model — fixtures are collections of parser test cases, roughly one line per case, so rare message types are heavily over-represented. It is here because it assumes nothing beyond the corpus and is the least favourable declared mix.",
+   "weights": "pool_lines"},
+  {"id": "equal-sources",
+   "label": "four sources at 25 % each; within a source, by corpus line count",
+   "assumption": "The four sources contribute equal volume; inside a source, strata keep their corpus proportions. Removes the accident that the PAN-OS fixtures are 40 % of all corpus lines; still inherits the over-representation of rare message types inside each source.",
+   "weights": {"source": {"cisco-asa": 1, "paloalto-panos": 1, "fortinet-fortigate": 1, "squid": 1}}},
+  {"id": "connection-heavy",
+   "label": "four sources at 25 %; 80 % of each firewall's volume is connection/traffic logging",
+   "assumption": "A firewall logs every connection, and management, threat and system events are comparatively rare: 80 % of each source's volume is assigned to its connection-class strata and 20 % to everything else, by corpus line count inside each class. The 80 % is a round number chosen by us, not taken from any capture; this is the mix most favourable to ULPF because the onboarded families are connection-class. Quote it only beside the other two.",
+   "weights": {"source": {"cisco-asa": 1, "paloalto-panos": 1, "fortinet-fortigate": 1, "squid": 1}, "class": {"connection": 0.8, "other": 0.2}}},
+  {"id": "demo-families",
+   "label": "the demo's own stream: only the nine onboarded families, in the demo's proportions",
+   "assumption": "Traffic consists of the nine onboarded families and nothing else, in the proportions of the demo's mixed capture (scripts/p6-build-packs.sh). Two of its pools are OURS, not corpus: the worked trace's Squid sample and the synthetic 11-slot Squid family built to show propagation. Coverage reaches ~100 % by construction; it shows the cost side of the curve and the one place propagation acts, and it is not evidence about live traffic.",
+   "weights": {"strata": {"asa-302013": 20, "panos-traffic": 20, "fortigate-traffic": 13, "squid-trace-sample": 6, "squid-native-11-synthetic": 6, "asa-302014": 10, "asa-106023": 10, "asa-305011": 10, "asa-302015": 10}}}
+ ],
+ "families": [
+  {"id": "asa-302013", "source_id": "asa-fw-01", "source_pack": "cisco-asa-fw-01", "vendor": "cisco-asa", "runtime_family": "cisco-asa-fw-01/asa-302013", "kind": "spec", "spec": "asa-302013", "recording": "asa-302013", "samples_stratum": "asa-302013",
+   "discriminator": "vendor_schema_field_order", "evidence": "Cisco Secure Firewall ASA Series Syslog Messages: 302013 Built {inbound|outbound} {protocol} connection ..."},
+  {"id": "asa-302014", "source_id": "asa-fw-01", "source_pack": "cisco-asa-fw-01", "vendor": "cisco-asa", "runtime_family": "cisco-asa-fw-01/asa-302014", "kind": "spec", "spec": "asa-302014", "recording": "asa-302013", "samples_stratum": "asa-302014",
+   "discriminator": "vendor_schema_field_order", "evidence": "Cisco Secure Firewall ASA Series Syslog Messages: 302014/302016 Teardown {TCP|UDP} connection ..."},
+  {"id": "asa-106023", "source_id": "asa-fw-01", "source_pack": "cisco-asa-fw-01", "vendor": "cisco-asa", "runtime_family": "cisco-asa-fw-01/asa-106023", "kind": "spec", "spec": "asa-106023", "recording": "asa-106023", "samples_stratum": "asa-106023", "samples_exclude": "0x0\\]\"$",
+   "discriminator": "vendor_schema_field_order", "evidence": "Cisco Secure Firewall ASA Series Syslog Messages: 106023 Deny protocol src ... dst ... by access-group"},
+  {"id": "asa-305011", "source_id": "asa-fw-01", "source_pack": "cisco-asa-fw-01", "vendor": "cisco-asa", "runtime_family": "cisco-asa-fw-01/asa-305011", "kind": "spec", "spec": "asa-305011", "recording": "asa-302013", "samples_stratum": "asa-305011",
+   "discriminator": "vendor_schema_field_order", "evidence": "Cisco Secure Firewall ASA Series Syslog Messages: 305011 Built {dynamic|static} translation"},
+  {"id": "asa-302015", "source_id": "asa-fw-01", "source_pack": "cisco-asa-fw-01", "vendor": "cisco-asa", "runtime_family": "cisco-asa-fw-01/asa-302015", "kind": "spec", "spec": "asa-302015", "recording": "asa-302013", "samples_stratum": "asa-302015",
+   "discriminator": "vendor_schema_field_order", "evidence": "Cisco Secure Firewall ASA Series Syslog Messages: 302015 Built {inbound|outbound} UDP connection"},
+  {"id": "panos-traffic", "source_id": "panos-fw-01", "source_pack": "panos-fw-01", "vendor": "paloalto-panos", "runtime_family": "panos-fw-01/panos-traffic", "kind": "spec", "spec": "panos-traffic", "recording": "panos-traffic", "samples_stratum": "panos-traffic",
+   "discriminator": "vendor_schema_field_order", "evidence": "PAN-OS 8.1 Syslog Field Descriptions: Traffic log field order"},
+  {"id": "fortigate-traffic", "source_id": "fortigate-fw-01", "source_pack": "fortigate-fw-01", "vendor": "fortinet-fortigate", "runtime_family": "fortigate-fw-01/fortigate-traffic", "kind": "spec", "spec": "fortigate-traffic", "recording": "fortigate-traffic", "samples_stratum": "fortigate-traffic",
+   "discriminator": "vendor_schema_field_order", "evidence": "FortiOS 6.2 Log Reference: traffic/forward log fields"},
+  {"id": "squid-10", "source_id": "squid-proxy-01", "source_pack": "squid-proxy-01", "vendor": null, "runtime_family": "squid-proxy-01/positional-10", "kind": "fixture", "samples_path": "contracts/golden/squid-native/samples/access.log",
+   "discriminator": "device_logformat_configuration", "evidence": "logformat squid %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt"},
+  {"id": "squid-11", "source_id": "squid-proxy-01", "source_pack": "squid-proxy-01", "vendor": null, "runtime_family": "squid-proxy-01/positional-11", "kind": "fixture", "samples_path": "learning/fixtures/squid-native-11.log", "after": "squid-10",
+   "discriminator": null, "evidence": null}
+ ]
+}

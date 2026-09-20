@@ -210,6 +210,19 @@ protected by its API (exclusive create, consecutive versions), read-only file mo
 `lake verify` recomputes — **not kernel-immutable and not signed**. Root can rewrite a lake file; `lake verify`
 then names the version. v1 being "byte-identical" is a checked hash, not a cryptographic commitment.
 
+## If a judge asks for the coverage curve
+
+Show `docs/metrics/coverage.svg` and say, in this order: (1) **the traffic mix is assumed** — fixtures carry no
+volume distribution, so there are four declared mixes, least to most favourable, and no number is quoted from one
+alone; (2) **coverage is measured** — a stream is built per mix and the runtime says what is usable as families are
+added; (3) **cost is counted decisions, not minutes** — nobody was timed; (4) the result: **for the same coverage,
+60 decisions with ULPF against 211 by hand; 8 evidence requests resolved 42 ambiguities**; nine families make
+**24–49 % of corpus-derived traffic** usable depending on the assumed mix (100 % only on the demo's own stream);
+(5) what it does **not** show: the predicted concave shape — falling marginal cost appears once, on our synthetic
+Squid family; ASA's five families cost the same each, by the propagation key's design. Do not say "four vendors
+covered": Elastic's own Squid capture routes at 15 % under the family learned from the trace's six lines
+(P8 report §13.5) — that is a healing story, not a coverage claim.
+
 ## Showing healing — the reasoning behind step 8 (raised 2026-09-20; built the same day as step 8)
 
 What a judge should see is *drift detected → the same onboarding path → the quarantined lines now flow*, and

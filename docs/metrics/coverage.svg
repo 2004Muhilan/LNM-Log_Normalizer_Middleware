@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 944 718" width="944" height="718" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="11" fill="#0b0b0b">
+<rect width="944" height="718" fill="#fcfcfb"/>
+<text x="56" y="24" font-size="15" font-weight="600">Coverage against counted onboarding decisions, under four DECLARED replay mixes</text>
+<text x="56" y="42" fill="#52514e">Every mix is a stated assumption: the fixtures carry no traffic distribution.</text>
+<text x="56" y="57" fill="#52514e">y is measured by replaying the constructed stream through the runtime; x is counted from the session records, not timed.</text>
+<g transform="translate(56,80)"><line x1="0" y1="0" x2="22" y2="0" stroke="#2a78d6" stroke-width="2"/><text x="28" y="4">ULPF: responses + certificates read (held-out lines)</text><line x1="300" y1="0" x2="322" y2="0" stroke="#eb6834" stroke-width="2"/><text x="328" y="4">hand-authoring: one decision per field (same coverage)</text></g>
+<text x="56" y="110" font-weight="600">corpus-lines</text><text x="56" y="124" fill="#52514e" font-size="10">ASSUMED: every corpus line weighted equally</text>
+<line x1="56" y1="342.0" x2="456" y2="342.0" stroke="#e4e3df"/><text x="50" y="346.0" text-anchor="end" fill="#52514e">0%</text>
+<line x1="56" y1="289.5" x2="456" y2="289.5" stroke="#e4e3df"/><text x="50" y="293.5" text-anchor="end" fill="#52514e">25%</text>
+<line x1="56" y1="237.0" x2="456" y2="237.0" stroke="#e4e3df"/><text x="50" y="241.0" text-anchor="end" fill="#52514e">50%</text>
+<line x1="56" y1="184.5" x2="456" y2="184.5" stroke="#e4e3df"/><text x="50" y="188.5" text-anchor="end" fill="#52514e">75%</text>
+<line x1="56" y1="132.0" x2="456" y2="132.0" stroke="#e4e3df"/><text x="50" y="136.0" text-anchor="end" fill="#52514e">100%</text>
+<text x="56.0" y="356" text-anchor="middle" fill="#52514e">0</text>
+<text x="136.0" y="356" text-anchor="middle" fill="#52514e">50</text>
+<text x="216.0" y="356" text-anchor="middle" fill="#52514e">100</text>
+<text x="296.0" y="356" text-anchor="middle" fill="#52514e">150</text>
+<text x="376.0" y="356" text-anchor="middle" fill="#52514e">200</text>
+<text x="456.0" y="356" text-anchor="middle" fill="#52514e">250</text>
+<path d="M56.0,342.0 L140.8,342.0 L140.8,326.0 L158.4,326.0 L158.4,313.1 L176.0,313.1 L176.0,302.2 L193.6,302.2 L193.6,294.4 L216.0,294.4 L216.0,287.1 L238.4,287.1 L238.4,283.3 L257.6,283.3 L257.6,280.8 L372.8,280.8 L372.8,278.7 L393.6,278.7 L393.6,278.7" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<path d="M56.0,342.0 L73.6,342.0 L73.6,326.0 L81.6,326.0 L81.6,313.1 L89.6,313.1 L89.6,302.2 L100.8,302.2 L100.8,294.4 L112.0,294.4 L112.0,287.1 L123.2,287.1 L123.2,283.3 L131.2,283.3 L131.2,280.8 L150.4,280.8 L150.4,278.7 L152.0,278.7 L152.0,278.7" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="140.8" cy="326.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>1. panos-traffic: 7.6% after 53 decisions</title></circle>
+<circle cx="73.6" cy="326.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>1. panos-traffic: 7.6% after 11 decisions</title></circle>
+<circle cx="158.4" cy="313.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>2. asa-305011: 13.75% after 64 decisions</title></circle>
+<circle cx="81.6" cy="313.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>2. asa-305011: 13.75% after 16 decisions</title></circle>
+<circle cx="176.0" cy="302.2" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>3. asa-302014: 18.95% after 75 decisions</title></circle>
+<circle cx="89.6" cy="302.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>3. asa-302014: 18.95% after 21 decisions</title></circle>
+<circle cx="193.6" cy="294.4" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-106023: 22.65% after 86 decisions</title></circle>
+<circle cx="100.8" cy="294.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-106023: 22.65% after 28 decisions</title></circle>
+<circle cx="216.0" cy="287.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-302013: 26.15% after 100 decisions</title></circle>
+<circle cx="112.0" cy="287.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-302013: 26.15% after 35 decisions</title></circle>
+<circle cx="238.4" cy="283.3" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-302015: 27.95% after 114 decisions</title></circle>
+<circle cx="123.2" cy="283.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-302015: 27.95% after 42 decisions</title></circle>
+<circle cx="257.6" cy="280.8" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>7. squid-10: 29.15% after 126 decisions</title></circle>
+<circle cx="131.2" cy="280.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>7. squid-10: 29.15% after 47 decisions</title></circle>
+<circle cx="372.8" cy="278.7" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>8. fortigate-traffic: 30.15% after 198 decisions</title></circle>
+<circle cx="150.4" cy="278.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>8. fortigate-traffic: 30.15% after 59 decisions</title></circle>
+<circle cx="393.6" cy="278.7" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 30.15% after 211 decisions</title></circle>
+<circle cx="152.0" cy="278.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 30.15% after 60 decisions</title></circle>
+<text x="456" y="269.7" text-anchor="end" fill="#52514e">ends at 30.15% of the stream: 60 decisions (ULPF) vs 211 (by hand)</text>
+<text x="520" y="110" font-weight="600">equal-sources</text><text x="520" y="124" fill="#52514e" font-size="10">ASSUMED: four sources at 25 % each; within a source, by corpus line count</text>
+<line x1="520" y1="342.0" x2="920" y2="342.0" stroke="#e4e3df"/><text x="514" y="346.0" text-anchor="end" fill="#52514e">0%</text>
+<line x1="520" y1="289.5" x2="920" y2="289.5" stroke="#e4e3df"/><text x="514" y="293.5" text-anchor="end" fill="#52514e">25%</text>
+<line x1="520" y1="237.0" x2="920" y2="237.0" stroke="#e4e3df"/><text x="514" y="241.0" text-anchor="end" fill="#52514e">50%</text>
+<line x1="520" y1="184.5" x2="920" y2="184.5" stroke="#e4e3df"/><text x="514" y="188.5" text-anchor="end" fill="#52514e">75%</text>
+<line x1="520" y1="132.0" x2="920" y2="132.0" stroke="#e4e3df"/><text x="514" y="136.0" text-anchor="end" fill="#52514e">100%</text>
+<text x="520.0" y="356" text-anchor="middle" fill="#52514e">0</text>
+<text x="600.0" y="356" text-anchor="middle" fill="#52514e">50</text>
+<text x="680.0" y="356" text-anchor="middle" fill="#52514e">100</text>
+<text x="760.0" y="356" text-anchor="middle" fill="#52514e">150</text>
+<text x="840.0" y="356" text-anchor="middle" fill="#52514e">200</text>
+<text x="920.0" y="356" text-anchor="middle" fill="#52514e">250</text>
+<path d="M520.0,342.0 L604.8,342.0 L604.8,332.2 L720.0,332.2 L720.0,322.8 L737.6,322.8 L737.6,314.4 L755.2,314.4 L755.2,307.2 L772.8,307.2 L772.8,302.2 L795.2,302.2 L795.2,297.4 L814.4,297.4 L814.4,293.4 L836.8,293.4 L836.8,290.9 L857.6,290.9 L857.6,290.9" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<path d="M520.0,342.0 L537.6,342.0 L537.6,332.2 L556.8,332.2 L556.8,322.8 L564.8,322.8 L564.8,314.4 L572.8,314.4 L572.8,307.2 L584.0,307.2 L584.0,302.2 L595.2,302.2 L595.2,297.4 L603.2,297.4 L603.2,293.4 L614.4,293.4 L614.4,290.9 L616.0,290.9 L616.0,290.9" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="604.8" cy="332.2" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>1. panos-traffic: 4.65% after 53 decisions</title></circle>
+<circle cx="537.6" cy="332.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>1. panos-traffic: 4.65% after 11 decisions</title></circle>
+<circle cx="720.0" cy="322.8" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>2. fortigate-traffic: 9.15% after 125 decisions</title></circle>
+<circle cx="556.8" cy="322.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>2. fortigate-traffic: 9.15% after 23 decisions</title></circle>
+<circle cx="737.6" cy="314.4" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>3. asa-305011: 13.15% after 136 decisions</title></circle>
+<circle cx="564.8" cy="314.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>3. asa-305011: 13.15% after 28 decisions</title></circle>
+<circle cx="755.2" cy="307.2" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-302014: 16.55% after 147 decisions</title></circle>
+<circle cx="572.8" cy="307.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-302014: 16.55% after 33 decisions</title></circle>
+<circle cx="772.8" cy="302.2" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-106023: 18.95% after 158 decisions</title></circle>
+<circle cx="584.0" cy="302.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-106023: 18.95% after 40 decisions</title></circle>
+<circle cx="795.2" cy="297.4" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-302013: 21.25% after 172 decisions</title></circle>
+<circle cx="595.2" cy="297.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-302013: 21.25% after 47 decisions</title></circle>
+<circle cx="814.4" cy="293.4" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>7. squid-10: 23.15% after 184 decisions</title></circle>
+<circle cx="603.2" cy="293.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>7. squid-10: 23.15% after 52 decisions</title></circle>
+<circle cx="836.8" cy="290.9" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>8. asa-302015: 24.35% after 198 decisions</title></circle>
+<circle cx="614.4" cy="290.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>8. asa-302015: 24.35% after 59 decisions</title></circle>
+<circle cx="857.6" cy="290.9" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 24.35% after 211 decisions</title></circle>
+<circle cx="616.0" cy="290.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 24.35% after 60 decisions</title></circle>
+<text x="920" y="281.9" text-anchor="end" fill="#52514e">ends at 24.35% of the stream: 60 decisions (ULPF) vs 211 (by hand)</text>
+<text x="56" y="416" font-weight="600">connection-heavy</text><text x="56" y="430" fill="#52514e" font-size="10">ASSUMED: four sources at 25 %; 80 % of each firewall's volume is connection/traffic logging</text>
+<line x1="56" y1="648.0" x2="456" y2="648.0" stroke="#e4e3df"/><text x="50" y="652.0" text-anchor="end" fill="#52514e">0%</text>
+<line x1="56" y1="595.5" x2="456" y2="595.5" stroke="#e4e3df"/><text x="50" y="599.5" text-anchor="end" fill="#52514e">25%</text>
+<line x1="56" y1="543.0" x2="456" y2="543.0" stroke="#e4e3df"/><text x="50" y="547.0" text-anchor="end" fill="#52514e">50%</text>
+<line x1="56" y1="490.5" x2="456" y2="490.5" stroke="#e4e3df"/><text x="50" y="494.5" text-anchor="end" fill="#52514e">75%</text>
+<line x1="56" y1="438.0" x2="456" y2="438.0" stroke="#e4e3df"/><text x="50" y="442.0" text-anchor="end" fill="#52514e">100%</text>
+<text x="56.0" y="662" text-anchor="middle" fill="#52514e">0</text>
+<text x="136.0" y="662" text-anchor="middle" fill="#52514e">50</text>
+<text x="216.0" y="662" text-anchor="middle" fill="#52514e">100</text>
+<text x="296.0" y="662" text-anchor="middle" fill="#52514e">150</text>
+<text x="376.0" y="662" text-anchor="middle" fill="#52514e">200</text>
+<text x="456.0" y="662" text-anchor="middle" fill="#52514e">250</text>
+<path d="M56.0,648.0 L171.2,648.0 L171.2,606.0 L256.0,606.0 L256.0,592.0 L273.6,592.0 L273.6,579.3 L291.2,579.3 L291.2,568.7 L308.8,568.7 L308.8,561.1 L331.2,561.1 L331.2,553.8 L350.4,553.8 L350.4,549.8 L372.8,549.8 L372.8,546.0 L393.6,546.0 L393.6,546.0" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<path d="M56.0,648.0 L75.2,648.0 L75.2,606.0 L92.8,606.0 L92.8,592.0 L100.8,592.0 L100.8,579.3 L108.8,579.3 L108.8,568.7 L120.0,568.7 L120.0,561.1 L131.2,561.1 L131.2,553.8 L139.2,553.8 L139.2,549.8 L150.4,549.8 L150.4,546.0 L152.0,546.0 L152.0,546.0" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="171.2" cy="606.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>1. fortigate-traffic: 20.0% after 72 decisions</title></circle>
+<circle cx="75.2" cy="606.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>1. fortigate-traffic: 20.0% after 12 decisions</title></circle>
+<circle cx="256.0" cy="592.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>2. panos-traffic: 26.65% after 125 decisions</title></circle>
+<circle cx="92.8" cy="592.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>2. panos-traffic: 26.65% after 23 decisions</title></circle>
+<circle cx="273.6" cy="579.3" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>3. asa-305011: 32.7% after 136 decisions</title></circle>
+<circle cx="100.8" cy="579.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>3. asa-305011: 32.7% after 28 decisions</title></circle>
+<circle cx="291.2" cy="568.7" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-302014: 37.75% after 147 decisions</title></circle>
+<circle cx="108.8" cy="568.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-302014: 37.75% after 33 decisions</title></circle>
+<circle cx="308.8" cy="561.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-106023: 41.4% after 158 decisions</title></circle>
+<circle cx="120.0" cy="561.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-106023: 41.4% after 40 decisions</title></circle>
+<circle cx="331.2" cy="553.8" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-302013: 44.85% after 172 decisions</title></circle>
+<circle cx="131.2" cy="553.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-302013: 44.85% after 47 decisions</title></circle>
+<circle cx="350.4" cy="549.8" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>7. squid-10: 46.75% after 184 decisions</title></circle>
+<circle cx="139.2" cy="549.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>7. squid-10: 46.75% after 52 decisions</title></circle>
+<circle cx="372.8" cy="546.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>8. asa-302015: 48.55% after 198 decisions</title></circle>
+<circle cx="150.4" cy="546.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>8. asa-302015: 48.55% after 59 decisions</title></circle>
+<circle cx="393.6" cy="546.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 48.55% after 211 decisions</title></circle>
+<circle cx="152.0" cy="546.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 48.55% after 60 decisions</title></circle>
+<text x="456" y="537.0" text-anchor="end" fill="#52514e">ends at 48.55% of the stream: 60 decisions (ULPF) vs 211 (by hand)</text>
+<text x="520" y="416" font-weight="600">demo-families</text><text x="520" y="430" fill="#52514e" font-size="10">ASSUMED: the demo's own stream: only the nine onboarded families, in the demo's proportions</text>
+<line x1="520" y1="648.0" x2="920" y2="648.0" stroke="#e4e3df"/><text x="514" y="652.0" text-anchor="end" fill="#52514e">0%</text>
+<line x1="520" y1="595.5" x2="920" y2="595.5" stroke="#e4e3df"/><text x="514" y="599.5" text-anchor="end" fill="#52514e">25%</text>
+<line x1="520" y1="543.0" x2="920" y2="543.0" stroke="#e4e3df"/><text x="514" y="547.0" text-anchor="end" fill="#52514e">50%</text>
+<line x1="520" y1="490.5" x2="920" y2="490.5" stroke="#e4e3df"/><text x="514" y="494.5" text-anchor="end" fill="#52514e">75%</text>
+<line x1="520" y1="438.0" x2="920" y2="438.0" stroke="#e4e3df"/><text x="514" y="442.0" text-anchor="end" fill="#52514e">100%</text>
+<text x="520.0" y="662" text-anchor="middle" fill="#52514e">0</text>
+<text x="600.0" y="662" text-anchor="middle" fill="#52514e">50</text>
+<text x="680.0" y="662" text-anchor="middle" fill="#52514e">100</text>
+<text x="760.0" y="662" text-anchor="middle" fill="#52514e">150</text>
+<text x="840.0" y="662" text-anchor="middle" fill="#52514e">200</text>
+<text x="920.0" y="662" text-anchor="middle" fill="#52514e">250</text>
+<path d="M520.0,648.0 L542.4,648.0 L542.4,608.0 L627.2,608.0 L627.2,568.0 L742.4,568.0 L742.4,542.0 L760.0,542.0 L760.0,521.9 L777.6,521.9 L777.6,501.8 L795.2,501.8 L795.2,481.9 L817.6,481.9 L817.6,461.9 L836.8,461.9 L836.8,450.0 L857.6,450.0 L857.6,438.0" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<path d="M520.0,648.0 L531.2,648.0 L531.2,608.0 L548.8,608.0 L548.8,568.0 L568.0,568.0 L568.0,542.0 L576.0,542.0 L576.0,521.9 L587.2,521.9 L587.2,501.8 L595.2,501.8 L595.2,481.9 L606.4,481.9 L606.4,461.9 L614.4,461.9 L614.4,450.0 L616.0,450.0 L616.0,438.0" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="542.4" cy="608.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>1. asa-302013: 19.05% after 14 decisions</title></circle>
+<circle cx="531.2" cy="608.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>1. asa-302013: 19.05% after 7 decisions</title></circle>
+<circle cx="627.2" cy="568.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>2. panos-traffic: 38.1% after 67 decisions</title></circle>
+<circle cx="548.8" cy="568.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>2. panos-traffic: 38.1% after 18 decisions</title></circle>
+<circle cx="742.4" cy="542.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>3. fortigate-traffic: 50.5% after 139 decisions</title></circle>
+<circle cx="568.0" cy="542.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>3. fortigate-traffic: 50.5% after 30 decisions</title></circle>
+<circle cx="760.0" cy="521.9" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-302014: 60.05% after 150 decisions</title></circle>
+<circle cx="576.0" cy="521.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>4. asa-302014: 60.05% after 35 decisions</title></circle>
+<circle cx="777.6" cy="501.8" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-106023: 69.6% after 161 decisions</title></circle>
+<circle cx="587.2" cy="501.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>5. asa-106023: 69.6% after 42 decisions</title></circle>
+<circle cx="795.2" cy="481.9" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-305011: 79.1% after 172 decisions</title></circle>
+<circle cx="595.2" cy="481.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>6. asa-305011: 79.1% after 47 decisions</title></circle>
+<circle cx="817.6" cy="461.9" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>7. asa-302015: 88.6% after 186 decisions</title></circle>
+<circle cx="606.4" cy="461.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>7. asa-302015: 88.6% after 54 decisions</title></circle>
+<circle cx="836.8" cy="450.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>8. squid-10: 94.3% after 198 decisions</title></circle>
+<circle cx="614.4" cy="450.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>8. squid-10: 94.3% after 59 decisions</title></circle>
+<circle cx="857.6" cy="438.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 100.0% after 211 decisions</title></circle>
+<circle cx="616.0" cy="438.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>9. squid-11: 100.0% after 60 decisions</title></circle>
+<text x="920" y="638.0" text-anchor="end" fill="#52514e">ends at 100.0% of the stream: 60 decisions (ULPF) vs 211 (by hand)</text>
+<text x="488.0" y="686" text-anchor="middle" fill="#52514e">x: cumulative onboarding decisions (counted; nobody was timed). Nine families, four sources; each dot is one family, in descending volume under that mix.</text>
+<text x="488.0" y="704" text-anchor="middle" fill="#52514e">y: share of the replayed stream emitted as usable events (held-out and in-sample replay agree at every step). A step is a family, not a trend: nine points do not support a fitted curve.</text>
+</svg>

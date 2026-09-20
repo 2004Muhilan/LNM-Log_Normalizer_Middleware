@@ -92,9 +92,14 @@ so no decision about "intended differences" was needed. Proven on the defect it 
 the two lines. What remains true: `pack.json`'s hashes are still *derived* values (they must be) — the check pins
 them to the committed bytes, so a change in the compiler's canonical form shows up as a reviewed diff, not silence.
 
-**3.2 The subset guard compares two strings (Open).** Both stacks compare `pack.table_hash` with
+**3.2 The subset guard compares two strings (Python side closed in the third pass; Go side open).** Both stacks compare `pack.table_hash` with
 `index.json.table_hash`; neither recomputes the hash from `ocsf/pinned/<class>.json`. Delete leaf paths
-from the table file and the guard, its negative vector and every suite still pass.
+from the table file and the guard, its negative vector and every suite still pass. *Third pass:*
+`learning/tests/test_pinned_tables.py` recomputes each table's hash from its file with the generator's definition and
+compares it with the file's own claim and the index; a table with a leaf path removed no longer matches. The Go
+loader still compares two strings — the hash is over Python's canonical JSON, which plan §1 rules out reproducing;
+redefining it over file bytes changes every pack hash. A team decision (P8 report §13.7). §3.3 and §3.5's `batch`
+were assessed as not quick and are still owed, with the reason each is more than a test.
 
 **3.3 Negative vectors satisfied by the wrong rejection (Open).** Three negatives
 (`pack-mandatory-model-only`, `pack-structural-determination-two-survivors`,

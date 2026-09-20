@@ -1,5 +1,9 @@
 # P8 report — the closing account: the audit, versioned corrections, what the numbers support
 
+**Third pass (2026-09-20, §13): the missing metrics deliverable — coverage under the declared replay mix, evidence
+requests per coverage band, candidate-set distribution — with the cost axis in counted decisions. Agreement-with-
+reference stays blocked on the crosswalk review, which is the team's.**
+
 **Status: P8 is finished — first pass (`aca113e`) accepted 2026-09-20; this revision adds the second pass of the
 same day: drift healing as a demo step, the three audit findings named as next, the effort figures re-cut to
 lead with the weakest case, the packaging loose ends, and egress connectors (§9–§12).** This is the last phase
@@ -142,7 +146,7 @@ Caveats that travel with every figure: counted decisions, not time; certificates
 even where the vendor's documentation resolves everything at once; fixtures chosen because drafts existed for
 them; nothing here says any mapping is *correct*. Agreement with the reference parser stands as measured in P6,
 quoted with its sample — 208 comparable pairs over 16 of 46 ASA lines — over a crosswalk that is **unreviewed**
-(owed by the team, not self-reviewed). The replay mix and the coverage curve were not built.
+(owed by the team, not self-reviewed). The replay mix and the coverage figures are §13 (third pass).
 
 Machine time (desktop): model proposal 59.5 s for the Squid session and 19.1 s for the ASA 302015 family at 20
 layers; 14 s for Squid at 33 layers.
@@ -223,10 +227,11 @@ was not taken. The runbook carries the same paragraph.
 
 ## 8. Not done, and carried
 
-- The replay mix, the coverage curve, the *automatic* drift loop (refused by design, §9), review-interface
-  polish: not built.
-- **Owed by the team:** the ECS→OCSF crosswalk review (not self-reviewed); the next three audit items (subset
-  guard, schema-shadowed negative vectors, lineage `batch` never validated).
+- The *automatic* drift loop (refused by design, §9) and review-interface polish: not built. The replay mix and
+  the coverage figures were built in the third pass (§13).
+- **Owed by the team:** the ECS→OCSF crosswalk review (not self-reviewed) — and with it the agreement-with-reference
+  results with adjudicated disagreements, the one P8 metric still blocked; two audit items (schema-shadowed negative
+  vectors, lineage `batch` never validated; the subset guard is half closed, §13.7).
 - **Unexercised on real data:** sequence-gap detection — no corpus vendor emits RFC 5424 `meta sequenceId`;
   coverage is four synthetic lines.
 - **Not built, stated in §11:** a file-tail ingress; pass-through delivery that re-derives undelivered events from
@@ -386,3 +391,228 @@ the normalized spool is a delivery buffer whose retention is a deployment choice
     healing narrative should name the monitor's three signals and that samples come back out of the evidence
     store. Stage 12's `provenance.proposal` does not record that the served model's identity was checked.
 12. **Plan §11 rows 51–56**; plan header v1.8.
+
+## 13. Third pass — coverage under the declared replay mix
+
+The P8 deliverable that was missing: "the coverage curve under the declared replay mix, evidence requests per
+coverage, candidate-set distribution" (plan §7 P8; mix construction moved to P8 by §5.3). Built with one change
+agreed at the boundary: **the cost axis is counted decisions, not minutes** — nobody was timed (§4).
+Reproduce: `bash scripts/p8-coverage.sh` (regenerates and compares with the committed figures; `--write` to
+regenerate them). Mix: [`metrics/replay-mix.json`](../metrics/replay-mix.json). Figures:
+[`docs/metrics/coverage.json`](metrics/coverage.json). Picture: [`docs/metrics/coverage.svg`](metrics/coverage.svg).
+
+**The gate, after this pass** (desktop; servers started per configuration; `twice.sh` fails if the two runs *show*
+different things):
+
+| | run 1 | run 2 | same facts shown |
+|---|---|---|---|
+| 20 layers (pinned) | 97.6 s (step 2: 81.1) | 88.6 s (74.4) | yes — pos_1 / pos_3 / pos_5 |
+| 33 of 33 layers (`ULPF_DEMO_NGL_UNPINNED=1`) | 44.8 s (30.5) | 47.0 s (30.4) | yes — pos_1 / pos_3 / pos_4 |
+
+`p1-check` … `p8-check` all pass (21 / 34 / 26 / 32 / 76 / 65 s; `p8-check` includes `p7-check` and now the
+coverage check); 64 Python tests, zero skips. The coverage check was proven on the defect it exists for: with one
+committed figure altered (30.15 → 31.15) `p8-coverage.sh` prints the diff and exits 1. Nothing the demo reads was
+changed in this pass. (My first gate attempt failed pre-flight on three checks — the model server and the UI were
+down, because the previous pass ended with `reset.sh --all`. Operator state, not a regression; pre-flight did its job.)
+
+### 13.1 The design, validated before building — and what the validation changed
+
+**Does the mix need to be plausible, or merely declared?** Declared is all the repository can support: no traffic
+capture exists here, so plausibility cannot be established from inside the project and a "plausible" mix would be
+an invented one. But *merely* declared is not enough either, because **the mix is not a nuisance parameter — it is
+half the curve.** The x values (decisions per family) are measured and nearly fixed; the y increments are the
+weights. One declared mix lets the author draw any shape they like. So the mix is declared **four times**, from
+least to most favourable, each with its assumption written beside it, and the spread between them is reported as
+the result. Nothing is quoted from one mix alone.
+
+**Coverage is measured, not credited.** The first design weighted the nine onboarded families and would have
+reached 100 % by construction. Before building it, the whole four-vendor corpus (1,316 lines, 26 files) was
+replayed through the runtime with every pack loaded: **397 lines usable, 30 %.** So the mix is declared over
+*traffic strata* (17: message groups and fixture files, onboarded or not), a stream is constructed per mix
+(2,000 frames, largest-remainder apportionment, deterministic interleave, pools cycled), and the **runtime** says
+what is usable, with the packs of the first *k* families loaded, for every *k*. Nothing is attributed to a family
+by label.
+
+**In-sample replay is an upper bound, so a held-out split is run beside it.** The demo onboards a family from all
+its corpus lines and replays the same lines. Here each corpus-sampled family is also onboarded from the
+even-numbered lines of its stratum and replayed over the odd-numbered ones. Result: **identical coverage at every
+step for the seven anchored families** (FortiGate onboarded from 7 lines routes all 6 held-out lines; it sees 72
+fields instead of 73). Its limit, stated: the *draft specs* were hand-written against the whole fixture files, so
+what is held out is the onboarding (labels, enumerations, certificates, routing signature), not the spec.
+
+### 13.2 The four declared mixes (every one is an ASSUMPTION)
+
+| mix | what is assumed | how it was chosen |
+|---|---|---|
+| `corpus-lines` | every corpus line weighs the same | assumes nothing beyond the corpus; known false as traffic (fixtures are test cases, ~one line per case, so rare messages are over-represented); the **least favourable** |
+| `equal-sources` | four sources at 25 %; inside a source, by corpus line count | removes the accident that PAN-OS fixtures are 40 % of all corpus lines |
+| `connection-heavy` | four sources at 25 %; 80 % of each source's volume is connection/traffic logging | a firewall logs every connection; **the 80 % is a round number of ours, from no capture**; the **most favourable** to ULPF because the onboarded families are connection-class |
+| `demo-families` | traffic is the nine onboarded families and nothing else, in the demo stream's proportions | the stream the demo replays; two of its pools are **ours, not corpus** (the trace's Squid sample, the synthetic 11-slot Squid family); reaches 100 % by construction; **not evidence about live traffic** |
+
+### 13.3 What came out (held-out split; in-sample is identical)
+
+Per family — measured from the session records (recorded/fixture providers, so reproducible; the live-model
+sessions of §4 differ by a certificate or two: 60 decisions here against 61 there):
+
+| family | onboarding samples | by hand (fields) | ULPF: responses + certificates | evidence requests | certificates resolved by the response | fields given provenance by it | slots by propagation |
+|---|---|---|---|---|---|---|---|
+| asa-302013 | 23 | 14 | 1 + 6 = 7 | 1 | 4 | 14 | 0 |
+| asa-302014 (+302016) | 34 | 11 | 1 + 4 = 5 | 1 | 4 | 11 | 0 |
+| asa-106023 | 25 | 11 | 1 + 6 = 7 | 1 | 6 | 11 | 0 |
+| asa-305011 (+305012) | 41 | 11 | 1 + 4 = 5 | 1 | 4 | 11 | 0 |
+| asa-302015 | 12 | 14 | 1 + 6 = 7 | 1 | 4 | 14 | 0 |
+| panos-traffic | 50 | 53 | 1 + 10 = 11 | 1 | 9 | 53 | 0 |
+| fortigate-traffic | 7 | 72 | 1 + 11 = 12 | 1 | 7 | 72 | 0 |
+| squid-10 (ours: trace sample) | 6 | 12 | 1 + 4 = 5 | 1 | 4 | 12 | 0 |
+| squid-11 (ours: synthetic) | 6 | 13 | 0 + 1 = 1 | 1 (never answered; certificate retained, slot not mandatory) | 0 | 0 | **10** |
+
+Coverage, families in descending volume under each mix (n = 9 families, m = 4 sources):
+
+| mix (ASSUMED) | coverage after 1 / 3 / 5 / 9 families | decisions at the end: ULPF vs by hand | ≥ 25 % reached after | ≥ 50 % |
+|---|---|---|---|---|
+| `corpus-lines` | 7.6 / 19.0 / 26.2 / **30.2 %** | 60 vs 211 | 5 families, 35 vs 100 decisions, 5 evidence requests | never |
+| `equal-sources` | 4.7 / 13.2 / 19.0 / **24.4 %** | 60 vs 211 | never | never |
+| `connection-heavy` | 20.0 / 32.7 / 41.4 / **48.6 %** | 60 vs 211 | 2 families, 23 vs 125 decisions, 2 requests | never |
+| `demo-families` | 19.1 / 50.5 / 69.6 / **100 %** | 60 vs 211 | 2 families, 18 vs 67, 2 requests | 3 families, 30 vs 139, 3 requests |
+
+**Evidence requests per coverage band** (`coverage.json` → `bands`, per mix): under the three corpus-derived mixes
+only the first band (≥ 25 %) is ever reached, and under `equal-sources` not even that; the full ladder exists only
+under `demo-families` (25 / 50 / 75 / 90 / 100 % after 2 / 3 / 6 / 8 / 8 responses). What *is* mix-independent:
+**eight operator responses resolved 42 certificates — 5.25 ambiguities per question, range 4–9 — and gave vendor
+provenance to 198 fields; the ninth family needed no response at all (10 slots by propagation).** "One question
+resolves many fields" is measured, at that sample.
+
+**Candidate-set distribution under the mix** (the runtime logs it on every replay; assembled, not new work):
+
+| mix | size 0 (no family: quarantined) | size 1 | size ≥ 2 | max at any of the 9 steps |
+|---|---|---|---|---|
+| `corpus-lines` | 1,385 | 615 | 0 | 1 |
+| `equal-sources` | 1,501 | 499 | 0 | 1 |
+| `connection-heavy` | 1,029 | 971 | 0 | 1 |
+| `demo-families` | 0 | 2,000 | 0 | 1 |
+
+The K = 4 empirical question (plan P6 risk) stays **unanswered at this corpus breadth**: with nine families the
+DAG never returned two candidates, under any mix, at any step. K is a resource bound that has not been approached,
+not a bound that has been shown sufficient. (Size 1 exceeds usable by the 12 long-tail ASA lines that route and
+then fail to parse — quarantined at stage `parse`.)
+
+### 13.4 Does the curve's shape survive this corpus? No — and what to report instead
+
+The plan's curve (§7.3 of the architecture, §1.3's argument) is concave for two reasons: volume is skewed, and
+**marginal cost falls** because structurally related families cost little. At this corpus size:
+
+- **Falling marginal cost is visible exactly once**, Squid 11-slot after Squid 10-slot (5 decisions → 1, against
+  13 by hand) — and that family is **our synthetic fixture with zero corpus traffic**. In ASA, five related
+  families cost 7, 5, 7, 5, 7: flat. That is the settled propagation key (plan §4.4 — the anchor is in L3, so
+  nothing crosses ASA families), not a defect, but it means the §1.3 effect is **not shown on real-shaped data**.
+- **Any concavity in the picture comes from the declared weights**, i.e. from us. Under `corpus-lines` the steps
+  are nearly linear; `connection-heavy` looks concave only because FortiGate's 13 traffic lines are given 20 % of
+  the stream.
+- **Family counts per source do not distort it; field counts do.** ASA's five families are 31 of ULPF's 60
+  decisions and 61 of the baseline's 211; PAN-OS and FortiGate, one family apiece, are 125 of the 211. The
+  horizontal gap between the two staircases is mostly those two wide formats — the same fact as §4, seen sideways.
+- **The plateau, not the slope, is the finding**: 24 % to 49 % of corpus-derived traffic, a factor of two that is
+  entirely the assumption, and 100 % only when traffic is defined as what was onboarded.
+
+So what is reported is **two staircases per mix on shared axes** (ULPF and hand-authoring reach the same coverage;
+the horizontal gap is the claim), as small multiples over the four mixes, dots for families, **no fitted curve, no
+single headline number**; beside it the per-family table above, which is the honest scatter: nine points, four
+sources. The sentence the data supports: *"for the same coverage — whatever the traffic mix — ULPF needed 60
+counted decisions where hand-authoring needs 211, 8 evidence requests for 42 ambiguities; nine families make a
+quarter to a half of our corpus-derived replay analytics-ready depending on an assumed mix; the coverage-curve
+shape the architecture predicts is not demonstrated at four sources."*
+
+### 13.5 What the whole-corpus replay found (raised, not fixed)
+
+| stratum | corpus lines | usable | why not |
+|---|---|---|---|
+| the 7 onboarded corpus strata (5 ASA, PAN-OS traffic, FortiGate traffic) | 381 | 381 (100 %) | — |
+| **squid-native (Elastic's `access1.log`)** | 100 | **15 (15 %)** | the 10-slot family was learned from the trace's 6 lines, where the user field is always `-`: it became a structural literal, and the L4 class sketch expects `text` where these lines carry a `word`. 85 lines with a real user name are *unknown signature* — quarantined, not guessed |
+| squid-custom-logformat | 100 | 0 | a draft spec exists; never onboarded |
+| panos-traffic-other-layouts | 201 | 0 | other PAN-OS versions' column layouts: the type anchor's column holds `start`/`end` → drift signal (101), or RFC 5424 framing → unknown (100) |
+| panos-threat / panos-other | 237 | 0 | never onboarded |
+| fortigate-utm / fortigate-event | 59 | 0 | never onboarded |
+| asa-long-tail (9 files, ~90 message ids) | 238 | 1 | never onboarded; 12 route and fail to parse (non-canonical headers) |
+
+The Squid row matters for what is said on stage: **"Squid onboarded" is an in-sample statement.** Six samples in
+which a field never varies produce a family that refuses real traffic where it does. The system behaves as
+designed (quarantine → drift monitor → re-onboard with a wider capture), and that is a better healing demo than it
+is a coverage claim. Not fixed here: re-onboarding Squid from a wider sample changes the golden pack the whole
+demo stands on.
+
+### 13.6 Tried and rejected
+
+- **Weights over the onboarded families only** — 100 % by construction; kept only as the labelled `demo-families`.
+- **One "plausible" mix** — nothing here can establish plausibility; a single mix is a free parameter.
+- **Coverage computed as Σ weight × per-stratum usable rate** — exact and needs no stream, but §5.3 says replay
+  streams are *constructed*, and a real replay per step is what catches a family stealing another's traffic (none did).
+- **Absolute-minute axis** — not measured (§4). A relative axis (% of hand-authoring cost) hides that both totals are small.
+- **A fitted or smoothed curve** — nine points.
+- **Work directory on disk** — the evidence store fsyncs every raw write (invariant 3, untouched); ~90 replays took
+  9 min 19 s on ext4 and 1 min 37 s on tmpfs. The script uses `/dev/shm`.
+- **Naming the tool `coverage.py`** — shadows the `coverage` package under pytest; it is `coverage_curve.py`.
+
+### 13.7 Optional audit items — one half-closed, two left owed
+
+- **Subset guard (§3.2): Python side closed.** `learning/tests/test_pinned_tables.py` recomputes every pinned
+  table's hash from its file (the generator's definition) and compares it with the file's own claim and the index;
+  a table with one leaf path removed no longer matches. **The Go loader still compares two strings**: the hash is
+  over Python's canonical JSON, and reproducing that in Go is the canonical-JSON machinery plan §1 rules out;
+  redefining it over file bytes changes every pack hash and golden. A decision for the team, not absorbed.
+- **Schema-shadowed negative vectors (§3.3): not quick, left owed.** It needs three new vectors that pass the
+  schema and fail only the semantic check, i.e. a `build_vectors.py --write` and a review of the golden diff.
+- **Lineage `batch` (§3.5): not quick, left owed.** De-batched elements are raw JSON values; no onboarded family
+  has a JSON surface, so every element quarantines and no emitted event can carry `batch`. Closing it needs a
+  JSON-surface pack (a hand-authored spec and golden pack), not a test.
+
+### 13.8 Raised in the third pass
+
+1. **Coverage of corpus-derived traffic is 24–49 %, not "four vendors covered"** (§13.3) — wording for any slide.
+2. **The §1.3 marginal-cost effect is shown only on a synthetic family** (§13.4).
+3. **Squid native: 15 % out-of-sample** (§13.5); the golden Squid pack was not touched.
+4. **K = 4 is unexercised**: no replay ever produced two candidates (§13.3).
+5. **Held-out does not hold out the draft specs** (§13.1).
+6. **Agreement-with-reference with adjudicated disagreements** — the fourth P8 metric — **remains blocked** on the
+   crosswalk review, which is the team's and was not self-reviewed. The P6 figure stands as measured, quoted with
+   its sample: 208 comparable pairs over 16 of 46 ASA lines.
+7. **Trace corrections (standing obligation):** none from this pass — nothing here changes behaviour.
+8. **Plan §11 rows 57–58**; plan header v1.9. No contract, invariant or settled decision was touched: the new code
+   is a learning-plane tool, a mix file, a script, two test files and a check in `p8-check.sh`.
+
+### 13.9 Read against the plan, deliverable by deliverable — what is still missing
+
+Checked against plan §7 P1–P8, §2 and §5 after this pass. Everything not listed here is built and has a check.
+**The implementation is not "fully finished" against the plan as written; these are the differences.**
+
+*Not built, or built as something narrower than the plan's words:*
+
+1. **P8 — agreement-with-reference results with adjudicated disagreements.** Measured once, in P6, on one ASA
+   family: 208 comparable pairs over 16 of 46 lines, one row adjudicated. Never run for PAN-OS, FortiGate or
+   Squid, and blocked from being reported by item 2.
+2. **P1 exit criterion — "crosswalk review complete".** `library/crosswalk/ecs-ocsf.yaml` is built and
+   **unreviewed**. The team's; not self-reviewed. It has been open since P1's exit.
+3. **P2 — "file-tail ingest".** `--input` reads a file to EOF and stops; nothing follows a growing file. The P2
+   report calls it file-tail; it is file-read. A rotated-file drop (`--pull-dir`) is the working substitute (§11.1).
+4. **P8 — "review-interface polish" / P3 — "accept the response" through the interface.** The working surface is
+   the CLI (`certificates`, `respond`); the demo UI's certificate screen is a **read-only viewer** of the same
+   session files. Nothing in the browser accepts evidence.
+5. **P8 demo, §8.3 step 4 — "format broken mid-run, drift detected, re-onboarded".** Step 8 heals an in-domain
+   message id no family owned, from the previous step's quarantine, by a human (semi-automatic by design, §9). No
+   step breaks a format *mid-run*; the parse-success-drop monitor exists and has never fired in a demo.
+6. **P8 demo, §8.3 step 5 — "the daily root verified on a second machine".** Step 6's witness is a container that
+   has never run ULPF and holds only the public key, **on the same machine**. No bundle has been carried to the
+   other machine and verified there.
+7. **Coverage-curve shape** (§13.4): the deliverable exists; the shape the architecture predicts is not
+   demonstrated at four sources.
+
+*Built, never exercised on real data:* sequence-gap detection (four synthetic lines; no corpus vendor emits an
+RFC 5424 sequence id); K = 4 (max candidate set 1, §13.3); PAN-OS doubled-quote escapes and FortiGate escaped
+quotes (no fixture has them, P1); lineage `batch` on an emitted event (§13.7).
+
+*Changed by a recorded decision, so not missing:* the per-pack tiebreaker (dropped, row 32); the 7–8B model (the
+demo serves the 4B, row 23; Granite 8B proposals are replayed as recordings); analyst-minutes (counted decisions,
+row 48); the automatic drift loop (refused, row 51).
+
+*Owed outside the code:* the worked-trace corrections listed in every report since P5 have not been applied to
+the trace (it is not in this repository); the laptop has run no commit from `579d9bc` on; two audit items and the Go
+half of the subset guard (§13.7); architecture §4.4's priority classes (§11.2).

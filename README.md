@@ -105,6 +105,7 @@ tried and rejected" and "what the next phase inherits"; they are the project's m
 | routing, families, propagation, ML tuple | P6 report; `runtime/internal/route`, `library/` | `scripts/p6-check.sh` (four-vendor build needs the corpus cache) |
 | transports, framing, envelopes, gap records | P7 report; `runtime/internal/{frame,gap}` | `scripts/p7-check.sh` (invariant 7 under load, sized to the machine) |
 | versioned corrections (invariant 8), the audit, effort figures | P8 report; `runtime/internal/lake`, `pipeline/renormalize.go`, `learning/tools/effort.py` | `scripts/p8-check.sh` (needs corpus + Docker; zero skips; named tests by name; goldens checked, never regenerated); `bash demo/run.sh 7 7` (correction), `bash demo/run.sh 8 8` (drift healing) |
+| coverage under the **declared** replay mix (four stated assumptions), evidence requests per coverage band, candidate-set distribution | P8 report §13; `metrics/replay-mix.json`, `learning/tools/coverage_curve.py`, `docs/metrics/coverage.{json,svg}` | `bash scripts/p8-coverage.sh` (regenerates and compares; `--write` to regenerate; needs the corpus cache) |
 | connectors: six ingress paths, three egress sinks, a sink outage as an evidence leaf | P8 report §9; `runtime/internal/egress` | `scripts/p8-connectors-smoke.sh`; `ulpf-runtime run --forward syslog+tcp://host:port --forward https://… --out FILE`, `ulpf-runtime forward` |
 
 The contracts are frozen: a change is a version bump, a same-commit golden-vector update and green
