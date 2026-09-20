@@ -58,6 +58,11 @@ class LlamaClient:
     def props(self) -> dict:
         return self._get("/props")
 
+    def served_meta(self) -> dict:
+        """What the server says about the weights it loaded (GGUF header facts: /v1/models data[0].meta)."""
+        d = self._get("/v1/models")
+        return dict((d.get("data") or [{}])[0].get("meta") or {})
+
     def chat(self, system: str, user: str, schema: dict, max_tokens: int = 2048, enable_thinking: bool = False) -> Completion:
         body = {"messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                 "response_format": {"type": "json_object", "schema": schema},

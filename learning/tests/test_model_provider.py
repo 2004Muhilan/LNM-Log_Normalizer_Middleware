@@ -154,3 +154,36 @@ def test_structure_from_spec_names_slots(tmp_path):
     assert "src_host" in names and "dst_port" in names and kept == [line]
     assert st.slots[names.index("dst_port")].token_class == "integer"
     assert "name=src_host" in prompt.describe_structure(st, kept)
+
+
+# ---------------------------------------------------------------- P8 audit §3.6: the model that answers is the model the pack names
+class _Served:
+    def __init__(self, path, meta=None, fail=False):
+        self.path, self.meta, self.fail = path, meta, fail
+
+    def props(self):
+        if self.fail:
+            raise OSError("connection refused")
+        return {"model_path": self.path, "build_info": "fake"}
+
+    def served_meta(self):
+        return dict(self.meta or {})
+
+
+def test_served_model_identity_is_checked_against_the_manifest():
+    from ulpf_learn.model.provider import ServedModelMismatch, assert_served_model
+    good = {"n_params": 4205751296, "size": 2729969664, "n_vocab": 248320, "n_embd": 2560}
+    ok = assert_served_model(_Served("/models/Qwen3.5-4B-Q4_K_M.gguf", good), "qwen3.5-4b-q4_k_m")
+    assert ok["file"] == "Qwen3.5-4B-Q4_K_M.gguf" and ok["checked_against_manifest"] == ["n_embd", "n_params", "n_vocab", "size"]
+    # a stale server with ANOTHER model on the port: refused, by name
+    with pytest.raises(ServedModelMismatch, match="granite-4.1-8b-Q4_K_M.gguf"):
+        assert_served_model(_Served("/models/granite-4.1-8b-Q4_K_M.gguf", good), "qwen3.5-4b-q4_k_m")
+    # the right NAME over different weights: refused, by header facts
+    with pytest.raises(ServedModelMismatch, match="header facts differ"):
+        assert_served_model(_Served("/models/Qwen3.5-4B-Q4_K_M.gguf", dict(good, n_params=8791592960)), "qwen3.5-4b-q4_k_m")
+    # a server that reports no header facts cannot satisfy a manifest that records them
+    with pytest.raises(ServedModelMismatch, match="header facts differ"):
+        assert_served_model(_Served("/models/Qwen3.5-4B-Q4_K_M.gguf", {}), "qwen3.5-4b-q4_k_m")
+    # an unreachable server: the answering model is unknown, which is a refusal, not "best effort"
+    with pytest.raises(ServedModelMismatch, match="unknown"):
+        assert_served_model(_Served("", fail=True), "qwen3.5-4b-q4_k_m")

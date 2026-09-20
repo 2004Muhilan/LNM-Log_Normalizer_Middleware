@@ -155,7 +155,62 @@ evidence**, restores the byte from step 6's record, re-verifies, then corrects �
 derived from the evidence, never from the previous interpretation, so it will not run over tampered
 evidence." Needs a reset before it can run again: a version is never rewritten.
 
-## Showing healing (raised 2026-09-20; described, not built)
+## Step 8 — drift healing (P8; optional, after the six)
+
+`bash demo/run.sh 8 8` after a full run; ~45 s on the desktop at 20 layers (the model labels an ASA family live),
+terminal only. **Healing is semi-automatic by design** — say it first: a system that re-learns on its own from
+whatever arrives can be taught by an attacker, so the machine *detects* and a human *re-onboards* (architecture
+§3.6). The automatic loop is not missing; it is refused.
+
+1. **The monitor** (`learning/tools/drift.py`) reads step 5's quarantine and sorts it into what a human does next:
+   `RE-ONBOARD CANDIDATE asa-message-id=302015` — an id *inside* the vendor's declared domain that no onboarded
+   family owns; and two `DOMAIN VIOLATION`s (`999999`, `WEIRD`) — *outside* the declared domains, never candidates.
+2. **The bytes come back out of the evidence store**, `raw_hash` checked: "they were kept when nothing could read
+   them — that is what makes healing possible." The operator adds the device's own capture of that message id.
+3. **The same path the audience watched in step 2**: spec, the model's labels, certificates, one evidence
+   request, the vendor's field-order documentation, promotion, a signed pack. Point at `propagated slots 0`:
+   302015 is a new L3 anchor value, so under the propagation key nothing pre-empts it — which is why this, and
+   not re-running step 2, is the healing demo (step 2 again shows zero certificates: the store already holds
+   that resolution, correctly).
+4. **The same capture replayed before and after**: `quarantined 3 → 2`, `cisco-asa-fw-01/asa-302015: 1`, and the
+   two domain violations are **still quarantined**. "It healed what the vendor documents and kept refusing what
+   nobody documents."
+
+Fallback (`ULPF_DEMO_PROVIDER=fixture`): replays the model's recorded labels for the *sibling* family 302013 —
+the script says so on screen; say it too. Step 8 writes only under `step8/`; steps 5–7 are untouched and it can be
+re-run without a reset.
+
+## The connector picture (for the "is this middleware?" question)
+
+Logs come **in** through connectors — file, stdin, syslog UDP, syslog TCP with RFC 6587 octet counting, HTTP
+receive, a directory drop — are evidenced, routed, parsed and normalized, and go **out** through connectors:
+`--forward syslog+tcp://siem:6514` (RFC 5424 in octet-counted frames), `--forward https://collector/ingest`
+(NDJSON POST), `--forward stdout:` — repeatable, any mix. `bash scripts/p8-connectors-smoke.sh` shows all nine in
+under a minute, plus the case that matters: **a SIEM that stops accepting costs no event and is not silent** —
+ingestion completes, the interruption is an `egress_stalled` record *in the evidence log* (a Merkle leaf the
+verifier prints), and `ulpf-runtime forward` delivers the rest from a persisted cursor when the SIEM returns.
+What to say precisely, because it will be probed:
+- **There is no file-tail ingress.** `--input` reads to EOF; a growing file is handled by dropping rotated files
+  into `--pull-dir`.
+- **Delivery is at-least-once.** HTTP has a real acknowledgement. Syslog over TCP has none (RFC 6587): after a
+  connection failure the last batch is sent again, receivers deduplicate on `event_id`, and order is guaranteed
+  within a connection, not across a reconnect. Syslog over UDP is refused as an egress: it cannot tell a sink
+  that stopped accepting from one that is fine.
+- **What is at rest:** the evidence log, *and* the normalized spool the cursor points into (the `--out` file /
+  the lake). "Nothing stored but the evidence log" is **not** true as built; a pure pass-through would re-derive
+  undelivered events from the evidence log on restart — the correction path shows that works — and is not built.
+- **The evidence log is the third connector class** — ingress, evidence, egress — and its backend can be swapped;
+  it cannot be switched off without giving up the guarantees it carries (raw-before-interpretation, gap leaves,
+  corrections, the witness) and without a contract change: lineage requires `raw_hash`, segment and offset.
+
+**Two stores, two protection levels — say which is which.** The **evidence log** (P5) is hash-chained,
+Merkle-committed and signed, and kernel-immutable when the store runs privileged (the demo runs unprivileged:
+the checkpoint says `sealed_only_dev`, signed). The **normalization lake** that step 7's corrections live in is
+protected by its API (exclusive create, consecutive versions), read-only file modes and a sha256 manifest that
+`lake verify` recomputes — **not kernel-immutable and not signed**. Root can rewrite a lake file; `lake verify`
+then names the version. v1 being "byte-identical" is a checked hash, not a cryptographic commitment.
+
+## Showing healing — the reasoning behind step 8 (raised 2026-09-20; built the same day as step 8)
 
 What a judge should see is *drift detected → the same onboarding path → the quarantined lines now flow*, and
 the honest version of that uses only what exists:
@@ -168,10 +223,10 @@ the honest version of that uses only what exists:
    By hand: `grep '%ASA-6-302015' corpus/cache/beats-cisco-asa/asa.log > /tmp/asa-302015.log`, then
    `python -m ulpf_learn onboard-spec --samples /tmp/asa-302015.log --spec drafts/sufficiency/asa-302013.json
    --vendor cisco-asa --family-id asa-302015 --unwrap-envelope --provider model …`, answer with
-   `vendor_schema_field_order`, promote, `merge` into the ASA source pack. **Not verified end to end**: the
-   302013 draft's regex pins the message id, so a 302015 draft spec (a copy with the id changed — "Built
-   outbound UDP" has the same shape) and a `families:` row in `library/vendor-tables/cisco-asa.yaml` are
-   needed first. That is a small, reviewable change and it is the missing piece of a healing demo.
+   `vendor_schema_field_order`, promote, `merge` into the ASA source pack. **Built as step 8**: the draft spec
+   `drafts/sufficiency/asa-302015.json` (the 302013 draft with the message id changed — "Built outbound UDP" has
+   the same shape; 35 of 35 corpus lines parse and its values are oracle-checked) and a `families:` row in
+   `library/vendor-tables/cisco-asa.yaml`.
 3. **Replay the quarantine**: re-run step 5 (`bash demo/run.sh 5 5`) with the healed pack — the `302015` line
    routes and emits, quarantined drops from 3 to 2, and the evidence log shows the original bytes were
    retained throughout. The two genuine domain violations stay quarantined, which is the point.

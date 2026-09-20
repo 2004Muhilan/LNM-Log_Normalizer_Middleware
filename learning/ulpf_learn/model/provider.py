@@ -80,6 +80,7 @@ class ModelProvider(Provider):
         return {
             "provider": "model", "model_id": self.model_id, "model_hash": self.model_hash,
             "llama_cpp": {"build_info": self.props.get("build_info"), "model_path": self.props.get("model_path"), "n_ctx": self.props.get("n_ctx")},
+            "served_model": getattr(self, "served_model", None),   # set by the CLI after assert_served_model; None = identity was not checked
             "decoding": dict(DECODING),
             "backend": self.backend, "mode": self.mode, "max_iterations": self.max_iterations,
             "prompt_template_hash": prompt.template_hash(),
@@ -188,6 +189,43 @@ class ModelProvider(Provider):
         tr.wall_ms = (time.perf_counter() - t0) * 1000
         self.last_trace = tr
         return Proposal(uid, cname, slots, "model", self.model_hash, {"provenance": self.provenance()})
+
+
+class ServedModelMismatch(RuntimeError):
+    pass
+
+
+def assert_served_model(client, model_id: str, manifest: Path | None = None) -> dict:
+    """The pack records the digest of the LOCAL file named by --model-id. Until P8 nothing compared that with what
+    the server had actually loaded: a stale llama-server on the port, serving another model, would have produced a
+    pack naming a model that never answered (audit §3.6). llama-server exposes no digest, so identity is checked on
+    everything it does expose, and the call is refused on any disagreement:
+      - the served file's NAME (props.model_path) must be the manifest's file for model_id;
+      - the GGUF header facts the server reports (n_params, tensor size, n_vocab, n_embd) must equal the manifest's
+        `served_meta` for that model, when the manifest records them (it does for the demo models).
+    What this cannot exclude: a different file with the same name AND the same header facts. The digest of the
+    file on disk is verified separately (verified_model_hash; demo/preflight.sh checks the copy the server mounts)."""
+    import sys
+    sys.path.insert(0, str(ROOT / "learning" / "tools"))
+    import models as m  # noqa: E402
+    e = m.entry(m.load(manifest or ROOT / "models" / "manifest.json"), model_id)
+    try:
+        props = client.props()
+    except Exception as ex:  # noqa: BLE001
+        raise ServedModelMismatch(f"cannot read /props from the model server: the model that would answer is unknown ({ex})") from ex
+    served = str(props.get("model_path") or "").replace(chr(92), "/").rsplit("/", 1)[-1]
+    if served != e["file"]:
+        raise ServedModelMismatch(f"the server has loaded {served!r}; --model-id {model_id} is {e['file']!r} — refusing to record a model that is not the one answering")
+    meta = {}
+    try:
+        meta = client.served_meta()
+    except Exception:  # noqa: BLE001 - older servers: the name check above still holds
+        pass
+    want = e.get("served_meta") or {}
+    bad = {k: (meta.get(k), v) for k, v in want.items() if meta.get(k) != v}
+    if bad:
+        raise ServedModelMismatch(f"the server's weights are named {served} but their header facts differ from the manifest's for {model_id}: {bad} (served, expected)")
+    return {"file": served, "meta": {k: meta.get(k) for k in ("n_params", "size", "n_vocab", "n_embd") if k in meta}, "checked_against_manifest": sorted(want)}
 
 
 def verified_model_hash(model_id: str, manifest: Path | None = None, cache: Path | None = None) -> str:

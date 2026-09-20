@@ -11,6 +11,6 @@ docker image inspect "ulpf-learning:$id" --format "ulpf-learning:$id {{.Size}} b
 echo "=== start check (digest verified at start, then llama-server; stopped after readiness)"
 docker rm -f ulpf-learning-check >/dev/null 2>&1 || true
 docker run -d --name ulpf-learning-check --network none -e ULPF_NGL=0 "ulpf-learning:$id" >/dev/null
-for i in $(seq 1 90); do sleep 2; docker logs ulpf-learning-check 2>&1 | grep -q "server is listening" && break; done
+for i in $(seq 1 90); do sleep 2; docker logs ulpf-learning-check 2>&1 | grep -qE "listening on http" && break; done
 docker logs ulpf-learning-check 2>&1 | grep -E "model_hash|listening|MISMATCH|error" | head -5
 docker rm -f ulpf-learning-check >/dev/null

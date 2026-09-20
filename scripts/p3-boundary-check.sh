@@ -11,7 +11,7 @@ python ocsf/tools/build_pinned.py | sed 's/^/  /' && python ocsf/tools/crosschec
 echo "=== runtime build"
 (cd runtime && gofmt -w ./internal ./cmd ./contracts && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
 echo "=== golden vectors + both suites"
-python contracts/golden/tools/build_vectors.py || status=1
+python contracts/golden/tools/build_vectors.py --check || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
 (cd learning && python -m pytest -q 2>&1 | tail -1) || status=1
 echo "=== runtime suite"

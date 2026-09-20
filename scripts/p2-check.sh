@@ -13,7 +13,7 @@ echo "=== go: fmt/vet/build runtime binary"
 (cd runtime && [ -z "$(gofmt -l ./internal ./cmd ./contracts | tee /dev/stderr)" ] && go vet ./... && mkdir -p bin && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
 
 echo "=== golden vectors (parser_hash from the compiler; normalized golden from the pipeline)"
-python contracts/golden/tools/build_vectors.py || status=1
+python contracts/golden/tools/build_vectors.py --check || status=1
 
 echo "=== verify-pack (fail-closed load of the golden pack)"
 runtime/bin/ulpf-runtime verify-pack --pack contracts/golden/squid-native || status=1

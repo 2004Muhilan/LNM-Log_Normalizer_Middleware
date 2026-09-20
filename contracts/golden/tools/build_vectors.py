@@ -223,5 +223,51 @@ def main():
     print(f"wrote {len(vectors)} vectors")
 
 
+def check() -> int:
+    """Regenerate into a SCRATCH COPY and compare with the committed goldens; fail on any difference.
+
+    Until P8 every phase check began by regenerating the goldens in place — line 1's normalized event from the
+    runtime's current output, every hash, the negatives, the index — and then "checked" them, so a regression
+    that stayed schema-valid rewrote its own expectation and passed (audit §3.1). The checks now call this:
+    the committed files are the expectation, regeneration is a deliberate `--write` whose diff gets reviewed.
+    `pack.json.sig` is excluded: it is git-ignored and signed per machine by keys-bootstrap."""
+    global GOLDEN, SQ, NEG
+    committed = GOLDEN
+    tmp = Path(tempfile.mkdtemp(prefix="ulpf-golden-check-"))
+    try:
+        scratch = tmp / "golden"
+        shutil.copytree(committed, scratch, ignore=shutil.ignore_patterns("__pycache__"))
+        GOLDEN, SQ, NEG = scratch, scratch / "squid-native", scratch / "negative"
+        main()
+        skip = {"pack.json.sig"}
+        def files(root):
+            return {str(f.relative_to(root)).replace(chr(92), "/"): f for f in root.rglob("*") if f.is_file() and f.name not in skip and "__pycache__" not in f.parts}
+        old, new = files(committed), files(scratch)
+        problems = [f"only in the committed tree: {k}" for k in sorted(set(old) - set(new))] + [f"regeneration produces a file that is not committed: {k}" for k in sorted(set(new) - set(old))]
+        for k in sorted(set(old) & set(new)):
+            if old[k].read_bytes() != new[k].read_bytes():
+                problems.append(f"DIFFERS: {k}")
+                if k.endswith(".json"):
+                    import difflib
+                    d = list(difflib.unified_diff(old[k].read_text(encoding="utf-8").splitlines(), new[k].read_text(encoding="utf-8").splitlines(), "committed/" + k, "regenerated/" + k, lineterm="", n=1))
+                    problems += ["    " + l for l in d[:24]]
+        if problems:
+            print("GOLDEN CHECK: FAIL — the committed goldens are not what the current code produces:")
+            print(chr(10).join("  " + x for x in problems))
+            print("  If the change is intended: python contracts/golden/tools/build_vectors.py --write, review the diff, commit it.")
+            return 1
+        print(f"GOLDEN CHECK: ok — {len(old)} committed golden files are byte-identical to a fresh regeneration")
+        return 0
+    finally:
+        GOLDEN, SQ, NEG = committed, committed / "squid-native", committed / "negative"
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--check"]:
+        sys.exit(check())
+    if sys.argv[1:] == ["--write"]:
+        main()
+        sys.exit(0)
+    sys.exit("usage: build_vectors.py --check   (compare the committed goldens with a fresh regeneration; what every phase check runs)" + chr(10) +
+             "       build_vectors.py --write   (regenerate in place: a deliberate act — review and commit the diff)")

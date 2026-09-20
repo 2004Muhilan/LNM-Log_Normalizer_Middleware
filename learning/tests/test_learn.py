@@ -143,7 +143,9 @@ def test_trace_stage10_to_13_resolution_promotion_and_differential(session, tmp_
     if corpus.exists():
         go = subprocess.run([str(RUNTIME), "parse", "--spec", str(pack_dir / fam["parser"]["spec_ref"]), "--input", str(corpus)], capture_output=True, text=True, check=True, env=env).stdout
         clines = [l.rstrip(b"\r") for l in corpus.read_bytes().split(b"\n") if l.strip()]
-        for line, gl in zip(clines, go.splitlines()):
+        glines = go.splitlines()
+        assert len(glines) == len(clines) and clines, f"the runtime emitted {len(glines)} span maps for {len(clines)} corpus lines"  # zip() alone passed on truncated or empty output (P8 audit)
+        for line, gl in zip(clines, glines):
             assert prog.parse(line) == json.loads(gl)
 
 

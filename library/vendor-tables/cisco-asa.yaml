@@ -33,6 +33,7 @@ anchors:
 # Per-family structural declaration for routing (l2 template = regex-anchored message body).
 families:
   asa-302013: { anchor_values: ["302013"], l2: template, action_id: 1, severity_id: 1, activity_id: 1 }
+  asa-302015: { anchor_values: ["302015"], l2: template, action_id: 1, severity_id: 1, activity_id: 1 }   # Built UDP connection (P8 healing demo: in-domain, unowned until onboarded)
   asa-302014: { anchor_values: ["302014", "302016"], l2: template, action_id: 1, severity_id: 1, activity_id: 2 }
   asa-106023: { anchor_values: ["106023"], l2: template, action_id: 2, severity_id: 2, activity_id: 6 }
   asa-305011: { anchor_values: ["305011", "305012"], l2: template, action_id: 1, severity_id: 1, activity_id: 6 }

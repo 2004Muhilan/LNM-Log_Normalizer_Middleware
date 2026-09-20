@@ -10,7 +10,7 @@ status=0
 echo "=== spec mirror test"
 (cd runtime && go test -count=1 ./internal/spec/ -run TestMirrorMatchesSchema -v 2>&1 | grep -E "^(--- |\s+--- |ok|FAIL|\s+mirror_test)" | sed 's/^ *//') || status=1
 echo "=== golden vectors + both suites"
-python contracts/golden/tools/build_vectors.py || status=1
+python contracts/golden/tools/build_vectors.py --check || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
 (cd learning && python -m pytest -q 2>&1 | tail -1) || status=1
 echo "=== runtime suite"

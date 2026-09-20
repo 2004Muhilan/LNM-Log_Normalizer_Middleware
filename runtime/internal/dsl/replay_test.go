@@ -57,6 +57,7 @@ func TestReplayASA(t *testing.T) {
 		expectOK int
 	}{
 		{"asa-302013.json", map[string]bool{"302013": true}, 62, 62},
+		{"asa-302015.json", map[string]bool{"302015": true}, 35, 35}, // P8 healing demo family (UDP sibling of 302013)
 		{"asa-302014.json", map[string]bool{"302014": true, "302016": true}, 81, 81},
 		{"asa-106023.json", map[string]bool{"106023": true}, 66, 65}, // one malformed fixture line (stray trailing quote)
 		{"asa-305011.json", map[string]bool{"305011": true, "305012": true}, 93, 93},

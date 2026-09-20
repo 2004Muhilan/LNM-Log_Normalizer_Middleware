@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"ulpf/runtime/internal/dsl"
+	"ulpf/runtime/internal/egress"
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/frame"
 	"ulpf/runtime/internal/gap"
@@ -28,7 +29,23 @@ import (
 	"ulpf/runtime/internal/route"
 )
 
+// EgressSink is one downstream delivery (P8): a sink URL and where its cursor is persisted.
+type EgressSink struct {
+	URL        string
+	CursorPath string
+}
+
 type Options struct {
+	// P8 egress. SpoolPath is the FILE the Out writer writes (the delivery spool the forwarders read); with any
+	// Egress sink the pipeline flushes Out after every event, reports a sink that stops accepting as an
+	// `egress_stalled` gap record in the evidence log (and `egress_resumed` when it catches up), and drains the
+	// forwarders for EgressDrain before it returns. Ingestion never waits for a sink; nothing is dropped.
+	Egress           []EgressSink
+	SpoolPath        string
+	EgressStallAfter time.Duration
+	EgressDrain      time.Duration
+	EgressTimeout    time.Duration
+
 	Pack  *pack.Pack   // single pack (P2–P5 callers)
 	Packs []*pack.Pack // P6: every onboarded pack of a mixed stream; Pack is appended when set
 	// SourceID is what the evidence record carries as the ingest source. Routing happens AFTER the raw
@@ -87,6 +104,7 @@ type Stats struct {
 	GapRecords    int            `json:"gap_records"`
 	GapKinds      map[string]int `json:"gap_kinds"`
 	Peers         int            `json:"peers"`
+	Egress        []egress.Stats `json:"egress,omitempty"` // P8: per sink — delivered, retries, stalls, undelivered bytes
 }
 
 type quarantined struct {
@@ -207,6 +225,46 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 	p := &Pipeline{store: store, tracker: gap.New(o.SilenceAfter), st: &st, o: o, source: sourceID, now: now}
 	if ready != nil {
 		ready(p)
+	}
+	// egress: one forwarder per sink over the spool; an interruption of DELIVERY becomes an evidence leaf like an
+	// interruption of ARRIVAL does
+	var forwarders []*egress.Forwarder
+	reported := map[string]bool{}
+	if len(o.Egress) > 0 {
+		if o.SpoolPath == "" {
+			return st, fmt.Errorf("egress needs the normalized output in a file (--out FILE): the file is the delivery spool")
+		}
+		timeout := o.EgressTimeout
+		if timeout == 0 {
+			timeout = 5 * time.Second
+		}
+		for _, e := range o.Egress {
+			sink, err := egress.Open(e.URL, timeout)
+			if err != nil {
+				return st, err
+			}
+			name := sink.Name()
+			f := &egress.Forwarder{Spool: o.SpoolPath, CursorPath: e.CursorPath, Sink: sink, StallAfter: o.EgressStallAfter,
+				OnStall: func(s egress.Stall) {
+					p.mu.Lock()
+					defer p.mu.Unlock()
+					reported[name] = true
+					p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "egress_stalled", SourceID: sourceID, Channel: "egress:" + name, Peer: name, DetectedAt: now().UnixMilli(),
+						LastSeenAt: s.Since.UnixMilli(), LastEventID: s.LastEventID, SilenceMS: s.Duration.Milliseconds(), Missing: s.LagBytes,
+						Detail: "sink not accepting: " + s.Err + "; events are spooled, none dropped; delivery resumes from the last acknowledged event"}, name)
+				},
+				OnResume: func(s egress.Stall) {
+					p.mu.Lock()
+					defer p.mu.Unlock()
+					p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "egress_resumed", SourceID: sourceID, Channel: "egress:" + name, Peer: name, DetectedAt: now().UnixMilli(),
+						LastSeenAt: s.Since.UnixMilli(), LastEventID: s.LastEventID, SilenceMS: s.Duration.Milliseconds(), Missing: s.LagEvents,
+						Detail: fmt.Sprintf("sink accepting again: %d event(s) delivered late, none dropped", s.LagEvents)}, name)
+				}}
+			if err := f.Start(true); err != nil { // the run has just created the spool: the cursor starts at zero
+				return st, err
+			}
+			forwarders = append(forwarders, f)
+		}
 	}
 	// silence sweeps while a listener source runs (a file source ends before any sweep matters)
 	stopSweep := make(chan struct{})
@@ -332,6 +390,11 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 		if _, err := out.Write(append(b, '\n')); err != nil {
 			return err
 		}
+		if len(forwarders) > 0 {
+			if err := out.Flush(); err != nil { // the spool is read by the forwarders: an event is deliverable as soon as it is emitted
+				return err
+			}
+		}
 		st.Emitted++
 		st.ByFamily[d.Pack.PackID+"/"+d.Family.FamilyID]++
 		if ml != nil {
@@ -367,6 +430,25 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 	})
 	close(stopSweep)
 	sweepWG.Wait()
+	if len(forwarders) > 0 {
+		out.Flush()
+		drain := o.EgressDrain
+		if drain == 0 {
+			drain = 10 * time.Second
+		}
+		for _, f := range forwarders { // p.mu is NOT held here: a resume during the drain still becomes a leaf
+			es := f.Drain(drain)
+			if es.Undelivered > 0 {
+				p.mu.Lock()
+				if !reported[es.Sink] { // an outage shorter than the stall threshold, still open at shutdown, is recorded too
+					p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "egress_stalled", SourceID: sourceID, Channel: "egress:" + es.Sink, Peer: es.Sink, DetectedAt: now().UnixMilli(),
+						Missing: es.Undelivered, Detail: "undelivered at shutdown: " + es.LastError + "; the cursor is persisted, `ulpf-runtime forward` resumes from it"}, es.Sink)
+				}
+				p.mu.Unlock()
+			}
+			st.Egress = append(st.Egress, es)
+		}
+	}
 	p.mu.Lock()
 	st.Peers = p.tracker.Peers()
 	if err == nil {

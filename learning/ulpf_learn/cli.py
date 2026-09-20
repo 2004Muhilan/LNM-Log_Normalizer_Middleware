@@ -87,12 +87,14 @@ def main(argv=None) -> int:
             prov = RecordedProvider(Path(a.recording))
         if a.provider == "model":
             from .model.client import LlamaClient
-            from .model.provider import ModelProvider, verified_model_hash
+            from .model.provider import ModelProvider, assert_served_model, verified_model_hash
             if not a.model_id:
                 ap.error("--model-id is required with --provider model")
             client = LlamaClient(a.server)
             client.wait_ready(60)
+            served = assert_served_model(client, a.model_id)   # refuses when the server is not serving the model the pack would name
             prov = ModelProvider(client, a.model_id, verified_model_hash(a.model_id), mode=a.mode, backend=a.backend)
+            prov.served_model = served
         store = Path(a.propagation_store) if a.propagation_store else None
         if a.cmd == "onboard":
             s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor, propagation_store=store)

@@ -4,6 +4,8 @@ models/cache/
 corpus/cache/
 ocsf/cache/
 runtime/bin/
+# dev PRIVATE keys never enter an image layer (learning/Dockerfile copies keys/: only the trust store may go in) — P8
+keys/dev/
 .git/
 **/__pycache__/
 **/.pytest_cache/

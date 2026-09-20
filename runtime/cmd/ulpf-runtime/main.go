@@ -24,6 +24,7 @@ import (
 
 	"ulpf/runtime/internal/checkpoint"
 	"ulpf/runtime/internal/dsl"
+	"ulpf/runtime/internal/egress"
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/frame"
 	"ulpf/runtime/internal/lake"
@@ -83,6 +84,10 @@ func main() {
 		fs.Var(&dirs, "pack", "pack directory (repeat for a mixed stream: every onboarded source)")
 		sourceID := fs.String("source-id", "", "evidence-record source id for a mixed stream (defaults to the single pack's source_id)")
 		lakeDir := fs.String("lake", "", "versioned lake directory (invariant 8): normalized events are ALSO sealed there as normalization@v1 (exclusive create, read-only, sha256 manifest); corrections go through `renormalize`")
+		var forwards packList
+		fs.Var(&forwards, "forward", "P8 egress (repeatable): syslog+tcp://host:port (RFC 5424 over RFC 6587 octet counting) | http(s)://collector/path (NDJSON POST) | stdout: — needs --out FILE (the delivery spool); a sink that stops accepting costs no event: delivery resumes from a persisted cursor and the interruption is a gap record in the evidence log")
+		fwdStall := fs.Duration("forward-stall-after", 3*time.Second, "egress: report a sink as stalled (egress_stalled gap record) after this long without an accepted batch")
+		fwdDrain := fs.Duration("forward-drain", 10*time.Second, "egress: at the end of input, wait this long for sinks to catch up; what is left stays spooled (exit 3)")
 		mlPath := fs.String("ml-out", "", "ML feature records JSONL (requirement h): (template_id, parameter_vector, timestamp, entity_ids)")
 		input := fs.String("input", "", "input file (use - for stdin)")
 		evDir := fs.String("evidence", "", "evidence store directory")
@@ -175,6 +180,15 @@ func main() {
 			n := 0
 			o.NewID = func(time.Time) string { n++; return fmt.Sprintf("ev_%026d", n) }
 		}
+		if len(forwards) > 0 {
+			if *outPath == "-" {
+				die(fmt.Errorf("--forward needs --out FILE: the file is the delivery spool the cursor points into"))
+			}
+			o.SpoolPath, o.EgressStallAfter, o.EgressDrain = *outPath, *fwdStall, *fwdDrain
+			for i, u := range forwards {
+				o.Egress = append(o.Egress, pipeline.EgressSink{URL: u, CursorPath: fmt.Sprintf("%s.egress-%d.cursor", *outPath, i)})
+			}
+		}
 		var st pipeline.Stats
 		var err error
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -254,6 +268,54 @@ func main() {
 			fmt.Fprintf(os.Stderr, "lake: sealed normalization@v1, %d events, %s\n", m.Events, m.SHA256)
 		}
 		json.NewEncoder(os.Stderr).Encode(st)
+		undelivered := false
+		for _, es := range st.Egress {
+			if es.Undelivered > 0 {
+				fmt.Fprintf(os.Stderr, "egress: %d byte(s) NOT delivered to %s (%s); nothing is lost — resume with: ulpf-runtime forward --from %s --to %s --cursor <the .cursor file beside the spool>\n", es.Undelivered, es.Sink, es.LastError, *outPath, es.Sink)
+				undelivered = true
+			}
+		}
+		if undelivered {
+			os.Exit(3) // every output file is an unbuffered os.File and the lake is sealed above: nothing is pending
+		}
+	case "forward":
+		// P8: deliver (or finish delivering) a spool of normalized events from a persisted cursor. The standalone form of
+		// `run --forward`: same forwarder, same at-least-once semantics; it cannot write gap records (it does not own the
+		// evidence store), so it reports stalls on stderr.
+		fs := flag.NewFlagSet("forward", flag.ExitOnError)
+		from := fs.String("from", "", "spool: a normalized-event JSONL file")
+		to := fs.String("to", "", "sink: syslog+tcp://host:port | http(s)://url | stdout:")
+		cursor := fs.String("cursor", "", "cursor file (default <from>.forward.cursor)")
+		follow := fs.Bool("follow", false, "keep following the spool as it grows (until SIGINT)")
+		wait := fs.Duration("wait", 30*time.Second, "without --follow: how long to keep retrying a sink that is not accepting")
+		fs.Parse(os.Args[2:])
+		if *from == "" || *to == "" {
+			die(fmt.Errorf("forward needs --from and --to"))
+		}
+		if *cursor == "" {
+			*cursor = *from + ".forward.cursor"
+		}
+		sink, err := egress.Open(*to, 5*time.Second)
+		die(err)
+		f := &egress.Forwarder{Spool: *from, CursorPath: *cursor, Sink: sink,
+			OnStall: func(s egress.Stall) {
+				fmt.Fprintf(os.Stderr, "egress STALLED %s since %s: %s (last acknowledged %s; nothing dropped)\n", s.Sink, s.Since.Format(time.RFC3339), s.Err, s.LastEventID)
+			},
+			OnResume: func(s egress.Stall) {
+				fmt.Fprintf(os.Stderr, "egress RESUMED %s after %s: %d event(s) delivered late\n", s.Sink, s.Duration.Round(time.Millisecond), s.LagEvents)
+			}}
+		die(f.Start(false))
+		if *follow {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			<-ctx.Done()
+			stop()
+			*wait = 5 * time.Second
+		}
+		es := f.Drain(*wait)
+		json.NewEncoder(os.Stderr).Encode(es)
+		if es.Undelivered > 0 {
+			os.Exit(3)
+		}
 	case "renormalize":
 		// Invariant 8: a correction. Re-derives the affected events from the EVIDENCE under the corrected
 		// packs and seals them as the next normalization version with derived_from; prior versions are read, never written.
@@ -416,6 +478,6 @@ func die(err error) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ulpf-runtime compile|parse|verify-pack|run|renormalize|lake verify|lake get|export|reconstruct [flags]")
+	fmt.Fprintln(os.Stderr, "usage: ulpf-runtime compile|parse|verify-pack|run|forward|renormalize|lake verify|lake get|export|reconstruct [flags]")
 	os.Exit(2)
 }

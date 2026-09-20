@@ -13,7 +13,7 @@ bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit
 echo "=== runtime build"
 (cd runtime && [ -z "$(gofmt -l ./internal ./cmd ./contracts | tee /dev/stderr)" ] && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
 echo "=== golden vectors + contract suites"
-python contracts/golden/tools/build_vectors.py || status=1
+python contracts/golden/tools/build_vectors.py --check || status=1
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
 echo "=== runtime suite"
 (cd runtime && go test -count=1 ./... 2>&1 | grep -vE "no test files") || status=1

@@ -7,7 +7,7 @@ status=0
 bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)
 
 echo "=== build golden vectors ==="
-python contracts/golden/tools/build_vectors.py || status=1
+python contracts/golden/tools/build_vectors.py --check || status=1
 
 echo "=== python: golden walk ==="
 (cd learning && python -m ulpf_contracts --golden) || status=1

@@ -121,6 +121,10 @@ func main() {
 				detail = fmt.Sprintf("expected sequence %d, observed %d: %d message(s) missing", r.Expected, r.Observed, r.Missing)
 			case "sequence_reset":
 				detail = fmt.Sprintf("expected sequence %d, observed %d: %s", r.Expected, r.Observed, r.Detail)
+			case "egress_stalled":
+				detail = fmt.Sprintf("DELIVERY to %s interrupted (last acknowledged event %s): %s", r.Peer, r.LastEventID, r.Detail)
+			case "egress_resumed":
+				detail = fmt.Sprintf("delivery to %s resumed after %d ms: %s", r.Peer, r.SilenceMS, r.Detail)
 			default:
 				detail = r.Detail
 			}
