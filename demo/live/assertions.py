@@ -6,7 +6,7 @@
 
 Scripted: the listed answers (the truth about flowgen — the operator's own notes on their sensor) are queued one by
 one, exactly as the UI queues a dropdown choice, and applied. Interactive: nothing is queued; the operator chooses in
-the UI (screen 5). When they press "promote", whatever they did not answer themselves is filled from the notes — an
+the System page (demo/ui/live.html). When they press "promote", whatever they did not answer themselves is filled from the notes — an
 unanswered column would keep the model's label, and two columns carrying the same label make a pack the contract refuses.
 Ends when no mandatory attribute is blocked and every expected answer was applied.
 """
@@ -47,7 +47,7 @@ def main() -> int:
 
     publish()
     if interactive:
-        print(">>> waiting for the operator: choose in the UI (screen 5), then press promote", flush=True)
+        print(">>> waiting for the operator: choose on the System page (live.html), then press promote", flush=True)
     applied, asserted, to_queue, promote_seen, next_at = 0, set(), list(notes) if not interactive else [], False, time.time() + pause
     deadline = time.time() + 900
     while time.time() < deadline:

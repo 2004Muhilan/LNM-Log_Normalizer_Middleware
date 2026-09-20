@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """sink — the demo's CONSUMER / storage app: receives what ULPF's egress connector delivers (HTTP POST, NDJSON, one
 normalized OCSF event per line), writes it to SQLite, and SHOWS it: http://127.0.0.1:8790/ is a page with the row
-count, rows per second over the last two minutes (an outage is a flat stretch, the catch-up is the spike after it)
-and the latest rows. Standard library only, fully offline, entirely OUTSIDE the pipeline.
+count and the latest rows, newest first — an outage reads as the rows stopping, the catch-up as them resuming. Standard library only, fully offline, entirely OUTSIDE the pipeline.
 
     sink.py --listen 127.0.0.1:8790 --db events.sqlite --status consumer.json
 
@@ -23,22 +22,16 @@ import time
 LOCK = threading.Lock()
 STATE = {"app": "sink", "rows": 0, "batches": 0, "received": 0, "duplicates_ignored": 0, "by_family": {}, "latest": [], "per_second": [], "started": time.time()}
 
-PAGE = """<!doctype html><meta charset=utf-8><title>sink — the consumer's database</title>
-<style>body{font:16px system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:24px}h1{font-size:1.3rem;margin:0 0 4px}.dim{color:#8b949e}
-.big{font-size:4rem;font-weight:700;color:#3fb950;line-height:1}table{border-collapse:collapse;width:100%;margin-top:12px;font:13px ui-monospace,monospace}
-td,th{padding:4px 8px;border-bottom:1px solid #21262d;text-align:left}th{color:#8b949e;font-weight:400}.new{background:#12261a}svg{width:100%;height:90px;margin-top:10px}
-.bar{fill:#2a78d6}.k{display:inline-block;margin-right:36px;vertical-align:top}.lab{color:#8b949e;font-size:.8rem;text-transform:uppercase}</style>
-<h1>sink — a consumer app's SQLite database <span class=dim>(outside ULPF; fed by the HTTP POST egress connector)</span></h1>
-<div><div class=k><div class=lab>rows</div><div class=big id=rows>…</div></div>
-<div class=k><div class=lab>batches · duplicates ignored</div><div style="font-size:1.6rem" id=b>…</div><div class=lab style="margin-top:8px">by family</div><div id=fam class=dim></div></div></div>
-<div class=lab style="margin-top:10px">rows stored per second, last 120 s — a flat stretch is an outage on THIS side; the spike after it is ULPF delivering from its cursor</div>
-<svg id=chart viewBox="0 0 1200 90" preserveAspectRatio="none"></svg>
-<table><thead><tr><th>stored at</th><th>event time (OCSF, ms)</th><th>src</th><th>dst</th><th>action_id</th><th>bytes out / in</th><th>family</th><th>event_id</th></tr></thead><tbody id=t></tbody></table>
-<script>let seen=new Set();async function tick(){try{const d=await (await fetch('/stats')).json();rows.textContent=d.rows;b.textContent=d.batches+' · '+d.duplicates_ignored;
-fam.textContent=Object.entries(d.by_family).map(([k,v])=>k+': '+v).join(' · ');const m=Math.max(1,...d.per_second.map(x=>x[1]));
-chart.innerHTML=d.per_second.map((x,i)=>`<rect class=bar x="${i*10}" width="8" y="${90-85*x[1]/m}" height="${85*x[1]/m}"><title>${x[1]} rows</title></rect>`).join('');
-t.innerHTML=d.latest.map(r=>`<tr class="${seen.has(r.event_id)||!seen.size?'':'new'}"><td>${r.stored_at}</td><td>${r.time}</td><td>${r.src}</td><td>${r.dst}</td><td>${r.action_id}</td><td>${r.bytes}</td><td>${r.family}</td><td class=dim>${r.event_id}</td></tr>`).join('');
-seen=new Set(d.latest.map(r=>r.event_id));}catch(e){rows.textContent='—'}}tick();setInterval(tick,700)</script>"""
+PAGE = """<!doctype html><meta charset=utf-8><title>Database — the consumer's events</title>
+<style>body{margin:0;padding:28px 36px;background:#fff;color:#000;font:22px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif}h1{font-size:1.5rem;margin:0 0 18px}
+.lab{color:#666;font-size:.95rem}.big{font-size:5rem;font-weight:800;line-height:1}table{border-collapse:collapse;width:100%;margin-top:22px;font:1.05rem ui-monospace,Consolas,monospace}
+td,th{padding:7px 14px 7px 0;border-bottom:1px solid #ddd;text-align:left}th{color:#666;font:400 .9rem system-ui,sans-serif}.red{color:#c00000}</style>
+<h1>Database — a consumer app outside ULPF, fed by the HTTP POST connector</h1>
+<div class=lab>rows</div><div class=big id=rows>…</div>
+<table><thead><tr><th>stored at</th><th>event time (ms)</th><th>source</th><th>destination</th><th>action</th><th>bytes out / in</th></tr></thead><tbody id=t></tbody></table>
+<script>async function tick(){try{const d=await (await fetch('/stats')).json();rows.textContent=d.rows;rows.className='big';
+t.innerHTML=d.latest.map(r=>`<tr><td>${r.stored_at}</td><td>${r.time}</td><td>${r.src}</td><td>${r.dst}</td><td>${r.action_id}</td><td>${r.bytes}</td></tr>`).join('');
+}catch(e){rows.className='big red';rows.textContent='DOWN'}}tick();setInterval(tick,500)</script>"""
 
 
 def dig(d, path):

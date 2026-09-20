@@ -15,7 +15,7 @@
 #   G  backfill from the evidence log;  H  the accounting;  I  whitespace drift, the case no policy can heal
 #
 # The two apps are demo/live/flowgen.py and demo/live/sink.py (standard library only). ULPF_LIVE_INTERACTIVE=1 waits for the
-# operator on screen 5 (the onboard decision, the dropdowns) instead of applying the scripted answers.
+# operator on the System page, demo/ui/live.html (the onboard decision, the dropdowns) instead of applying the scripted answers.
 source "$(dirname "$(readlink -f "$0")")/../lib.sh"
 cd "$ROOT"
 LIVE="$STATE/live"; IN_PORT="${ULPF_LIVE_TCP_PORT:-6515}"; SINK_ADDR="${ULPF_LIVE_SINK:-127.0.0.1:8790}"; RATE="${ULPF_LIVE_RATE:-8}"
@@ -117,7 +117,7 @@ resolve_by_assertion() { # session then "field=attribute|why" ...   (demo/live/a
   python "$ROOT/demo/live/assertions.py" "$S" "$LIVE" $([ "$INTERACTIVE" = "1" ] && echo --interactive) "$@" || fail "operator assertions"
 }
 # THE TIER 1 MOMENT: the only place a human is structurally required for a new source. Nothing is onboarded from traffic that
-# merely arrived; a named operator says "onboard this". Interactive: the button on screen 5. Scripted: the same record, after a pause.
+# merely arrived; a named operator says "onboard this". Interactive: the button on the System page. Scripted: the same record, after a pause.
 wait_for_decision() { # signature events
   python3 - "$LIVE" "$1" "$2" <<'EOF'
 import json, os, sys
@@ -126,7 +126,7 @@ json.dump({"decision_needed": {"signature": sig, "events": int(n), "question": "
 os.replace(f"{L}/pending.json.tmp", f"{L}/pending.json")
 EOF
   : > "$LIVE/decisions.jsonl"
-  if [ "$INTERACTIVE" = "1" ]; then echo ">>> WAITING FOR A HUMAN: press 'onboard this source' on screen 5 (nothing happens until then — by design)"
+  if [ "$INTERACTIVE" = "1" ]; then echo ">>> WAITING FOR A HUMAN: press 'onboard this source' on the System page, http://localhost:8765/live.html (nothing happens until then — by design)"
   else echo ">>> waiting for a human decision (scripted: op-014 decides after ${ULPF_LIVE_DECISION_PAUSE:-5}s; the stream keeps quarantining meanwhile)"
        ( sleep "${ULPF_LIVE_DECISION_PAUSE:-5}"; echo '{"onboard": true, "by": "script"}' >> "$LIVE/decisions.jsonl" ) & fi
   wait_for 900 "a human to say 'onboard this'" grep -q '"onboard": true' "$LIVE/decisions.jsonl"

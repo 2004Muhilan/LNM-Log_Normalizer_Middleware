@@ -315,3 +315,37 @@ resolve is not mandatory**; the blocked outcome is implemented and reachable, an
     rest (8); the UI writes two queue files now (9); the model's certificate set varies between runs (10); whitespace
     drift cannot be re-onboarded (11). **Carried:** the crosswalk review is the team's, not self-reviewed; sequence-gap
     detection is unexercised on real data; the laptop has run none of this.
+
+## 9. Third pass — the screens, stripped back (presentation only)
+
+Screen 5 of the six-step UI is gone (key `5` there now opens the new page); the live sequence has **three plain pages**,
+vanilla HTML/CSS/JS, nothing fetched from anywhere: `demo/ui/live.html` + `live.js` (System: two UP/DOWN blocks, the
+phase list, and only the running phase's detail), `demo/ui/generator.html` (raw lines, scrolling, with their connector),
+and the consumer's own page in `demo/live/sink.py` (a row count and the latest rows; the per-second chart is removed).
+One stylesheet, `plain.css`: black on white, large type, red for down / failing and no other colour. Removed: the
+per-family counts, quarantine-reason and candidate-set figures, the monitor's event log, the generic evidence-record
+list, batches / duplicates, the arrows and connector boxes, tags and tinted panels.
+
+`run-live.sh` drives the phases exactly as before; no phase control was added. **Below the UI, two demo-app edits and
+nothing else:** `flowgen.py` adds its last 16 lines to the status file it already writes (the Generator page needs the
+lines, not only the last one), and `sink.py`'s embedded page was rewritten. No pipeline file, no script logic.
+
+**The interactive path was clicked through in a browser this time** (fixture provider): *onboard this source* in phase
+A → the sequence left the wait; `pos_4`, `pos_6`, `pos_1`, `pos_2` chosen from the dropdowns and asserted one by one →
+the blocker line went 4 → 3 → 2 → 1 → "every mandatory field has evidence"; *promote*; the outage and the alert appeared
+and went away with their phases; *promote* again in phase F with the zone certificate on screen; the run ended
+2,226 lines = 2,226 evidence records = 2,226 rows. The dropdown now offers `connection_info.protocol_num` (it did not,
+so phase F could only be completed from the operator's notes).
+
+**Raised, not built:** the script stops the consumer when the sequence ends, so the Database page then says DOWN in red
+(the System page says STOPPED). Leaving the consumer running after phase H is a one-line change in `run-live.sh`, i.e.
+below the UI — not made. The gate after this pass:
+
+| | six steps, run 1 / run 2 | live sequence (A–I), run 1 / run 2 | same facts shown |
+|---|---|---|---|
+| 20 layers (pinned) | 90.6 s / 91.0 s | 180 s / 162 s | yes / yes |
+| 33 of 33 layers (`ULPF_DEMO_NGL_UNPINNED=1`) | 45.6 s / 47.8 s | 150 s / 159 s | yes / yes |
+
+73 Python tests pass. Run after the last edit to any script (the scripts' messages now say "the System page" where they
+said "screen 5"; the first gate attempt was stopped for that edit and restarted from the beginning). The phase checks
+were not re-run in this pass: no pipeline file changed. The laptop has run none of this.

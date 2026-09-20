@@ -210,12 +210,21 @@ protected by its API (exclusive create, consecutive versions), read-only file mo
 `lake verify` recomputes — **not kernel-immutable and not signed**. Root can rewrite a lake file; `lake verify`
 then names the version. v1 being "byte-identical" is a checked hash, not a cryptographic commitment.
 
-## The live sequence — generators in, a consumer out, and everything that can go wrong in between (screen `5`)
+## The live sequence — generators in, a consumer out, and everything that can go wrong in between (three plain pages)
 
 `bash demo/live/run-live.sh` after the usual set-up (reset, model server, UI). Parallel to the six steps; everything it
 writes is under `~/ulpf-demo/live`. **About 3 min at 20 layers, about 2 min at 33** (two model calls; timings in
-[live-demo-report.md](live-demo-report.md)). Acceptance: `bash demo/live/twice-live.sh`. Open the consumer's own page
-in a second tab: **http://127.0.0.1:8790/**.
+[live-demo-report.md](live-demo-report.md)). Acceptance: `bash demo/live/twice-live.sh`.
+
+**Three pages, each doing one job** — plain, large type, black on white; **red means down or failing and nothing else is coloured**. Open all three before you start (key `5` in the six-step UI jumps to the first):
+
+| page | what is on it | when you point at it |
+|---|---|---|
+| **System** — http://localhost:8765/live.html (the main screen) | two status blocks, **Generators** and **Consumer**, UP / DOWN in very large type (the whole block turns red when down); the list of phases A–I, each pending / running / done, advancing by itself; and **only what the running phase needs**: A the quarantined / parsed / guessed counters and the *onboard* button; B and F the certificate cards and one row per column (dropdowns when interactive); C two counters; D "ULPF is ahead of the database by N" and the outage records; E parse success and the ALERT; G–H the three numbers of the accounting; I the whitespace case. When a phase ends its detail goes away | all the time |
+| **Generator** — http://localhost:8765/generator.html | the raw lines as they are produced, scrolling, each prefixed with the connector it leaves through (`syslog TCP` / `HTTP POST`). Nothing else. At the drift the lines visibly change shape (a number where `tcp` was, a zone at the end) | phase A ("this is what arrives: no labels anywhere") and phase E ("firmware 2.0") |
+| **Database** — http://127.0.0.1:8790/ (served by the consumer app itself; loads once the sequence has started) | a row count and the latest events, newest first, typed. During the outage the page itself says DOWN and the rows stop; after the restart they resume and the count jumps — no chart, the stopping and resuming is the picture | phases C, D, G |
+
+Nothing on these pages drives the sequence: `run-live.sh` advances the phases exactly as before. The only controls are the two that already existed — the *onboard* button and the dropdowns + *promote* — and they only exist in an interactive run.
 
 ```
 flowtap sensor A --syslog/TCP (RFC 6587)--\                          /--HTTP POST (NDJSON)--> sink: SQLite + its own page
@@ -240,8 +249,9 @@ One runtime process for the whole sequence: packs are **hot-loaded** (SIGHUP), n
 **The dropdown — what to say when the resolution is not a config line.** In step 2 the operator pastes Squid's
 `logformat` line and one document resolves every field. **There is no such document for a format we invented**, and
 the system now says so itself: its one request reads *"No vendor documentation or device configuration is known to
-ULPF for this source … state what each pending field is"*. `ULPF_LIVE_INTERACTIVE=1`: screen 5 shows the Tier 1
-button, then one dropdown per column (the certificate's candidates first). Choose `pos_4 → src_endpoint.ip`,
+ULPF for this source … state what each pending field is"*. `ULPF_LIVE_INTERACTIVE=1`: the System page shows the *onboard this source*
+button in phase A, then one dropdown per column in phase B (the certificate's candidates first). **This path was clicked through
+in a browser on 2026-09-20** — the button, four assertions, *promote*, and *promote* again in phase F — and the run balanced. Choose `pos_4 → src_endpoint.ip`,
 `pos_6 → dst_endpoint.ip`, `pos_1 → time`, `pos_2 → action_id`, watch the four blockers clear, press **promote** —
 the rest is filled from the operator's notes. Scripted (default): the same answers, queued through the same file.
 - Say: "I am not configuring a parser — I am **answering the question the system asked**, one field at a time; each
@@ -265,7 +275,8 @@ is promoted).
 |---|---|
 | phase B fails "the certificates … did not fire" | the model did not label both addresses on this draw (its labels vary with the live sample lines). Re-run; or `ULPF_DEMO_PROVIDER=fixture bash demo/live/run-live.sh` — under a minute, says FALLBACK on screen, say it too |
 | ports 6515 / 8516 / 8790 busy | `bash demo/reset.sh` stops the live apps too; or `ULPF_LIVE_TCP_PORT`, `ULPF_LIVE_HTTP_PORT`, `ULPF_LIVE_SINK` |
-| interactive run sits in phase A or B | it is waiting for you — that is the point of phase A; screen 5 |
+| interactive run sits in phase A, B or F | it is waiting for you — that is the point of phase A; the System page. In F just press *promote* (or choose `pos_3 → connection_info.protocol_num`, `pos_10 → src_endpoint.zone` first) |
+| the Database page says DOWN in red after the sequence has finished | expected: the script stops the consumer at the end. The System page says STOPPED, not DOWN. Do not leave the Database page on the projector after phase H |
 | skip the whitespace case | `ULPF_LIVE_SKIP_PAD=1` |
 
 ## If a judge asks for the coverage curve

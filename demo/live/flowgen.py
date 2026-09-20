@@ -103,6 +103,7 @@ def main() -> int:
     started = time.time()
     next_t = started
     last_line = ""
+    recent = collections.deque(maxlen=16)   # the generator page shows the raw lines as they are produced
     paused = finishing = False
     while True:
         now = time.time()
@@ -124,6 +125,7 @@ def main() -> int:
         while now >= next_t and not finishing:
             last_line = gen.line(fmt, next_t)
             backlog.append(last_line)
+            recent.append(last_line)
             generated += 1
             next_t += 1.0 / a.rate
         if sock is None and not paused:
@@ -158,14 +160,14 @@ def main() -> int:
                     pass
                 sock = None
         write_status(a.status, {"app": "flowgen", "to": a.to, "rate": a.rate, "format": fmt, "generated": generated, "sent": sent, "backlog": len(backlog),
-                                "connected": sock is not None, "paused": paused, "connections": reconnects, "drift_at_line": drift_at, "last_line": last_line, "at": now, "pid": os.getpid()})
+                                "connected": sock is not None, "paused": paused, "connections": reconnects, "drift_at_line": drift_at, "last_line": last_line, "recent": list(recent), "at": now, "pid": os.getpid()})
         if (finishing or (a.max_lines and generated >= a.max_lines)) and not backlog:
             break
         time.sleep(min(0.1, max(0.01, next_t - time.time())))
     if sock is not None:
         sock.close()
     write_status(a.status, {"app": "flowgen", "to": a.to, "rate": a.rate, "format": fmt, "generated": generated, "sent": sent, "backlog": len(backlog),
-                            "connected": False, "connections": reconnects, "drift_at_line": drift_at, "last_line": last_line, "at": time.time(), "stopped": True, "pid": os.getpid()})
+                            "connected": False, "connections": reconnects, "drift_at_line": drift_at, "last_line": last_line, "recent": list(recent), "at": time.time(), "stopped": True, "pid": os.getpid()})
     return 0
 
 

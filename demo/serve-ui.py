@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The demo UI server: standard library only, fully offline. Serves demo/ui/ at / and the demo state
 directory at /state/ with no caching, so the browser sees what the scripts just wrote. Read-only, with ONE exception:
-POST /live/assert appends the operator's choice on screen 5 ({"field": "pos_4", "attribute": "src_endpoint.ip"} or
+POST /live/assert appends the operator's choice on the System page, live.html ({"field": "pos_4", "attribute": "src_endpoint.ip"} or
 {"promote": true}) as a line to <state>/live/assertions.jsonl. The server executes nothing: the live sequence
 (demo/live/assertions.py) reads that queue and calls the same `ulpf_learn respond` CLI it would call for a scripted answer.
 

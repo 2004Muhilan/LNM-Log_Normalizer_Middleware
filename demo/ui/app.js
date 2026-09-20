@@ -2,7 +2,7 @@
 // No framework, no network beyond localhost, no opinion — if a file is missing the screen says so.
 (() => {
   const $ = (id) => document.getElementById(id);
-  const screens = { review: "s-review", tamper: "s-tamper", flow: "s-flow", discover: "s-discover", live: "s-live" };
+  const screens = { review: "s-review", tamper: "s-tamper", flow: "s-flow", discover: "s-discover" };
   const stepScreen = { 1: "discover", 2: "review", 3: "review", 4: "review", 5: "flow", 6: "tamper" };
   let active = "review";
   let follow = true;
@@ -167,88 +167,16 @@
   }
 
 
-  // ---------------------------------------------------------------- screen 5: the live pipeline (generator -> ULPF -> consumer)
-  let assertKey = "";
-  async function postAssert(body) { try { await fetch("/live/assert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); } catch (e) { console.error(e); } }
-  async function renderLive() {
-    const [st, gen, gen2, w, con, pend, gapsTxt, alert] = await Promise.all([getJSON("live/status.json"), getJSON("live/generator.json"), getJSON("live/generator-http.json"), getJSON("live/watch.json"),
-      getJSON("live/consumer.json"), getJSON("live/pending.json"), getText("live/gaps.json"), getJSON("live/autoheal/alert-latest.json")]);
-    const top = $("live-top"), asr = $("live-assert");
-    if (!st) { top.innerHTML = '<div class="empty">the live sequence has not run — bash demo/live/run-live.sh</div>'; asr.innerHTML = ""; assertKey = ""; return; }
-    const phases = Object.entries(st.phases || {}).map(([k, p]) => `<span class="st ${p.state || ""}" title="${esc(p.title || "")}">${esc(k)} ${esc((p.title || "").split(/[:—(]/)[0].trim().slice(0, 30))}${p.state === "done" ? `<span class="t">${fmtS(p.seconds)}</span>` : p.state === "running" ? '<span class="t blink">running…</span>' : ""}</span>`).join("");
-    const cur = (st.phases || {})[st.current] || {};
-    const ps = w && w.parse_success != null ? Math.round(100 * w.parse_success) : null;
-    const fired = w && w.fired;
-    const topSig = w && w.signals && ((w.signals[w.dominant_signal] || [])[0]);
-    const events = ((w && w.events) || []).slice(-3).map((e) => `<div class="${e.state === "fired" ? "bad" : "ok"}" style="font-size:.9rem">${esc(e.message)}</div>`).join("");
-    const gaps = (gapsTxt || "").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-    const gapRows = gaps.slice(-6).map((g) => `<div class="family"><span><b class="${g.record.kind === "egress_stalled" ? "bad" : g.record.kind.startsWith("pack_") ? "warn" : "ok"}">${esc(g.record.kind)}</b> <span class="dim" style="font-size:.85rem">${esc(String(g.record.detail || "").slice(0, 120))}</span></span><span class="dim">leaf ${g.leaf_index} · ${esc(g.segment_id)}</span></div>`).join("");
-    const conDown = !con || (Date.now() / 1000 - con.at > 3);
-    const lag = w && con ? Math.max(0, w.usable_total - con.rows) : 0;
-    const genBox = (g, name, how) => g ? `<div class="family"><span><b>${name}</b> <span class="dim" style="font-size:.85rem">${how}</span></span><span>${g.format === 2 ? '<span class="tag unresolved">firmware 2.0</span> ' : ""}${g.sent} sent${g.backlog ? ` · <span class="warn">${g.backlog} queued</span>` : ""}</span></div>` : "";
-    const box = (title, sub, body, cls) => `<div class="panel" style="flex:1;min-width:0;${cls || ""}"><h3>${title}</h3><div class="dim" style="font-size:.85rem;margin-bottom:6px">${sub}</div>${body}</div>`;
-    const arrow = (a, b) => `<div style="align-self:center;text-align:center;padding:0 6px;min-width:120px"><div style="font-size:2rem;line-height:1">⇉</div><div class="dim" style="font-size:.8rem">${a}<br>${b}</div></div>`;
-    const ing = ((st.runtime || {}).ingress || []), eg = ((st.runtime || {}).egress || []);
-    top.innerHTML = `<div class="panel"><nav class="steps">${phases}</nav><div style="margin-top:6px;font-size:1.05rem">${esc(cur.title || "")}${cur.note ? ` — <span class="dim">${esc(cur.note)}</span>` : ""}</div></div>
-      <div style="display:flex;gap:0;align-items:stretch">
-        ${box("Generator apps (flowgen ×2)", "outside the pipeline · each knows a host and a port", `${genBox(gen, "flowtap sensor A", "syslog / TCP, RFC 6587")}${genBox(gen2, "flowtap sensor B", "HTTP POST")}<div class="mono dim" style="font-size:.78rem;margin-top:6px;word-break:break-all">${esc((gen || {}).last_line || "")}</div>` || '<div class="dim">not started</div>')}
-        ${arrow("ingress connectors", ing.map(esc).join(" · ") || "—")}
-        ${box("ULPF runtime — one process, no restarts", `packs: ${esc(((st.runtime || {}).packs || []).join(" · ") || "—")}`, w ? `<div class="kpi"><div class="k"><div class="lab">evidence records</div><div class="big">${w.frames_total}</div></div><div class="k"><div class="lab">usable</div><div class="big ok">${w.usable_total}</div></div><div class="k"><div class="lab">quarantined (bytes kept)</div><div class="big warn">${w.quarantined_total}</div></div><div class="k"><div class="lab">parse success · last ${w.window}</div><div class="big ${fired ? "bad" : "ok"}">${ps == null ? "…" : ps + "%"}</div></div></div><div class="barwrap" style="margin-top:6px"><div class="bar" style="width:${ps || 0}%;${fired ? "background:var(--bad)" : ""}"></div></div>${fired ? `<div class="bad" style="margin-top:6px"><b>DRIFT MONITOR FIRED</b> — ${esc(w.dominant_signal)}${topSig ? `: <span class="mono" style="font-size:.78rem">${esc(topSig.key)}</span> (${topSig.events})` : ""}</div>` : ""}` : '<div class="dim">not started</div>', fired ? "border-left:6px solid var(--bad)" : "")}
-        ${arrow("egress connectors", eg.map(esc).join(" · ") || "—")}
-        ${box(`sink — consumer app ${conDown ? '<span class="tag unresolved">DOWN</span>' : '<span class="tag resolved">up</span>'}`, `outside the pipeline · SQLite · its own page: <a href="http://127.0.0.1:8790/" target="_blank" style="color:var(--acc)">127.0.0.1:8790</a>`, con ? `<div class="kpi"><div class="k"><div class="lab">rows in SQLite</div><div class="big ${conDown ? "bad" : "ok"}">${con.rows}</div></div><div class="k"><div class="lab">ULPF is ahead by</div><div class="big ${lag > 12 ? "warn" : ""}">${lag}</div></div></div><div class="dim" style="font-size:.8rem;margin-top:4px">${Object.entries(con.by_family || {}).map(([k, v]) => `${esc(k)}: ${v}`).join(" · ")} · duplicates ignored ${con.duplicates_ignored}</div>${(con.latest || []).slice(0, 3).map((r) => `<div class="mono dim" style="font-size:.75rem">${esc(r.src)} → ${esc(r.dst)} · action ${esc(r.action_id)} · t=${esc(r.time)}</div>`).join("")}` : '<div class="dim">not started</div>', conDown ? "border-left:6px solid var(--bad)" : "")}
-      </div>
-      <div class="grid2"><div class="panel"><h3>Drift monitor (detection; healing policy below)</h3>${events || '<div class="dim">watching…</div>'}</div>
-      <div class="panel"><h3>Evidence-log records that are not events — outages and pack changes are leaves too</h3>${gapRows || '<div class="dim">none yet</div>'}</div></div>
-      ${alert ? `<div class="panel" style="border-left:6px solid var(--warn)"><h3>ALERT — ${esc(alert.alert)} · ${esc(alert.policy_version)} · ${esc(alert.at)}</h3><div style="font-size:1.1rem">${esc(alert.outcome)}</div>
-        <div class="grid2" style="margin-top:6px"><div><div class="lab dim">promoted automatically — on evidence that already existed</div>${(alert.auto_promoted || []).map((m) => `<span class="tag config" style="margin:2px">${esc(m.field)} → ${esc(m.attribute)}</span>`).join(" ")}<div class="dim" style="font-size:.85rem;margin-top:4px">source binding: ${esc(JSON.stringify((alert.source_binding || {}).drifted_from))} ⊆ known · pack ${esc((alert.pack || {}).pack_id)} v${esc((alert.pack || {}).pack_version)} <span class="mono">${esc(String((alert.pack || {}).sha256 || "").slice(0, 23))}…</span></div></div>
-        <div><div class="lab dim">withheld — nobody has evidence; the operator is asked, nothing is guessed</div>${(alert.withheld || []).map((x) => `<div><span class="tag ambiguous">${esc(x.field)}</span> <span class="dim" style="font-size:.9rem">${esc(x.why_withheld)}</span></div>`).join("") || '<span class="ok">nothing</span>'}<div class="mono dim" style="font-size:.75rem;margin-top:4px">rollback: ${esc(((alert.rollback || {}).command || "").replace(/\/home\/[^ ]*\/live\//g, "…/live/"))}</div></div></div></div>` : ""}`;
-    // the operator's panel: rebuilt only when its content changes, so an open dropdown survives the polling
-    const sess = pend && pend.session ? await getJSON(`live/${pend.session}/session.json`) : null;
-    const key = JSON.stringify([pend, sess && Object.values(sess.certificates || {}).map((c) => [c.certificate_id, c.status])]);
-    if (key === assertKey) return;
-    assertKey = key;
-    if (pend && pend.decision_needed) {
-      const d = pend.decision_needed;
-      asr.innerHTML = `<div class="panel request" style="border-left:6px solid var(--warn)"><h3>Tier 1 — the one decision only a human can make</h3><div style="font-size:1.15rem">${esc(d.question)}</div>
-        <div class="mono dim" style="margin:6px 0">${esc(d.signature)} · ${d.events}+ lines quarantined</div><button id="live-onboard" style="font-size:1.1rem">onboard this source (recorded as operator op-014)</button>
-        <div class="dim" style="font-size:.85rem;margin-top:6px">nothing is learned from traffic that merely arrived; after this decision onboarding runs by itself, and stops only where a field is ambiguous</div></div>`;
-      $("live-onboard").onclick = () => postAssert({ onboard: true });
-      return;
-    }
-    if (!pend || !sess) { asr.innerHTML = ""; return; }
-    const certs = Object.values(sess.certificates || {});
-    const leafs = ["time", "start_time", "end_time", "src_endpoint.ip", "dst_endpoint.ip", "src_endpoint.port", "dst_endpoint.port", "action_id", "connection_info.protocol_name", "traffic.bytes_in", "traffic.bytes_out", "traffic.bytes", "traffic.packets", "src_endpoint.zone", "dst_endpoint.zone"];
-    const rows = (pend.fields || []).map((f) => {
-      const cert = (pend.open_certificates || []).find((c) => c.field === f.field);
-      const prov = (f.provenance || [])[0] || "";
-      const opts = [...new Set([...(cert ? cert.candidates : []), ...(f.mapped || []), ...leafs])];
-      const ctl = pend.interactive && !pend.done && prov !== "operator_assertion" ? `<select data-field="${esc(f.field)}"><option value="">choose…</option>${opts.map((o) => `<option>${esc(o)}</option>`).join("")}</select> <button data-assert="${esc(f.field)}">assert</button>` : "";
-      return `<tr><td class="mono">${esc(f.field)}</td><td class="mono dim" style="font-size:.85rem">${(f.samples || []).map(esc).join(" · ")}</td><td>${esc((f.mapped || [])[0] || "—")}</td><td><span class="tag ${prov === "operator_assertion" ? "config" : prov === "model_proposal" ? "model" : "enum"}">${esc(prov || "—")}</span></td><td>${cert ? `<span class="tag ambiguous">${esc(cert.class || cert.status)}</span>` : ""}</td><td>${ctl}</td></tr>`;
-    }).join("");
-    const blockers = (pend.blockers || []).map((b) => `<div class="warn">${esc(b)}</div>`).join("") || '<div class="ok">nothing mandatory is blocked</div>';
-    asr.innerHTML = `<div class="grid2"><div><div class="panel request"><h3>Operator assertion — ${esc(pend.session)} (no vendor document exists for this source)</h3>${blockers}
-        <table style="margin-top:8px"><tr><th>field</th><th>samples</th><th>mapped to</th><th>provenance</th><th>certificate</th><th></th></tr>${rows}</table>
-        ${pend.interactive && !pend.done ? `<button id="live-promote" style="margin-top:10px;font-size:1.05rem">promote (fill the rest from the operator's notes)</button>` : ""}
-        <div class="dim" style="font-size:.85rem;margin-top:6px">each assertion is recorded per field with the operator's id, provenance <b>operator_assertion</b>, inside the signed pack — weaker than a vendor document, and labelled so</div></div></div>
-      <div>${certs.map((c) => certCard(c)).join("")}</div></div>`;
-    for (const b of asr.querySelectorAll("button[data-assert]")) b.onclick = () => { const sel = asr.querySelector(`select[data-field="${b.dataset.assert}"]`); if (sel && sel.value) postAssert({ field: b.dataset.assert, attribute: sel.value }); };
-    const pb = $("live-promote"); if (pb) pb.onclick = () => postAssert({ promote: true });
-  }
-
   // ---------------------------------------------------------------- loop
   async function tick() {
     const st = await getJSON("status.json");
     lastStatus = st;
-    const lv = await getJSON("live/status.json");
-    const liveRunning = lv && lv.updated && (!st || !st.updated || lv.updated > st.updated) && Object.values(lv.phases || {}).some((p) => p.state === "running");
-    if (follow && liveRunning) { if (active !== "live") show("live"); }
-    else if (follow && st && st.current && stepScreen[st.current] && stepScreen[st.current] !== active && active !== "live") show(stepScreen[st.current]);
+    if (follow && st && st.current && stepScreen[st.current] && stepScreen[st.current] !== active) show(stepScreen[st.current]);
     renderSteps(st);
     try {
       if (active === "review") await renderReview();
       else if (active === "tamper") await renderTamper();
       else if (active === "flow") await renderFlow();
-      else if (active === "live") await renderLive();
       else await renderDiscover();
     } catch (e) { console.error(e); }
   }
@@ -257,8 +185,8 @@
     if (e.key === "2") { follow = false; show("tamper"); }
     if (e.key === "3") { follow = false; show("flow"); }
     if (e.key === "4") { follow = false; show("discover"); }
-    if (e.key === "5") { follow = false; show("live"); }
-    if (e.key === "f" || e.key === "F") { follow = !follow; $("foot").textContent = (follow ? "following the running step · " : "manual · ") + "keys: 1 review · 2 tamper · 3 flow · 4 discovery · 5 live pipeline · F follow"; }
+    if (e.key === "5") { location.href = "/live.html"; }   // the live sequence has its own three plain pages
+    if (e.key === "f" || e.key === "F") { follow = !follow; $("foot").textContent = (follow ? "following the running step · " : "manual · ") + "keys: 1 review · 2 tamper · 3 flow · 4 discovery · 5 the live sequence's page · F follow"; }
   });
   show("review");
   tick();

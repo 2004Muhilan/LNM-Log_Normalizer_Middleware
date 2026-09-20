@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Generator — raw logs</title><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="plain.css"></head>
+<body>
+<h1>Generator — the raw logs being produced, and the connector each one leaves through</h1>
+<div class="log" id="log"><span class="muted">not running — bash demo/live/run-live.sh</span></div>
+<script>
+// Read-only: polls the two generators' status files. Lines are ordered by their own first column (the sensor's timestamp).
+async function get(p) { try { const r = await fetch(`/state/live/${p}?t=${Date.now()}`); return r.ok ? await r.json() : null; } catch { return null; } }
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+async function tick() {
+  const [a, b] = await Promise.all([get("generator.json"), get("generator-http.json")]);
+  const rows = [];
+  for (const [g, name] of [[a, "syslog TCP"], [b, "HTTP POST"]]) for (const l of (g && g.recent) || []) rows.push([parseFloat(l), name, l]);
+  if (!rows.length) return;
+  rows.sort((x, y) => x[0] - y[0]);
+  document.getElementById("log").innerHTML = rows.slice(-26).map((r) => `<span class="c">${r[1]}</span>${esc(r[2])}`).join("\n");
+}
+tick(); setInterval(tick, 400);
+</script>
+</body></html>
