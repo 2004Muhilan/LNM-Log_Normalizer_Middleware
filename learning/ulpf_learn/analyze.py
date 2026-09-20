@@ -70,7 +70,16 @@ def _decide(lib: Library, ranked_in: list[str], survivors: list[str]) -> tuple[s
     return None
 
 
-def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analysis:
+OPERATOR_ASSERTION_REQUEST = ("No vendor documentation or device configuration is known to ULPF for this source, so the cheapest evidence "
+                              "(a document that names every field at once) does not exist here. State what each pending field is; every statement "
+                              "is recorded per field with your operator id as operator_assertion — weaker than a document, and labelled so. Pending: {resolves}.")
+
+
+def analyze(plan: Plan, lib: Library, configurable_format: bool = True, document_evidence: bool = True) -> Analysis:
+    """document_evidence=False: no vendor table / device-configuration applier exists for this source. The two document
+    discriminators are then not requests anybody can answer; the request becomes ONE operator-assertion request over
+    every pending field (a sufficient provenance category of the acceptance policy, not a library discriminator), and
+    the library's other discriminators stay listed as alternatives."""
     pol = policy_for(plan.event_class_uid)
     mandatory = set(pol["mandatory_attributes"])
     certs, unevidenced = [], []
@@ -152,11 +161,17 @@ def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analy
                     per[d] = [c["field"]["path"]]
             if not configurable_format:
                 per.pop("device_logformat_configuration", None)
+            if not document_evidence:
+                per.pop("device_logformat_configuration", None); per.pop("vendor_schema_field_order", None)
             choices = lib.rank(cls_name, per)
             choices = [ch for ch in choices if ch.resolves]
+            if not document_evidence:
+                from types import SimpleNamespace
+                choices = [SimpleNamespace(discriminator_id="operator_assertion", cost_tier="free_if_available", rank=1, resolves=list(all_fields))] + \
+                          [SimpleNamespace(discriminator_id=c.discriminator_id, cost_tier=c.cost_tier, rank=c.rank + 1, resolves=c.resolves) for c in choices]
             sel, alts = choices[0], choices[1:]
             c["request"] = {
-                "ambiguity_class": cls_name, "sufficiency_group": group if sel.discriminator_id in ("device_logformat_configuration", "vendor_schema_field_order") else f"sg_{_slug(c['certificate_id'])}",
+                "ambiguity_class": cls_name, "sufficiency_group": group if sel.discriminator_id in ("device_logformat_configuration", "vendor_schema_field_order", "operator_assertion") else f"sg_{_slug(c['certificate_id'])}",
                 "selected": {"discriminator_id": sel.discriminator_id, "cost_tier": sel.cost_tier, "rank": 1, "resolves": sel.resolves},
                 "alternatives": [{"discriminator_id": a.discriminator_id, "cost_tier": a.cost_tier, "rank": a.rank, "resolves": a.resolves} for a in alts],
                 "text": "",
@@ -165,7 +180,7 @@ def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analy
         others = len(all_fields) - len(ambiguous)
         text = (f"{len(ambiguous)} field(s) cannot be resolved from the samples alone"
                 + (f" ({sum(1 for c in ambiguous if c['_mandatory'])} mandatory). " if any(c['_mandatory'] for c in ambiguous) else ". ")
-                + lib.request_text(selected, vendor="the device", product="", resolves=", ".join(all_fields), slot_index="")
+                + (OPERATOR_ASSERTION_REQUEST.format(resolves=", ".join(all_fields)) if selected == "operator_assertion" else lib.request_text(selected, vendor="the device", product="", resolves=", ".join(all_fields), slot_index=""))
                 + (f" This resolves {len(ambiguous)} ambiguous field(s) and {others} other field(s) at the same time." if selected in ("device_logformat_configuration", "vendor_schema_field_order") else ""))
         for c in ambiguous:
             c["request"]["text"] = text
@@ -179,9 +194,10 @@ def analyze(plan: Plan, lib: Library, configurable_format: bool = True) -> Analy
         # because there is no competing set to certify. It is a request kind, not a certificate kind.
         mand = [u for u in unevidenced if u["attribute"] in mandatory]
         if mand:
-            disc = "device_logformat_configuration" if configurable_format else "vendor_schema_field_order"
+            disc = "operator_assertion" if not document_evidence else ("device_logformat_configuration" if configurable_format else "vendor_schema_field_order")
             text = (f"{len(unevidenced)} field(s) rest on the {plan.proposed_by} proposal alone ({len(mand)} mandatory); no field is ambiguous, "
-                    f"but a proposal is not evidence (invariant 4). " + lib.request_text(disc, vendor="the device", product="", resolves=", ".join(pending_fields), slot_index=""))
+                    f"but a proposal is not evidence (invariant 4). " + (OPERATOR_ASSERTION_REQUEST.format(resolves=", ".join(pending_fields)) if disc == "operator_assertion"
+                                                                         else lib.request_text(disc, vendor="the device", product="", resolves=", ".join(pending_fields), slot_index="")))
             request = {"discriminator_id": disc, "sufficiency_group": f"sg_{_slug(plan.source_id)}_evidence", "certificates": [],
                        "resolves": pending_fields, "text": text, "alternatives": [], "kind": "unevidenced_mandatory"}
     for c in certs:

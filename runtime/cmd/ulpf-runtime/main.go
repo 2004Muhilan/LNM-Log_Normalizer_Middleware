@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -96,7 +97,9 @@ func main() {
 		collector := fs.String("collector", "col-01", "collector id")
 		channel := fs.String("channel", "", "ingest channel (defaults to file:<input>)")
 		failAfter := fs.Int("fail-after-raw-write", 0, "kill-test hook: exit after the Nth raw write")
-		listen := fs.String("listen", "", "listener instead of --input: udp::5514, tcp::6514 (RFC 6587 octet counting, newline fallback), http::8514 (POST bodies)")
+		var listens packList
+		fs.Var(&listens, "listen", "listener instead of --input: udp::5514, tcp::6514 (RFC 6587 octet counting, newline fallback), http::8514 (POST bodies); tcp: and http: may be given TOGETHER (repeat the flag): one runtime, two ingress connectors, each frame's evidence record names the connector it arrived on")
+		packsFile := fs.String("packs-file", "", "a file listing further pack directories, one per line; re-read on SIGHUP: packs are loaded by the same fail-closed loader and swapped in between two frames without a restart; every change is a pack_activated record in the evidence log")
 		maxFrames := fs.Int("max-frames", 0, "with --listen: stop after N frames (0 = until SIGINT)")
 		pullDir := fs.String("pull-dir", "", "P7: directory-drop collector; files are ingested in name order and renamed .done")
 		pullOnce := fs.Bool("pull-once", false, "with --pull-dir: one pass, then exit")
@@ -116,12 +119,56 @@ func main() {
 		if len(dirs) == 0 {
 			die(fmt.Errorf("at least one --pack is required"))
 		}
-		var packs []*pack.Pack
-		for _, d := range dirs {
-			p, err := pack.Load(d, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
-			die(err)
-			packs = append(packs, p)
+		listenS := ""
+		if len(listens) > 0 {
+			listenS = listens[0]
 		}
+		listen := &listenS
+		loadAll := func() ([]*pack.Pack, error) {
+			all := append([]string{}, dirs...)
+			if *packsFile != "" {
+				b, err := os.ReadFile(*packsFile)
+				if err != nil && !os.IsNotExist(err) {
+					return nil, err
+				}
+				for _, l := range strings.Split(string(b), "\n") {
+					if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+						all = append(all, l)
+					}
+				}
+			}
+			var out []*pack.Pack
+			for _, d := range all {
+				p, err := pack.Load(d, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
+				if err != nil {
+					return nil, fmt.Errorf("%s: %w", d, err)
+				}
+				out = append(out, p)
+			}
+			return out, nil
+		}
+		packs, err := loadAll()
+		die(err)
+		// SIGHUP: reload. A pack that does not load (schema, invariants, signature) leaves the running set untouched.
+		var livePipe *pipeline.Pipeline
+		hup := make(chan os.Signal, 1)
+		signal.Notify(hup, syscall.SIGHUP)
+		go func() {
+			for range hup {
+				if livePipe == nil {
+					continue
+				}
+				next, err := loadAll()
+				if err == nil {
+					err = livePipe.Reload(next, "SIGHUP reload of --pack and --packs-file")
+				}
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "reload REFUSED, the running packs stay loaded: %v\n", err)
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "reloaded: %d pack(s)\n", len(next))
+			}
+		}()
 		var in io.Reader = os.Stdin
 		if *listen == "" && *pullDir == "" && *input != "-" {
 			f, err := os.Open(*input)
@@ -190,10 +237,47 @@ func main() {
 			}
 		}
 		var st pipeline.Stats
-		var err error
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		switch {
+		case len(listens) > 1:
+			// two ingress connectors in one runtime: syslog/TCP and HTTP receive share the evidence log, the router and
+			// the egress; every frame carries the connector it arrived on into its evidence record
+			var t *frame.TCP
+			var h *frame.HTTP
+			var tl, hl net.Listener
+			for _, l := range listens {
+				switch {
+				case strings.HasPrefix(l, "tcp:") && t == nil:
+					t = &frame.TCP{Addr: strings.TrimPrefix(l, "tcp:"), MaxEventBytes: *maxEvent, MaxConns: *maxConns, IdleTimeout: *idle, MaxFrames: int64(*maxFrames), Multiline: multi}
+					tl, err = t.Listen()
+					die(err)
+				case strings.HasPrefix(l, "http:") && h == nil:
+					h = &frame.HTTP{Addr: strings.TrimPrefix(l, "http:"), MaxBodyBytes: *maxBody, MaxEventBytes: *maxEvent, MaxFrames: int64(*maxFrames)}
+					hl, err = h.Listen()
+					die(err)
+				default:
+					die(fmt.Errorf("--listen repeated: one tcp: and one http: listener are supported together, got %q", l))
+				}
+			}
+			if t == nil || h == nil {
+				die(fmt.Errorf("--listen repeated: one tcp: and one http: listener are supported together"))
+			}
+			o.Channel = "tcp:" + t.Addr
+			fmt.Fprintf(os.Stderr, "listening for syslog over TCP on %s and receiving HTTP POST bodies on %s\n", tl.Addr(), hl.Addr())
+			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error {
+				herr := make(chan error, 1)
+				go func() {
+					herr <- h.Serve(ctx, hl, func(fr frame.Frame) error { fr.Channel = "http:" + h.Addr; return emit(fr) })
+				}()
+				terr := t.Serve(ctx, tl, func(fr frame.Frame) error { fr.Channel = "tcp:" + t.Addr; return emit(fr) })
+				stop()
+				if e := <-herr; terr == nil {
+					terr = e
+				}
+				return terr
+			}, o, func(p *pipeline.Pipeline) { t.OnClose = p.Lost; livePipe = p })
+			die(err)
 		case strings.HasPrefix(*listen, "udp:"):
 			// syslog over UDP: one datagram per frame; every received byte is evidence, the envelope is
 			// unwrapped after the raw write, the payload is routed and parsed.
@@ -219,7 +303,7 @@ func main() {
 			}
 			fmt.Fprintf(os.Stderr, "listening for syslog over TCP on %s\n", ln.Addr())
 			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return t.Serve(ctx, ln, emit) }, o,
-				func(p *pipeline.Pipeline) { t.OnClose = p.Lost })
+				func(p *pipeline.Pipeline) { t.OnClose = p.Lost; livePipe = p })
 			die(err)
 			fmt.Fprintf(os.Stderr, "tcp: accepted=%d refused=%d idle_closed=%d partial_at_close=%d peak_active=%d\n", t.Accepted.Load(), t.Refused.Load(), t.IdleClosed.Load(), t.PartialAtClose.Load(), t.PeakActive.Load())
 		case strings.HasPrefix(*listen, "http:"):
@@ -232,7 +316,7 @@ func main() {
 				o.Channel = "http:" + addr
 			}
 			fmt.Fprintf(os.Stderr, "receiving HTTP POST bodies on %s\n", ln.Addr())
-			st, err = pipeline.RunFrames(func(emit func(frame.Frame) error) error { return h.Serve(ctx, ln, emit) }, o)
+			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return h.Serve(ctx, ln, emit) }, o, func(p *pipeline.Pipeline) { livePipe = p })
 			die(err)
 			fmt.Fprintf(os.Stderr, "http: requests=%d rejected=%d truncated=%d\n", h.Requests.Load(), h.Rejected.Load(), h.Truncated.Load())
 		case *listen != "":

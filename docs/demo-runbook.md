@@ -210,62 +210,63 @@ protected by its API (exclusive create, consecutive versions), read-only file mo
 `lake verify` recomputes — **not kernel-immutable and not signed**. Root can rewrite a lake file; `lake verify`
 then names the version. v1 being "byte-identical" is a checked hash, not a cryptographic commitment.
 
-## The live sequence — a generator app in, a consumer app out (parallel to the six steps; screen `5`)
+## The live sequence — generators in, a consumer out, and everything that can go wrong in between (screen `5`)
 
-`bash demo/live/run-live.sh` after the usual set-up (reset, model server, UI). It touches nothing the six steps own
-(everything is under `~/ulpf-demo/live`) and can run before or after them. **2–3 min at 20 layers (126–179 s over four runs), ≈1 min 45 s at
-33 (98–115 s)** — two model calls, whose length varies with the sample lines. Acceptance: `bash demo/live/twice-live.sh`. Report: [live-demo-report.md](live-demo-report.md).
+`bash demo/live/run-live.sh` after the usual set-up (reset, model server, UI). Parallel to the six steps; everything it
+writes is under `~/ulpf-demo/live`. **About 3 min at 20 layers, about 2 min at 33** (two model calls; timings in
+[live-demo-report.md](live-demo-report.md)). Acceptance: `bash demo/live/twice-live.sh`. Open the consumer's own page
+in a second tab: **http://127.0.0.1:8790/**.
 
 ```
-flowgen (generator app) --syslog/TCP, RFC 6587--> ULPF runtime --HTTP POST, NDJSON--> sink (consumer app, SQLite)
-                                                   evidence log: every byte, before any parsing
+flowtap sensor A --syslog/TCP (RFC 6587)--\                          /--HTTP POST (NDJSON)--> sink: SQLite + its own page
+flowtap sensor B --HTTP POST---------------+--> ONE ULPF runtime ----+
+                                                evidence log           \--stdout-------------> a file (any pipe)
 ```
 
-Both apps are standard-library Python, outside the pipeline: the generator knows a host and a port, the consumer knows
-that JSON arrives with an `event_id`. The format (`flowtap`) is ours, designed backwards from the certificate: bare
-epoch, a verdict code, a protocol, **two bare address/port pairs in both directions**, two unlabelled counters.
+One runtime process for the whole sequence: packs are **hot-loaded** (SIGHUP), never a restart, the generators never pause.
 
 | phase | what happens | what you say |
 |---|---|---|
-| **A** unknown source (~6 s) | the runtime knows only Squid; every flowtap line is quarantined; the monitor fires: *unknown signature*, parse success 0 % | "A sensor nobody told us about starts sending. Nothing is guessed and nothing is dropped — every line is already in the evidence log. The monitor sees it." |
-| **B** live onboarding (~60 s at 20 layers — talk) | the samples come **out of the evidence log** (raw_hash checked); the model labels them; certificates fire: `endpoint_orientation` on both addresses, `temporal_role` on the timestamp (the ports usually too); 4 mandatory attributes blocked | "The model recognised addresses, ports, a timestamp. It could not know which address initiated — the sensor sees both directions — so the system **refuses to choose** and says exactly what it cannot decide, and between which candidates." |
-| **B, the answer** | see *the dropdown* below | |
-| **C** loaded (~12 s) | runtime restarted with the signed pack (generator paused around it, its backlog delivered after); rows appear in SQLite | "Logs in through a connector, OCSF out through a connector, into somebody else's database." |
-| **D** drift (~8 s) | `--drift`: the generator switches to firmware 2.0 (ISO timestamp, a new column). Parse success falls through 80 %; **the monitor fires**; the stream quarantines | "The vendor pushed a firmware update. Nobody told us. Parse success collapses, the monitor fires — this is the first time in this project it fires on a live stream — and again nothing is lost and nothing is guessed." |
-| **E** healing (~55 s — talk) | samples from the evidence log again; the model again; **8 of 10 columns propagate** from what the operator already asserted (same source, same slot, same class); 2 new assertions (the timestamp, whose class changed; the new column); pack 1.1; restart; parse success recovers | "Same path you just watched. But the system remembers what the operator told it: eight columns need no question. Two answers, against ten mapping decisions by hand." |
-| **F** backfill (~5 s) | every quarantined line is replayed from the evidence log through the healed pack into the same database | "Everything that arrived while nobody could read it was kept. Now it can be read." |
-| **G** accounting | `generated == evidence records == database rows`; backfilled rows linked to the original evidence records by `raw_hash` | "N lines generated, N evidence records, N rows. Twice the format was unreadable; zero lines lost." |
+| **A** quarantine first, then **wait** | two sensors nobody configured start sending over two different connectors. Every line is quarantined: bytes in the evidence log, **0 parsed, 0 guessed**; the monitor reports an unknown signature. Then **nothing happens** — until a human presses *onboard this source* (interactive) or the script records op-014's decision after 5 s | "This is the trust decision, and it is the only place a human is structurally required for a new source. ULPF does not learn from traffic because it arrived — that is how you poison a parser. It keeps the bytes and waits. *(press)* That was Tier 1: a named operator, recorded. From here it runs by itself." |
+| **B** onboarding, automatic except for ambiguity (~60 s at 20 layers — talk) | samples come **out of the evidence log** (raw_hash checked); the model labels them; certificates fire — `endpoint_orientation` on both addresses, `temporal_role` on the timestamp; the system asks **one** question, and it is an answerable one: *operator assertion* (no vendor document exists for this source); see *the dropdown* below. Signed pack, **hot-loaded** | "The model recognised addresses, ports, a timestamp. It cannot know which address initiated — the sensor sees both directions — so the system refuses to choose and says exactly between which candidates. That is the only thing that stopped the automation." |
+| **C** flowing | two ingress connectors, two egress connectors, all four visible as endpoints; typed OCSF in the consumer's database (`time` in epoch ms, integer ports and `action_id`, vendor `flowtap`) | "Different connectors in, different connectors out, one evidence log in the middle. Open the database page." |
+| **D** egress outage (~12 s) | the consumer is **killed**. ULPF keeps ingesting (the *ULPF is ahead by* counter climbs, the sink box goes red); after 2 s the outage is an **`egress_stalled` record in the evidence log**; the consumer restarts; the backlog is delivered from the cursor; `egress_resumed`; on the database page: a flat stretch, then a spike, row count equal again | "The SIEM died. A forwarder would drop or block. ULPF does neither: ingestion carries on, the interruption of *delivery* is recorded in the same tamper-evident log as the events, and when the consumer is back it gets everything from where it stopped. Nothing dropped, nothing silent." |
+| **E** drift → **self-healing with an alert** (~55 s at 20 layers — talk) | both sensors get "firmware 2.0" (protocol as a number, a new zone column). Parse success collapses, **the monitor fires**, lines quarantine. `autoheal.py` runs with **no human**: checks the drifted traffic comes from the onboarded source's channels and peers, pulls samples from the evidence log, **8 of 10 columns propagate** from what the operator already said (every mandatory one among them) → pack 1.1 promoted, hot-loaded, stream flowing again; an **ALERT** records what changed, what propagated, what the model proposed, what was promoted, the pack's sha256, the rollback command; the runtime records `pack_activated` with the same sha256 **in the evidence log**. The **2 columns nobody has evidence for are withheld** — carried unmapped — and the operator is asked | "A vendor pushes firmware to a fleet. Confirming a prompt on every middleware box is not an operation anybody can run. So for a source a human already onboarded, drift heals itself — **but only as far as evidence goes**. Eight columns are where they were: the operator's earlier answers still hold. Two are new: the system will not pick a meaning for them — that would be a guess — so it parses without them and asks. The alert is the audit trail, and the pack change is a leaf in the evidence log." |
+| **F** the operator answers the two | two assertions → pack 1.2, hot-loaded; events now carry the zone and the protocol number | "Two answers, against ten mapping decisions by hand." |
+| **G** backfill | everything quarantined while unreadable is replayed from the evidence log through the current pack into the same database; *also here:* the alert's **rollback, one command**, run for real and then re-applied (two more `pack_activated` leaves) | "Everything that arrived while nobody could read it was kept. Now it can be read." |
+| **H** accounting | `generated == evidence records == database rows`; backfilled rows linked to the original evidence records by `raw_hash`; 5 `pack_activated`, 1 `egress_stalled`, 1 `egress_resumed` | "N lines in, N evidence records, N rows. Unknown source, dead consumer, changed format — zero lines lost, zero guessed." |
+| **I** the third case (~12 s) | whitespace drift (one trailing space): `parse_success_drop` fires — routed, then refused — **and re-onboarding cannot fix it** ("12 of 12 samples fail to parse") | "Three kinds of drift. One heals itself on old evidence. One heals as far as evidence goes and asks. And this one no policy can heal: induction ignores the very whitespace the parser rejects. It always needs a human — and it is the only place this signal has ever fired for real. We show it because it is true." |
 
 **The dropdown — what to say when the resolution is not a config line.** In step 2 the operator pastes Squid's
-`logformat` line and one document resolves every field. **There is no such document for a format we invented**, and the
-system's own request still asks for one ("provide the log-format directive") — say so: "the cheapest evidence does not
-exist here". What is left is the weakest sufficient evidence the policy admits: the operator's own statement.
-- `ULPF_LIVE_INTERACTIVE=1`: screen 5 shows one dropdown per column (the certificate's candidates first). Choose
-  `pos_4 → src_endpoint.ip`, `pos_6 → dst_endpoint.ip`, `pos_1 → time`, `pos_2 → action_id`, watch the four blockers
-  clear one by one, press **promote** — the rest is filled from the operator's notes. Scripted (default): the same
-  answers are queued one per second through the same file the dropdown writes to.
-- Say: "I am not configuring a parser — I am **answering the question the system asked**, one field at a time, and each
-  answer is recorded with my operator id inside the signed pack as `operator_assertion`. That is weaker than a vendor
-  document and the pack says so, per field. What the machine did without me: the structure, the routing signature, the
-  certificate that told me *which* fields needed a human, the signing, and keeping every byte while I was thinking."
-- **Do not claim "one question resolves many fields" here.** On this path one answer resolves one field: nine
-  assertions for nine columns, the same count as writing the mapping by hand. That claim is step 2's (one directive, all
-  fields). What this sequence adds is the *second* onboarding: two answers instead of ten, by propagation.
+`logformat` line and one document resolves every field. **There is no such document for a format we invented**, and
+the system now says so itself: its one request reads *"No vendor documentation or device configuration is known to
+ULPF for this source … state what each pending field is"*. `ULPF_LIVE_INTERACTIVE=1`: screen 5 shows the Tier 1
+button, then one dropdown per column (the certificate's candidates first). Choose `pos_4 → src_endpoint.ip`,
+`pos_6 → dst_endpoint.ip`, `pos_1 → time`, `pos_2 → action_id`, watch the four blockers clear, press **promote** —
+the rest is filled from the operator's notes. Scripted (default): the same answers, queued through the same file.
+- Say: "I am not configuring a parser — I am **answering the question the system asked**, one field at a time; each
+  answer is recorded with my operator id inside the signed pack as `operator_assertion`. Weaker than a vendor document,
+  and labelled so. The type of each value is *not* mine to say: it comes from the OCSF schema — I said 'this is `time`',
+  the schema says `time` is a timestamp, the column is an epoch, so it is coerced as one."
+- **Do not claim "one question resolves many fields" here**: one answer, one field; nine assertions for nine columns
+  is the same count as mapping by hand. That claim is step 2's. What this sequence shows instead is the *second*
+  onboarding: **0 answers to get the stream back, 2 to complete it, against 10 by hand.**
 
-What **not** to say: that the monitor's `parse_success_drop` signal fired *in this sequence* (what fires here is parse
-success falling below the threshold, dominated by *unknown signature* — a changed column changes the routing signature
-and never reaches the parser; the routed-then-refused signal fires on a whitespace-only change, shown separately by
-`bash demo/live/parse-drop-check.sh`, 12 s, and that kind of drift cannot be healed by re-onboarding); that healing is automatic; that the pack reload is hot (it is a restart, the
-generator paused around it); that the backfill is a product feature (it is the monitor's extraction plus an ordinary
-`run --input` into a second evidence store, linked by `raw_hash`). **Do not open an event's JSON on stage**: on the
-assertion path values are not type-coerced (`time` is the string the sensor wrote) and the pack's `source.product`
-still says Squid — both raised, both pipeline changes nobody approved yet (report §5).
+What **not** to say: that healing is unconditional (it refuses traffic not bound to the onboarded source, promotes
+nothing on a model proposal, and promotes nothing at all if a mandatory attribute did not resolve); that the binding
+is authentication (it is channel + peer host; plain syslog/TCP and HTTP authenticate nobody); that the live model
+raises a certificate on the two withheld columns (it usually proposes nothing for them — "nobody has said what this
+column is"; the fixture fallback shows the zone as an `endpoint_orientation` certificate); that the backfill is a
+product feature (it is the monitor's extraction plus an ordinary `run --input` into a second evidence store, linked by
+`raw_hash`); that healing is instant (the model call dominates: ~55 s at 20 layers, although nothing the model says
+is promoted).
 
 | symptom | do |
 |---|---|
-| phase B fails "the certificates … did not fire" | the model did not label both addresses on this draw (its labels vary with the sample lines, which carry real timestamps). Re-run; or `ULPF_DEMO_PROVIDER=fixture bash demo/live/run-live.sh` — 35 s, says FALLBACK on screen, say it too |
-| port 6515 or 8790 busy | `bash demo/reset.sh` stops the live apps too; or `ULPF_LIVE_TCP_PORT=… ULPF_LIVE_SINK=127.0.0.1:…` |
-| interactive run sits in phase B | it is waiting for you: screen 5, or press promote; it gives up after 15 minutes |
+| phase B fails "the certificates … did not fire" | the model did not label both addresses on this draw (its labels vary with the live sample lines). Re-run; or `ULPF_DEMO_PROVIDER=fixture bash demo/live/run-live.sh` — under a minute, says FALLBACK on screen, say it too |
+| ports 6515 / 8516 / 8790 busy | `bash demo/reset.sh` stops the live apps too; or `ULPF_LIVE_TCP_PORT`, `ULPF_LIVE_HTTP_PORT`, `ULPF_LIVE_SINK` |
+| interactive run sits in phase A or B | it is waiting for you — that is the point of phase A; screen 5 |
+| skip the whitespace case | `ULPF_LIVE_SKIP_PAD=1` |
 
 ## If a judge asks for the coverage curve
 

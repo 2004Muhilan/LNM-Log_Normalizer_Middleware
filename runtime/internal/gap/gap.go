@@ -33,7 +33,7 @@ const RecordVersion = "gap-record 1.0.0"
 // Record is one detected discontinuity. All times are epoch milliseconds.
 type Record struct {
 	RecordVersion string `json:"record_version"`
-	Kind          string `json:"kind"` // arrival: sequence_gap | sequence_reset | silence | silence_end | connection_lost — delivery (P8): egress_stalled | egress_resumed
+	Kind          string `json:"kind"` // arrival: sequence_gap | sequence_reset | silence | silence_end | connection_lost — delivery (P8): egress_stalled | egress_resumed — interpretation: pack_activated | pack_deactivated (a reload: from this leaf on, events are read under a different pack)
 	SourceID      string `json:"source_id"`
 	Channel       string `json:"channel"`
 	Peer          string `json:"peer"`

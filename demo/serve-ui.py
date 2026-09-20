@@ -37,6 +37,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404); return
         try:
             d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 4096)))
+            if d.get("onboard") is True:   # the Tier 1 decision: a human says "onboard this source"
+                dq = self.state / "live" / "decisions.jsonl"
+                if not dq.exists():
+                    raise ValueError("the live sequence is not waiting for a decision")
+                with open(dq, "a") as f:
+                    f.write(json.dumps({"onboard": True, "by": "ui"}) + "\n")
+                self.send_response(204); self.end_headers(); return
             if d.get("promote") is True:
                 rec = {"promote": True, "by": "ui"}
             elif re.fullmatch(r"pos_[0-9]{1,2}", str(d.get("field", ""))) and re.fullmatch(r"[a-z_]+(\.[a-z_]+){0,2}", str(d.get("attribute", ""))):

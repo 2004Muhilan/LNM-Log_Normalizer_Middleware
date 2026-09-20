@@ -40,7 +40,7 @@ def main() -> int:
         fields = [{"field": p["field"], "cls": p["cls"], "samples": sl["samples"][:3], "mapped": [m["attribute"] for m in p["mappings"]],
                    "provenance": [m["provenance"].get("category") for m in p["mappings"]]} for sl in s["plan"]["slots"] for p in sl["parts"]]
         tmp = live / "pending.json.tmp"
-        tmp.write_text(json.dumps({"session": session.name, "interactive": interactive, "done": done, "blockers": s["verdict"]["blockers"], "open_certificates": open_certs,
+        tmp.write_text(json.dumps({"session": str(session.relative_to(live)), "interactive": interactive, "done": done, "blockers": s["verdict"]["blockers"], "open_certificates": open_certs,
                                    "fields": fields, "mandatory": ["time", "src_endpoint.ip", "dst_endpoint.ip", "action_id"], "notes": notes if interactive else []}))
         os.replace(tmp, live / "pending.json")
         return s

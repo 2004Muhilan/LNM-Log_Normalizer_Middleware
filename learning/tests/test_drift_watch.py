@@ -70,4 +70,5 @@ def test_the_generated_format_says_nothing_about_which_address_is_the_initiator(
     assert 0 < private_first < 60                       # both directions: neither address column is "the private one"
     assert all(not any(ch.isalpha() for ch in r[0]) and r[1] in ("1", "2") for r in v1)   # bare epoch, bare verdict code: no label anywhere
     v2 = [g.line(2, 1758350000 + i).split() for i in range(20)]
-    assert {len(r) for r in v2} == {10} and all(r[0].endswith("Z") and r[9] in flowgen.ZONES for r in v2)
+    assert {len(r) for r in v2} == {10} and all(r[2] in ("6", "17") and r[9] in flowgen.ZONES for r in v2)
+    assert all(a == b for x, y in zip(v1[:1], v2[:1]) for a, b in [(len(x[0]), len(y[0]))])   # the timestamp column did not change: what is mandatory still propagates

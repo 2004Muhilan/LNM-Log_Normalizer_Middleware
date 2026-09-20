@@ -1,5 +1,7 @@
 # Live demo sequence — generator in, consumer out, onboarding and drift in between
 
+**Second pass (2026-09-20, §8): the sequence was rebuilt around nine requirements — quarantine-first with a human decision, an egress outage, a view on the database, two connectors on each side, the four on-stage hazards decided (three fixed in the pipeline, one replaced by hot reload), and automatic healing with a policy split and an alert. §1–§7 describe the first pass; where §8 contradicts them, §8 is current** (in particular: the pipeline *was* changed in the second pass, §5 items 2, 3, 5 and 6 are closed, and the v2 format is different).
+
 **Status (2026-09-20): built, additive, gated.** A parallel sequence (`demo/live/`, screen `5`) beside the six rehearsed
 steps, which were not touched. Built around the three selling points: **live onboarding**, **the ambiguity
 certificate**, **drift detection**. Nothing in the pipeline changed: no Go, no `ulpf_learn`, no contract. What did
@@ -161,3 +163,155 @@ format whose only change is padding needs a spec edit by a human, or an inductio
 
 The crosswalk review is the team's and was not self-reviewed (agreement results stay blocked). Sequence-gap detection
 remains unexercised on real data. Everything in P8 report §13.9 stands except item 5, which this sequence builds.
+
+## 8. Second pass — what changed, what was decided, what is raised
+
+**The gate, after everything (desktop; every check re-run, not only the last one touched):**
+
+| | six steps, run 1 / run 2 | live sequence (phases A–I), run 1 / run 2 | same facts shown |
+|---|---|---|---|
+| 20 layers (pinned) | 91.5 s / 89.8 s | 168 s / 134 s | yes / yes |
+| 33 of 33 layers (`ULPF_DEMO_NGL_UNPINNED=1`) | 48.3 s / 45.3 s | 149 s / 143 s | yes / yes |
+
+`p1-check` … `p8-check` all pass after the pipeline changes (21 / 69 / 27 / 32 / 80 / 70 s; `p8-check` 187 s, which runs
+`p7-check`, zero skipped tests, the golden check — 26 files byte-identical — the coverage check — committed figures
+regenerate byte for byte — the connector smoke and the image checks). 73 Python tests (5 new in this pass), the Go suite
+with a new reload test, `gofmt` clean. The fixture fallback runs the whole sequence in 54 s. `twice-live.sh` now compares the
+Tier 1 decision, the request and its count, typed values, the alert (binding, propagated, promoted, withheld, pack
+version), the monitor's signatures, the evidence-log record kinds and the accounting. The interactive path (the
+*onboard* button and the dropdowns) was exercised by hand in the first pass only; the button's endpoint is new and was
+**not** clicked through in a browser in this pass — the scripted path writes the same record. The laptop has run none of this.
+
+### 8.1 The nine, in order
+
+1. **Quarantine first, then a human.** Phase A ends in a wait. Two unconfigured sensors send; every line is quarantined
+   (the sequence *asserts* `usable == 0` before going on); nothing proceeds until `{"onboard": true}` is recorded —
+   the button on screen 5, or the script after 5 s. The record (`live/tier1-decision.json`) names the operator, the
+   signature, and how many lines were quarantined and parsed when the decision was made. After it, onboarding runs by
+   itself and stops only at the operator-assertion request. *Limit:* Tier 1 is "recorded operator id only" (plan §4.6);
+   the decision record is a demo-layer file, not a pipeline artifact — raised (§8.4.1).
+2. **Egress outage.** Phase D kills the consumer. Measured in every run: ULPF keeps ingesting (≥ 40 more usable events
+   are required before the consumer comes back), `egress_stalled` appears in the evidence log after the 2 s threshold,
+   the consumer restarts, the backlog is delivered from the cursor, `egress_resumed` follows, the row count catches up
+   to ULPF's. Nothing new in the pipeline: this is P8's forwarder, shown.
+3. **The storage app has a view**: `http://127.0.0.1:8790/` (served by `sink.py` itself, stdlib, offline): row count,
+   rows stored per second over the last two minutes (the outage is the flat stretch, the catch-up and the backfill are
+   the spikes), latest rows with typed values. Screen 5 shows the same app as an endpoint, DOWN in red during the outage.
+4. **Two connectors on each side — built, both cheap.** *(The first pass was syslog/TCP in and HTTP POST out, not HTTP
+   on both sides.)* Ingress: `--listen` is now repeatable for one `tcp:` plus one `http:` listener in one runtime
+   (≈40 lines of Go); each frame carries its connector into its evidence record (`ingest_channel`). A second generator
+   instance posts over HTTP. Egress: `--forward` was already repeatable; `stdout:` is the second sink, redirected to a
+   file. The accounting requires `stdout lines == usable events` and one evidence channel of each kind.
+5. **Type coercion — fixed, contained, no contract touched.** `apply_operator_assertion` now derives the cell's coercion
+   from the **pinned OCSF type** of the asserted attribute and the slot's token class (`timestamp_t` + float → epoch with
+   fraction, + integer → `epoch_auto`, + RFC 3339 text → rfc3339; integer types → int; `ip_t` → ip) — deterministic, never
+   from a proposal; `None` when nothing can be derived (the value stays a string, as before). Emitted events now carry
+   `time` in epoch ms, `_lineage.event_time == time`, integer `action_id`, ports and counters; the sequence asserts it.
+   The parser-spec contract already had every coercion used. What it does **not** fix: an assertion still cannot carry a
+   value map, so the format keeps OCSF's own verdict codes.
+6. **The Squid stamp — fixed.** A session whose vendor has no table produces a pack whose `source` is what the operator
+   said (`--vendor`, new `--product`, `--transport-hint`), and a family description naming how it was actually resolved.
+   The Squid default is kept for `vendor == squid` only, so the golden pack is byte-identical (`build_vectors.py --check`: 26 files).
+7. **The unanswerable request — replaced by an answerable one, and no longer re-counted.** When the library has no
+   document applier for the session's vendor, the two document discriminators are dropped from the ranking and the
+   request is `operator_assertion` over every pending field, with the library's remaining discriminators as alternatives.
+   Separately, a request that only *shrinks* (same discriminator, a subset of the fields) is no longer logged as a new
+   `request_issued`: **1 evidence request for 9 responses**, where it was 9 for 9. Vendor-table sessions are unaffected
+   (one response resolves everything; the coverage figures regenerate byte for byte — see the gate).
+8. **Hot reload — built, contained.** `Pipeline.Reload` swaps the router under the frame mutex, between two frames;
+   the CLI re-reads `--pack` and the new `--packs-file` on SIGHUP through the **same fail-closed loader** (schema, static
+   invariants, signature); a set that does not load, or an empty one, leaves the running router in place. Every changed
+   pack is a **`pack_activated` / `pack_deactivated` record in the evidence log** naming the pack's version and the sha256
+   of the signed bytes. The whole sequence is now **one runtime process**: no restart, the generators never pause.
+   Invariant 6's static test still passes unchanged (one `Parse`, on the routed family).
+9. **Automatic healing with a policy split** — §8.2.
+
+Also closed from §5: unasserted model labels are no longer emitted **where `--withhold-unevidenced` is used** (the live
+sequence and auto-heal use it; the default is unchanged so nothing else moves) — the column is parsed, carried unmapped,
+its certificate retained. An assertion now clears the provider's `unmapped_name`.
+
+### 8.2 Automatic healing — validated before building; three answers
+
+**(a) Is "this source was already onboarded" sufficient? No.** A quarantined line carries no source identity — only
+an ingest channel and a peer. If "onboarded" alone unlocked healing, anything able to reach the listener could send a
+look-alike format whose columns sit where the old ones sat and **inherit the operator's answers by position** (swap the
+address columns and every event's direction is wrong, on "evidence"). So `autoheal.py` requires a **source binding**:
+every drifted sample's (ingest channel, peer host) must be among those that already delivered events *emitted under
+this source's families*. Otherwise it writes an alert with outcome *refused* and promotes nothing. The binding is only
+as strong as the transport — plain syslog/TCP and HTTP authenticate nobody — and the alert says so in a `limit` field.
+A real Tier 1 / Tier 2 distinction at the transport (mTLS, syslog-TLS) does not exist in this build. Raised (§8.4.2).
+
+**(b) Does the alert belong in the evidence log? Yes — and the part that must be there, is.** The change of
+interpretation is recorded by the *runtime*, at the moment it takes effect, as a `pack_activated` leaf naming the pack's
+sha256; it is hashed, Merkle-committed and exportable like a gap record. The alert document names the same sha256 and
+carries the reasoning (what changed, what propagated, what the model proposed, what was promoted on which provenance,
+what was withheld and why, the previous packs, the rollback command). The alert *document itself* is a file beside the
+pack, **not** a leaf: committing it needs a way for the learning plane to append to the runtime's evidence store, which
+does not exist. Raised (§8.4.3).
+
+**(c) Does the acceptance policy assume a human at promotion? In three places.** `sample_provenance` wants an
+`operator_id` and a tier — auto-heal records `auto-heal`, tier 1 (the samples are an onboarded source's evidence); the
+pack is signed by whatever key is on the machine — unattended signing means **the pack-authority key lives on the
+middleware box**, which is a real change in the threat model; and `promote` had no notion of withholding. None of it
+touches a contract. Invariant 4 is untouched: a model proposal promotes nothing, mandatory or not. Raised (§8.4.4).
+
+**The policy as built** (`learning/tools/autoheal.py`, `POLICY_VERSION autoheal-1.0`), per *field*, which is how both
+rows of the table appear in one drift:
+
+| field rests on | what happens |
+|---|---|
+| propagation under the §4.4 key, or a vendor table | **promoted automatically**; listed in the alert with its provenance |
+| a model proposal, a certificate, or nothing | **withheld**: parsed, carried unmapped, certificate retained; the operator is asked |
+| — and if a **mandatory** attribute is among the withheld | **nothing is promoted**; the alert says *blocked* and the stream stays quarantined until the operator answers |
+
+Measured, both providers: 8 of 10 columns propagate (slots 1, 2, 4–9 — every mandatory attribute), pack 1.1 is
+promoted and hot-loaded with no human, parse success recovers; slots 3 and 10 are withheld and asked; two assertions
+make pack 1.2. **Rollback is one command** (`autoheal.py rollback --alert … --packs-file … --runtime-pid …`) and is run
+for real in phase G, then re-applied: both changes are `pack_activated` leaves. `parse-drop-check.sh` is phase I.
+
+**The v2 format was changed for this**, and that is a design decision to look at: the first pass's drift changed the
+*timestamp* column (epoch → ISO 8601). `time` is mandatory, so under the unchanged acceptance policy that drift can
+never heal in part — the third row of the table. The drift now changes the protocol column (name → IANA number) and
+appends a zone: everything mandatory still propagates. **"Partial promotion is fine" holds only when what did not
+resolve is not mandatory**; the blocked outcome is implemented and reachable, and is not what the sequence shows.
+
+### 8.3 Tried and rejected (second pass)
+
+- **Restart with a scripted pause** for pack activation — hot reload was contained, so the pause is gone.
+- **A second runtime process for the second ingress connector** — two evidence logs; one process with two listeners instead.
+- **Exact `ip:port` peer binding** — an HTTP client's port changes with its connection; channel + peer host, with the limit stated.
+- **Promoting the model's label for the withheld columns because nothing rivals it** ("unambiguous proposal") — a proposal
+  is not evidence (invariant 4's reasoning applies to every field, not only mandatory ones); withheld instead.
+- **Waiting on the monitor's frame total at the end** — the runtime's quarantine file is buffered and only complete at
+  exit, so the monitor lags by up to a buffer; the runtime's own count is what the accounting checks.
+- **Auto-heal skipping the model** because everything promoted came from propagation — the model's labels are what the
+  operator is shown for the withheld columns; but see §8.4.6.
+
+### 8.4 Raised, not absorbed
+
+1. **The Tier 1 decision is a demo-layer record.** The pipeline has no object for "a human decided to onboard this
+   source"; a session simply starts with an `--operator`. If the decision should be provable, it belongs in the session
+   and the pack's `sample_provenance`, or in the evidence log.
+2. **Source binding is not authentication** (§8.2a). With the transports built, auto-healing trusts the network path.
+3. **The alert document is not a leaf** (§8.2b); only the activation is.
+4. **Unattended signing puts the pack-authority key on the runtime host** (§8.2c). File-based dev keys made this
+   invisible; a deployment needs a decision (a separate healing authority with a narrower trust scope is the obvious one).
+5. **Hot reload adds two evidence record kinds** (`pack_activated`, `pack_deactivated`). Gap-record kinds have no schema
+   (P8 audit §3.5), so no contract changed — and that is the problem the audit named, now one kind larger. The verifier
+   prints them with the generic branch.
+6. **Healing latency is the model's** (~55 s at 20 layers) although nothing the model says is promoted; a fast path —
+   promote on propagation first, label the withheld columns afterwards — would make healing sub-second. Not built.
+7. **`--withhold-unevidenced` is opt-in.** The default still emits non-mandatory model labels as mappings (P3 behaviour,
+   every vendor pack in the repo was built that way and is fully evidenced, so it never showed). Whether the default
+   should flip is a team decision: it changes what existing sessions promote.
+8. **The runtime's quarantine writer is buffered**; a live monitor sees quarantine records up to a buffer late. Flushing
+   per record when a monitor is attached is a one-line runtime change, not made.
+9. **The live model proposes nothing for the two withheld columns**, so the second policy row shows on stage as
+   "nobody has said what this column is", not as a certificate; the fixture fallback shows the zone column as an
+   `endpoint_orientation` certificate.
+10. **Trace corrections (standing obligation):** the trace has no stage for a pack change on a running system, none for
+    a delivery interruption (raised in P8), and Stage 9's request text does not cover a source with no document.
+11. Still open from §5: structural determination unreachable (1); no re-ingest-from-evidence (7); normalized output at
+    rest (8); the UI writes two queue files now (9); the model's certificate set varies between runs (10); whitespace
+    drift cannot be re-onboarded (11). **Carried:** the crosswalk review is the team's, not self-reviewed; sequence-gap
+    detection is unexercised on real data; the laptop has run none of this.

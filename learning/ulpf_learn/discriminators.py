@@ -138,12 +138,43 @@ def apply_logformat(plan: Plan, directive: str, vendor: str, mandatory: set[str]
     return new, resolved
 
 
+_RFC3339 = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2})$")
+
+
+def coercion_for(class_uid: int, attribute: str, token_class: str, samples: list[str]) -> dict | None:
+    """The value coercion an asserted mapping needs, derived deterministically from the PINNED OCSF type of the
+    attribute and the slot's observed token class — never from a proposal. An operator who says "this column is
+    `time`" has said it is a timestamp; without this the cell stays a string and the event carries the sensor's text
+    (found with the live demo: `"time": "1789900220.082"`, lineage event_time 0). None = no coercion can be derived
+    (a textual timestamp that is not RFC 3339, a type with no coercion): the value stays a string, as before."""
+    from .enumerate_ import load_table
+    t = next((l.get("type") for l in load_table(class_uid)["leaf_paths"] if l["path"] == attribute), None)
+    if t in ("timestamp_t", "datetime_t"):
+        if token_class == "float":
+            return {"op": "coerce", "to": "timestamp", "format": {"kind": "epoch_s_frac", "timezone": "utc"}, "on_failure": "reject"}
+        if token_class == "integer":
+            return {"op": "coerce", "to": "timestamp", "format": {"kind": "epoch_auto", "timezone": "utc"}, "on_failure": "reject"}
+        if samples and all(_RFC3339.match(s) for s in samples):
+            return {"op": "coerce", "to": "timestamp", "format": {"kind": "rfc3339"}, "on_failure": "reject"}
+        return None
+    if t in ("integer_t", "long_t", "port_t") and token_class == "integer":
+        return {"op": "coerce", "to": "int", "on_failure": "reject"}
+    if t == "float_t" and token_class in ("float", "integer"):
+        return {"op": "coerce", "to": "float", "on_failure": "reject"}
+    if t == "ip_t" and token_class in ("ipv4", "ipv6", "ip"):
+        return {"op": "coerce", "to": "ip", "on_failure": "reject"}
+    return None
+
+
 def apply_operator_assertion(plan: Plan, field: str, attribute: str, operator_id: str, note: str, mandatory: set[str]) -> Plan:
     new = copy.deepcopy(plan)
-    for _, p in new.parts():
+    for slot, p in new.parts():
         if p.field == field:
             p.mappings = [Mapping(attribute, {"category": "operator_assertion", "operator_id": operator_id, "evidence_ref": note}, None, attribute in mandatory)]
             p.candidates = []
+            p.unmapped_name = None   # the provider's "carry it unmapped" no longer applies: the operator said what it is
+            if p.coerce is None:
+                p.coerce = coercion_for(new.event_class_uid, attribute, p.cls, slot.samples)
             return new
     raise KeyError(field)
 

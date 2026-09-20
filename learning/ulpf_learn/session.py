@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .acceptance import evaluate
 from .analyze import analyze
-from .discriminators import apply_labelled_session, apply_logformat, apply_operator_assertion, apply_vendor_schema, load_vendor_table, mandatory_for, vendor_table_meta
+from .discriminators import VENDOR_TABLES, apply_labelled_session, apply_logformat, apply_operator_assertion, apply_vendor_schema, load_vendor_table, mandatory_for, vendor_table_meta
 from .anchors import load_declared
 from .envelope import payload as envelope_payload
 from .propagation import Store as PropagationStore
@@ -66,11 +66,12 @@ class Session:
 
     # ------------------------------------------------------------------ workflow
     def onboard(self, samples_path: Path, source_id: str, operator_id: str, provider: Provider | None = None, vendor: str = "squid",
-                propagation_store: Path | None = None):
+                propagation_store: Path | None = None, product: str | None = None, transport_hint: str | None = None):
         raw = Path(samples_path).read_bytes()
         lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
         self.state = {"source_id": source_id, "operator_id": operator_id, "vendor": vendor, "created_at": now_iso(),
-                      "samples_path": str(samples_path), "sample_count": len(lines), "state": "induced", "timeline": [], "certificates": {}, "resolutions": []}
+                      "samples_path": str(samples_path), "sample_count": len(lines), "state": "induced", "timeline": [], "certificates": {}, "resolutions": [],
+                      "product": product, "transport_hint": transport_hint}
         self.log("session_started", samples=len(lines))
         structure = induce(lines)
         self.state["structure"] = {"arity": structure.arity, "other_arities": dict(structure.other_arities),
@@ -148,7 +149,7 @@ class Session:
         samples = self._samples()
         mandatory = mandatory_for(self.plan)
         verdict = evaluate(self.plan, self.current_spec(), samples)
-        analysis = analyze(self.plan, self.lib)
+        analysis = analyze(self.plan, self.lib, document_evidence=self.state.get("vendor", "squid") in VENDOR_TABLES)
         for c in analysis.certificates:
             prev = self.state["certificates"].get(c["certificate_id"])
             if prev and prev.get("status") == "resolved":
@@ -161,9 +162,14 @@ class Session:
         self.log("analyzed", certificates=len(analysis.certificates), unresolved=sum(1 for c in analysis.certificates if c["status"] == "unresolved"),
                  blockers=len(verdict.blockers))
         if analysis.request and self.state.get("state") != "promoted":
+            prev = self.state.get("pending_request") or self.state.get("last_request")
             if self.state.get("pending_request") != analysis.request:
+                # the SAME question with fewer fields left in it is not a new request: a per-field answer shrinks it. Counting each
+                # shrink as an evidence request inflated the effort figures (9 requests for 9 assertions, live demo 2026-09-20).
+                same = bool(prev) and prev["discriminator_id"] == analysis.request["discriminator_id"] and set(analysis.request["resolves"]) <= set(prev["resolves"])
                 self.state["pending_request"] = analysis.request
-                self.log("request_issued", discriminator=analysis.request["discriminator_id"], resolves=len(analysis.request["resolves"]))
+                if not same:
+                    self.log("request_issued", discriminator=analysis.request["discriminator_id"], resolves=len(analysis.request["resolves"]))
             self.state["state"] = "awaiting_evidence"
         elif verdict.promotable:
             self.state["pending_request"] = None
@@ -205,7 +211,7 @@ class Session:
         else:
             raise ValueError(f"no applier for discriminator {discriminator_id!r} in v1 (listed as an alternative only)")
         self.log("resolved", fields=len(self.state["resolutions"][-1]["fields"]))
-        self.state["pending_request"] = None
+        self.state["last_request"], self.state["pending_request"] = self.state.get("pending_request") or self.state.get("last_request"), None
         verdict, _ = self.analyze_and_evaluate()
         self.save()
         return verdict
@@ -241,13 +247,28 @@ class Session:
             }
         return touched
 
-    def promote(self, out_dir: Path, pack_id: str, pack_version: str = "1.0") -> Path:
+    def promote(self, out_dir: Path, pack_id: str, pack_version: str = "1.0", withhold_unevidenced: bool = False) -> Path:
         """pack_version > 1.0 is a CORRECTION of an already promoted family (P8, invariant 8): the same session,
         a retained certificate resolved by new evidence, a new pack version. The runtime re-derives the affected
         events from the evidence under it as normalization@v2 (`ulpf-runtime renormalize`); v1 is never rewritten."""
         verdict, _ = self.analyze_and_evaluate()
         if not verdict.promotable:
             raise RuntimeError("not promotable: " + "; ".join(verdict.blockers))
+        if withhold_unevidenced:
+            # Nothing that rests on a proposal alone goes into the pack: the column stays parsed and carried as an unmapped
+            # vendor field, its certificate (if any) is retained, and answering it later is a pack correction (P8). Without this a
+            # non-mandatory model label is emitted as a mapping — a guess with a provenance tag — and two columns given the same
+            # label make a pack the contract refuses.
+            from .plan import SUFFICIENT
+            withheld = []
+            for _, p in self.plan.parts():
+                if p.kind == "semantic" and any(m.provenance.get("category") not in SUFFICIENT for m in p.mappings):
+                    withheld.append({"field": p.field, "proposed": [m.attribute for m in p.mappings]})
+                    p.mappings, p.unmapped_name = [], p.unmapped_name or p.field
+            self.state["withheld"] = withheld
+            verdict, _ = self.analyze_and_evaluate()
+            if not verdict.promotable:
+                raise RuntimeError("not promotable once unevidenced fields are withheld: " + "; ".join(verdict.blockers))
         certs = list(self.state["certificates"].values())
         for c in certs:
             c.pop("_mandatory", None)
@@ -285,10 +306,16 @@ class Session:
                 anchor_values = {}
         else:
             anchor_values = {}
+            if self.state.get("vendor", "squid") != "squid":
+                # no vendor table: the pack says what the operator said the source is — never the Squid default
+                source_meta = {"vendor": self.state["vendor"], "product": self.state.get("product") or "unknown", "declared_envelope": "raw",
+                               "transport_hint": self.state.get("transport_hint") or "file"}
         path = emit_pack(self.plan, spec, verdict, certs, resolutions, samples, self.state["sample_count"], self.state["operator_id"],
                          pack_id, out_dir, now_iso(), routing, self.lib.version,
                          proposal_provenance=self.state.get("proposal_provenance"), family_id=self.plan.family_id, source_meta=source_meta, anchors=anchors,
-                         anchor_values=anchor_values, pack_version=pack_version)
+                         anchor_values=anchor_values, pack_version=pack_version,
+                         description=None if self.state.get("vendor", "squid") == "squid" or self.state.get("family_id") else
+                         f"{self.plan.event_class_name} family induced from {self.state['sample_count']} samples; resolved by: " + ", ".join(sorted({r["discriminator_id"] for r in self.state["resolutions"]} | ({"propagation"} if self.state.get("propagated") else set()))) + ".")
         if self.state.get("propagation_store"):
             store = PropagationStore(Path(self.state["propagation_store"]))
             n = store.record(self.plan, self.state["source_id"], routing, self.plan.family_id or f"positional-{len(self.plan.slots)}", str(self.path))

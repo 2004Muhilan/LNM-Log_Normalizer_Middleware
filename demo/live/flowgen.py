@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """flowgen — the demo's log GENERATOR: a made-up flow sensor ("flowtap") that emits one line per connection,
-continuously, into ULPF's ingress connector (syslog over TCP, RFC 6587 octet counting). Standard library only.
+continuously, into one of ULPF's ingress connectors — syslog over TCP with RFC 6587 octet counting (`--to host:port`)
+or HTTP POST of newline-delimited lines (`--to http://host:port/`). Standard library only.
 It sits entirely OUTSIDE the pipeline: it knows nothing about ULPF except a host and a port.
 
     flowgen.py --to 127.0.0.1:6515 --rate 8 --status gen.json --control gen.control [--drift-after N]
@@ -17,9 +18,11 @@ THE FORMAT IS DESIGNED BACKWARDS FROM THE CERTIFICATE. Nothing in a line says wh
   - two unlabelled counters: bytes or packets, in or out?                                  -> volume_direction (when proposed)
   - a verdict CODE, 1 = allowed, 2 = denied: a bare small integer nobody can read without being told.
 
-  v2 ("firmware 2.0", --drift / the control file): the timestamp becomes ISO 8601 and a zone column is appended.
-       2025-09-20T06:33:20.324Z 1 tcp 203.0.113.167 34350 10.4.3.103 443 6235241 78320482 dmz
-    A different arity and a different first-column class: the onboarded family's signature no longer matches.
+  v2 ("firmware 2.0", --drift / the control file): the protocol becomes its IANA NUMBER and a zone column is appended.
+       1758350000.324 1 6 203.0.113.167 34350 10.4.3.103 443 6235241 78320482 dmz
+    A different arity and a different third-column class: the onboarded family's signature no longer matches. Eight of
+    the ten columns are where they were, with the class they had — including everything the acceptance policy makes
+    mandatory — so what the operator already said about them still holds; two columns are new information.
   v3 (control `drift-pad`, --format 3): v1 with ONE TRAILING SPACE. The router tokenises on whitespace and still routes
     the line to the v1 family; the family's parser rejects a trailing delimiter. This is the only kind of change that
     makes the monitor's `parse_success_drop` signal (routed, then refused) fire for a positional family.
@@ -37,7 +40,7 @@ import random
 import socket
 import sys
 import time
-from datetime import datetime, timezone
+import http.client
 
 ZONES = ["dmz", "lan", "guest", "mgmt"]
 
@@ -53,8 +56,9 @@ class Flowtap:
         inside = f"10.4.{r.randint(1, 9)}.{r.randint(2, 250)}"
         outside = f"203.0.113.{r.randint(1, 250)}"
         a, b = (outside, inside) if self.n % 3 == 1 else (inside, outside)   # both directions: no column is "the private one"
-        ts = f"{now:.3f}" if fmt in (1, 3) else datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + f"{int(now * 1000) % 1000:03d}Z"
-        cols = [ts, r.choice(["1", "1", "1", "2"]), r.choice(["tcp", "tcp", "udp"]), a, str(r.randint(32768, 60999)), b, str(r.choice([443, 80, 53, 22, 8443])),
+        ts = f"{now:.3f}"
+        proto = r.choice(["tcp", "tcp", "udp"])
+        cols = [ts, r.choice(["1", "1", "1", "2"]), {"tcp": "6", "udp": "17"}[proto] if fmt == 2 else proto, a, str(r.randint(32768, 60999)), b, str(r.choice([443, 80, 53, 22, 8443])),
                 str(r.randint(100000, 9000000)), str(r.randint(100000, 90000000))]
         if fmt == 2:
             cols.append(r.choice(ZONES))
@@ -91,7 +95,8 @@ def main() -> int:
         return 0
     if not a.to:
         ap.error("--to is required")
-    host, port = a.to.rsplit(":", 1)
+    is_http = a.to.startswith("http://")
+    host, port = (a.to[len("http://"):].rstrip("/") if is_http else a.to).rsplit(":", 1)
     fmt, backlog, sock = a.format, collections.deque(), None
     sent = generated = reconnects = 0
     drift_at = None
@@ -123,17 +128,30 @@ def main() -> int:
             next_t += 1.0 / a.rate
         if sock is None and not paused:
             try:
-                sock = socket.create_connection((host, int(port)), timeout=1.0)
+                if is_http:
+                    sock = http.client.HTTPConnection(host, int(port), timeout=2.0); sock.connect()   # one kept-alive connection: one peer
+                else:
+                    sock = socket.create_connection((host, int(port)), timeout=1.0)
                 reconnects += 1
             except OSError:
                 sock = None
         while sock is not None and backlog:
-            l = backlog[0].encode()
             try:
-                sock.sendall(str(len(l)).encode() + b" " + l)
-                backlog.popleft()
-                sent += 1
-            except OSError:
+                if is_http:   # one POST per tick: every queued line, newline-delimited; a 2xx is the receiver's acknowledgement
+                    batch = list(backlog)
+                    sock.request("POST", "/", body=("\n".join(batch) + "\n").encode(), headers={"Content-Type": "text/plain"})
+                    resp = sock.getresponse(); resp.read()
+                    if resp.status // 100 != 2:
+                        raise OSError(f"HTTP {resp.status}")
+                    for _ in batch:
+                        backlog.popleft()
+                    sent += len(batch)
+                else:
+                    l = backlog[0].encode()
+                    sock.sendall(str(len(l)).encode() + b" " + l)
+                    backlog.popleft()
+                    sent += 1
+            except (OSError, http.client.HTTPException):
                 try:
                     sock.close()
                 except OSError:

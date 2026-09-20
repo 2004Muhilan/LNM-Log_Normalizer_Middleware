@@ -54,7 +54,8 @@ def show_certificates(s: Session):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="ulpf_learn")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    o = sub.add_parser("onboard"); o.add_argument("--samples", required=True); o.add_argument("--source-id", required=True); o.add_argument("--operator", required=True); o.add_argument("--session", required=True); o.add_argument("--fixture"); o.add_argument("--vendor", default="squid")
+    o = sub.add_parser("onboard"); o.add_argument("--samples", required=True); o.add_argument("--source-id", required=True); o.add_argument("--operator", required=True); o.add_argument("--session", required=True); o.add_argument("--fixture"); o.add_argument("--vendor", default="squid", help="the vendor-table key; a vendor the library has no table for gets an operator-assertion request, and its pack carries this name, never the Squid default")
+    o.add_argument("--product", help="product name for a source without a vendor table (pack source.product -> metadata.product.name)"); o.add_argument("--transport-hint", choices=["file", "syslog-udp", "syslog-tcp", "http", "pull-directory"])
     o.add_argument("--provider", choices=["fixture", "model", "recorded"], default="fixture", help="fixture (default; the P3 path, unchanged), model (P4: llama-server), or recorded (P6: replay a spike recording of the model's proposals)")
     o.add_argument("--recording", help="with --provider recorded: spike/results/<machine>/<model>__<backend>__<case>__<mode>.json")
     o.add_argument("--propagation-store", help="P6: JSON store of resolutions for this operator; hits resolve slots under the §4.4 key before any request is issued")
@@ -72,6 +73,7 @@ def main(argv=None) -> int:
     r = sub.add_parser("respond"); r.add_argument("--session", required=True); r.add_argument("--discriminator", required=True); r.add_argument("--input", required=True)
     r.add_argument("--field"); r.add_argument("--attribute"); r.add_argument("--initiator-ip"); r.add_argument("--sample-line")
     pr = sub.add_parser("promote"); pr.add_argument("--session", required=True); pr.add_argument("--out", required=True); pr.add_argument("--pack-id", required=True)
+    pr.add_argument("--withhold-unevidenced", action="store_true", help="map only what rests on sufficient evidence; a column resting on a proposal alone is carried unmapped, its certificate retained")
     pr.add_argument("--pack-version", default="1.0", help="P8: > 1.0 promotes a CORRECTION of an already promoted family (then `ulpf-runtime renormalize`)")
     mg = sub.add_parser("merge", help="P6: merge promoted single-family packs of one source into a signed source pack (anchors from the vendor table)")
     mg.add_argument("packs", nargs="+"); mg.add_argument("--out", required=True); mg.add_argument("--pack-id", required=True); mg.add_argument("--vendor"); mg.add_argument("--pack-version")
@@ -97,7 +99,7 @@ def main(argv=None) -> int:
             prov.served_model = served
         store = Path(a.propagation_store) if a.propagation_store else None
         if a.cmd == "onboard":
-            s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor, propagation_store=store)
+            s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor, propagation_store=store, product=a.product, transport_hint=a.transport_hint)
         else:
             s.onboard_spec(Path(a.samples), Path(a.spec), a.source_id, a.operator, a.vendor, a.family_id, prov, a.unwrap_envelope, propagation_store=store)
         show_status(s)
@@ -120,7 +122,7 @@ def main(argv=None) -> int:
         s.respond(a.discriminator, text, field=a.field, attribute=a.attribute, initiator_ip=a.initiator_ip, sample_line=a.sample_line)
         show_status(s)
     elif a.cmd == "promote":
-        p = s.promote(Path(a.out), a.pack_id, a.pack_version)
+        p = s.promote(Path(a.out), a.pack_id, a.pack_version, withhold_unevidenced=a.withhold_unevidenced)
         print("promoted:", p)
         print("metrics:", json.dumps(s.metrics()))
     elif a.cmd == "review":

@@ -6,31 +6,116 @@
       "event_class_uid": 4001,
       "event_class_name": "network_activity",
       "slots": {
-        "1": {"candidates": ["time"], "note": "epoch seconds with milliseconds"},
-        "2": {"candidates": ["connection_info.direction"], "note": "small integer code, meaning unknown"},
-        "3": {"candidates": ["connection_info.protocol_name"], "note": "tcp / udp"},
-        "4": {"candidates": ["src_endpoint.ip"]},
-        "5": {"candidates": ["src_endpoint.port"]},
-        "6": {"candidates": ["dst_endpoint.ip"]},
-        "7": {"candidates": ["dst_endpoint.port"]},
-        "8": {"candidates": ["traffic.bytes_out"], "note": "unlabelled counter"},
-        "9": {"candidates": ["traffic.bytes_in"], "note": "unlabelled counter"}
+        "1": {
+          "candidates": [
+            "time"
+          ],
+          "note": "epoch seconds with milliseconds"
+        },
+        "2": {
+          "candidates": [
+            "connection_info.direction"
+          ],
+          "note": "small integer code, meaning unknown"
+        },
+        "3": {
+          "candidates": [
+            "connection_info.protocol_name"
+          ],
+          "note": "tcp / udp"
+        },
+        "4": {
+          "candidates": [
+            "src_endpoint.ip"
+          ]
+        },
+        "5": {
+          "candidates": [
+            "src_endpoint.port"
+          ]
+        },
+        "6": {
+          "candidates": [
+            "dst_endpoint.ip"
+          ]
+        },
+        "7": {
+          "candidates": [
+            "dst_endpoint.port"
+          ]
+        },
+        "8": {
+          "candidates": [
+            "traffic.bytes_out"
+          ],
+          "note": "unlabelled counter"
+        },
+        "9": {
+          "candidates": [
+            "traffic.bytes_in"
+          ],
+          "note": "unlabelled counter"
+        }
       }
     },
     "10": {
       "event_class_uid": 4001,
       "event_class_name": "network_activity",
       "slots": {
-        "1": {"candidates": ["time"], "note": "ISO 8601 timestamp"},
-        "2": {"candidates": ["connection_info.direction"]},
-        "3": {"candidates": ["connection_info.protocol_name"]},
-        "4": {"candidates": ["src_endpoint.ip"]},
-        "5": {"candidates": ["src_endpoint.port"]},
-        "6": {"candidates": ["dst_endpoint.ip"]},
-        "7": {"candidates": ["dst_endpoint.port"]},
-        "8": {"candidates": ["traffic.bytes_out"]},
-        "9": {"candidates": ["traffic.bytes_in"]},
-        "10": {"candidates": ["src_endpoint.zone"], "note": "zone name"}
+        "1": {
+          "candidates": [
+            "time"
+          ],
+          "note": "epoch seconds with milliseconds"
+        },
+        "2": {
+          "candidates": [
+            "connection_info.direction"
+          ]
+        },
+        "3": {
+          "candidates": [
+            "connection_info.protocol_num"
+          ],
+          "note": "6 / 17: looks like an IANA protocol number"
+        },
+        "4": {
+          "candidates": [
+            "src_endpoint.ip"
+          ]
+        },
+        "5": {
+          "candidates": [
+            "src_endpoint.port"
+          ]
+        },
+        "6": {
+          "candidates": [
+            "dst_endpoint.ip"
+          ]
+        },
+        "7": {
+          "candidates": [
+            "dst_endpoint.port"
+          ]
+        },
+        "8": {
+          "candidates": [
+            "traffic.bytes_out"
+          ]
+        },
+        "9": {
+          "candidates": [
+            "traffic.bytes_in"
+          ]
+        },
+        "10": {
+          "candidates": [
+            "src_endpoint.zone",
+            "dst_endpoint.zone"
+          ],
+          "note": "a zone name; whose zone is not in the bytes"
+        }
       }
     }
   }

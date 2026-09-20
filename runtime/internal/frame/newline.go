@@ -34,6 +34,9 @@ type Frame struct {
 	// connection or UDP sender, the file name for a pull-directory drop. Continuity and gap
 	// accounting (P7) are kept per peer; empty for a single file stream.
 	Peer string
+	// Channel names the ingest connector the frame arrived on when one runtime serves several at once
+	// (`--listen` repeated); empty means the run's single channel (Options.Channel).
+	Channel string
 }
 
 // Newline frames on LF, preserving CRLF in raw_suffix, with a hard per-event byte cap.

@@ -58,7 +58,7 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
               samples: bytes, sample_count: int, operator_id: str, pack_id: str, out_dir: Path, created_at: str,
               routing_sketch: dict, library_version: str, proposal_provenance: dict | None = None, key_path: Path | None = None,
               family_id: str | None = None, source_meta: dict | None = None, anchors: list[dict] | None = None,
-              anchor_values: dict[str, list[str]] | None = None, pack_version: str = "1.0") -> Path:
+              anchor_values: dict[str, list[str]] | None = None, pack_version: str = "1.0", description: str | None = None) -> Path:
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -80,7 +80,7 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
     p_hash = parser_hash(spec_path)
     family = {
         "family_id": family_id or f"positional-{len(plan.slots)}",
-        "description": (f"{plan.event_class_name} family: structure given by {spec['spec_id']}, fields resolved against the vendor's field-order documentation over {sample_count} samples."
+        "description": description or (f"{plan.event_class_name} family: structure given by {spec['spec_id']}, fields resolved against the vendor's field-order documentation over {sample_count} samples."
                         if plan.given_spec is not None else
                         f"{plan.event_class_name} family induced from {sample_count} operator-supplied samples and resolved by device configuration."),
         "event_class_uid": plan.event_class_uid,

@@ -4,6 +4,8 @@
 package pack
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -127,6 +129,7 @@ type Pack struct {
 		SignatureFile string `json:"signature_file"`
 	} `json:"signing"`
 	SignatureVerified bool           `json:"-"`
+	FileSHA256        string         `json:"-"` // sha256 of the exact pack.json bytes the signature covers: what a `pack_activated` evidence record names
 	Dir               string         `json:"-"`
 	Location          *time.Location `json:"-"`
 	CategoryUIDs      map[int]int64  `json:"-"` // class uid -> category uid, from the pinned index
@@ -191,6 +194,8 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 		p.SignatureVerified = true
 	}
 	p.Dir = dir
+	sum := sha256.Sum256(raw)
+	p.FileSHA256 = "sha256:" + hex.EncodeToString(sum[:])
 	p.CategoryUIDs = map[int]int64{}
 	for _, f := range p.Families {
 		if cat, ok := loader.CategoryUID(int64(f.EventClassUID)); ok {

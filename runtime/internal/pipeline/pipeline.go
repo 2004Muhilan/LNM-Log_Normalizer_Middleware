@@ -135,6 +135,8 @@ func Run(in io.Reader, o Options) (Stats, error) {
 // that ended mid-frame as a gap record. Obtained through RunFramesWith.
 type Pipeline struct {
 	mu      sync.Mutex
+	router  *route.Router
+	active  map[string]string // pack_id -> "version sha256" of what is loaded now
 	store   *evidence.Store
 	tracker *gap.Tracker
 	st      *Stats
@@ -149,6 +151,45 @@ func (p *Pipeline) Lost(peer, reason string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.appendGap(p.tracker.Lost(peer, p.source, p.o.Channel, reason, p.now()), peer)
+}
+
+// Reload swaps the set of loaded packs between two frames (SIGHUP in the CLI). The packs arrive already loaded
+// by the same fail-closed loader as at start (schema, static invariants, signature); a router that does not
+// build leaves the old one in place. Every pack whose version or bytes changed — and every pack added or
+// removed — becomes a `pack_activated` / `pack_deactivated` record in the EVIDENCE LOG, a leaf like a gap record:
+// from that leaf on, events are interpreted differently, and that is provable from the log alone.
+func (p *Pipeline) Reload(packs []*pack.Pack, reason string) error {
+	if len(packs) == 0 {
+		return fmt.Errorf("reload refused: no packs (a runtime with nothing loaded quarantines everything; stop it instead)")
+	}
+	r := route.New(packs...)
+	if err := r.Err(); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	next := map[string]string{}
+	for _, pk := range packs {
+		next[pk.PackID] = pk.PackVersion + " " + pk.FileSHA256
+	}
+	for id, v := range next {
+		if prev, ok := p.active[id]; !ok || prev != v {
+			was := "not loaded"
+			if ok {
+				was = "v" + prev
+			}
+			p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "pack_activated", SourceID: p.source, Channel: "control:reload", Peer: "pack:" + id, DetectedAt: p.now().UnixMilli(),
+				Detail: fmt.Sprintf("pack %s v%s activated without a restart (was: %s); %s", id, v, was, reason)}, "pack:"+id)
+		}
+	}
+	for id, prev := range p.active {
+		if _, ok := next[id]; !ok {
+			p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "pack_deactivated", SourceID: p.source, Channel: "control:reload", Peer: "pack:" + id, DetectedAt: p.now().UnixMilli(),
+				Detail: fmt.Sprintf("pack %s v%s no longer loaded; %s", id, prev, reason)}, "pack:"+id)
+		}
+	}
+	p.router, p.active = r, next
+	return nil
 }
 
 func (p *Pipeline) appendGap(r gap.Record, peer string) {
@@ -222,7 +263,10 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 			q.Write(append(b, '\n'))
 		}
 	}
-	p := &Pipeline{store: store, tracker: gap.New(o.SilenceAfter), st: &st, o: o, source: sourceID, now: now}
+	p := &Pipeline{store: store, tracker: gap.New(o.SilenceAfter), st: &st, o: o, source: sourceID, now: now, router: router, active: map[string]string{}}
+	for _, pk := range packs {
+		p.active[pk.PackID] = pk.PackVersion + " " + pk.FileSHA256
+	}
 	if ready != nil {
 		ready(p)
 	}
@@ -296,7 +340,11 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 	one := func(fr frame.Frame) error {
 		st.Frames++
 		// 1. raw evidence write — durable before anything else looks at the bytes
-		rec, err := store.AppendFrom(fr.Raw, fr.Framing, sourceID, o.Collector, o.Channel, fr.Peer)
+		channel := o.Channel
+		if fr.Channel != "" {
+			channel = fr.Channel
+		}
+		rec, err := store.AppendFrom(fr.Raw, fr.Framing, sourceID, o.Collector, channel, fr.Peer)
 		if err != nil {
 			return err
 		}
@@ -331,11 +379,11 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 				break
 			}
 		}
-		for _, g := range p.tracker.Observe(fr.Peer, sourceID, o.Channel, rec.EventID, seq, now()) {
+		for _, g := range p.tracker.Observe(fr.Peer, sourceID, channel, rec.EventID, seq, now()) {
 			p.appendGap(g, fr.Peer)
 		}
 		// 4. route: the decision DAG narrows to one family or quarantines; no parser runs here
-		d := router.RouteChain(payload, ch)
+		d := p.router.RouteChain(payload, ch) // p.mu is held: Reload swaps the router between two frames, never inside one
 		st.CandidateSets[fmt.Sprint(d.Candidates)]++
 		if d.Drift {
 			st.DriftSignals++
