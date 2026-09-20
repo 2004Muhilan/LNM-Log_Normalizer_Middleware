@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """The demo UI server: standard library only, fully offline. Serves demo/ui/ at / and the demo state
-directory at /state/ with no caching, so the browser sees what the scripts just wrote. Read-only.
+directory at /state/ with no caching, so the browser sees what the scripts just wrote. Read-only, with ONE exception:
+POST /live/assert appends the operator's choice on screen 5 ({"field": "pos_4", "attribute": "src_endpoint.ip"} or
+{"promote": true}) as a line to <state>/live/assertions.jsonl. The server executes nothing: the live sequence
+(demo/live/assertions.py) reads that queue and calls the same `ulpf_learn respond` CLI it would call for a scripted answer.
 
     python3 demo/serve-ui.py --state ~/ulpf-demo --port 8765
 """
 import argparse
+import json
+import re
 import http.server
 import os
 import posixpath
@@ -26,6 +31,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path in ("/", ""):
             return str(UI / "index.html")
         return str(UI / path.lstrip("/"))
+
+    def do_POST(self):
+        if self.path != "/live/assert":
+            self.send_error(404); return
+        try:
+            d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 4096)))
+            if d.get("promote") is True:
+                rec = {"promote": True, "by": "ui"}
+            elif re.fullmatch(r"pos_[0-9]{1,2}", str(d.get("field", ""))) and re.fullmatch(r"[a-z_]+(\.[a-z_]+){0,2}", str(d.get("attribute", ""))):
+                rec = {"field": d["field"], "attribute": d["attribute"], "by": "ui"}
+            else:
+                raise ValueError("expected {field: pos_N, attribute: ocsf.path} or {promote: true}")
+            q = self.state / "live" / "assertions.jsonl"
+            if not q.exists():
+                raise ValueError("the live sequence is not waiting for the operator")
+            with open(q, "a") as f:
+                f.write(json.dumps(rec) + "\n")
+            self.send_response(204); self.end_headers()
+        except (ValueError, OSError) as e:
+            self.send_response(400); self.end_headers(); self.wfile.write(str(e).encode())
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, max-age=0")

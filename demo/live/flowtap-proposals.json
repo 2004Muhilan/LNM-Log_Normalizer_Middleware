@@ -1,0 +1,37 @@
+{
+  "note": "FALLBACK for demo/live (ULPF_DEMO_PROVIDER=fixture): team-authored proposals for the flowgen formats, standing in for the model exactly as learning/fixtures/squid-native-proposals.json does for step 2. They are PROPOSALS: the acceptance engine treats them as it treats the model's, never as evidence. Deliberately imperfect where the live 4B is imperfect (the counters and the verdict code are not recognised), so the fallback shows the same thing the live run shows.",
+  "model_hash": "none:fixture",
+  "by_arity": {
+    "9": {
+      "event_class_uid": 4001,
+      "event_class_name": "network_activity",
+      "slots": {
+        "1": {"candidates": ["time"], "note": "epoch seconds with milliseconds"},
+        "2": {"candidates": ["connection_info.direction"], "note": "small integer code, meaning unknown"},
+        "3": {"candidates": ["connection_info.protocol_name"], "note": "tcp / udp"},
+        "4": {"candidates": ["src_endpoint.ip"]},
+        "5": {"candidates": ["src_endpoint.port"]},
+        "6": {"candidates": ["dst_endpoint.ip"]},
+        "7": {"candidates": ["dst_endpoint.port"]},
+        "8": {"candidates": ["traffic.bytes_out"], "note": "unlabelled counter"},
+        "9": {"candidates": ["traffic.bytes_in"], "note": "unlabelled counter"}
+      }
+    },
+    "10": {
+      "event_class_uid": 4001,
+      "event_class_name": "network_activity",
+      "slots": {
+        "1": {"candidates": ["time"], "note": "ISO 8601 timestamp"},
+        "2": {"candidates": ["connection_info.direction"]},
+        "3": {"candidates": ["connection_info.protocol_name"]},
+        "4": {"candidates": ["src_endpoint.ip"]},
+        "5": {"candidates": ["src_endpoint.port"]},
+        "6": {"candidates": ["dst_endpoint.ip"]},
+        "7": {"candidates": ["dst_endpoint.port"]},
+        "8": {"candidates": ["traffic.bytes_out"]},
+        "9": {"candidates": ["traffic.bytes_in"]},
+        "10": {"candidates": ["src_endpoint.zone"], "note": "zone name"}
+      }
+    }
+  }
+}

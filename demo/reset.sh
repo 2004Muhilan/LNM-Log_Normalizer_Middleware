@@ -11,6 +11,8 @@ echo "=== reset: stopping runtime, senders, committer"
 pkill -x ulpf-runtime 2>/dev/null; pkill -x ulpf-committer 2>/dev/null
 [ -f "$STATE/sender.pid" ] && kill "$(cat "$STATE/sender.pid")" 2>/dev/null
 pkill -f "demo/steps/5-sender" 2>/dev/null
+# the live sequence's apps (demo/live): generator, consumer, the drift watch
+pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/live/sink.py" 2>/dev/null; pkill -f "tools/drift.py --watch" 2>/dev/null
 docker rm -f ulpf-demo-witness >/dev/null 2>&1
 if [ "${1:-}" = "--all" ]; then
   bash "$ROOT/demo/llama-server.sh" stop

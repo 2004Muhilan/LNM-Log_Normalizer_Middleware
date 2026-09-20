@@ -210,6 +210,63 @@ protected by its API (exclusive create, consecutive versions), read-only file mo
 `lake verify` recomputes — **not kernel-immutable and not signed**. Root can rewrite a lake file; `lake verify`
 then names the version. v1 being "byte-identical" is a checked hash, not a cryptographic commitment.
 
+## The live sequence — a generator app in, a consumer app out (parallel to the six steps; screen `5`)
+
+`bash demo/live/run-live.sh` after the usual set-up (reset, model server, UI). It touches nothing the six steps own
+(everything is under `~/ulpf-demo/live`) and can run before or after them. **2–3 min at 20 layers (126–179 s over four runs), ≈1 min 45 s at
+33 (98–115 s)** — two model calls, whose length varies with the sample lines. Acceptance: `bash demo/live/twice-live.sh`. Report: [live-demo-report.md](live-demo-report.md).
+
+```
+flowgen (generator app) --syslog/TCP, RFC 6587--> ULPF runtime --HTTP POST, NDJSON--> sink (consumer app, SQLite)
+                                                   evidence log: every byte, before any parsing
+```
+
+Both apps are standard-library Python, outside the pipeline: the generator knows a host and a port, the consumer knows
+that JSON arrives with an `event_id`. The format (`flowtap`) is ours, designed backwards from the certificate: bare
+epoch, a verdict code, a protocol, **two bare address/port pairs in both directions**, two unlabelled counters.
+
+| phase | what happens | what you say |
+|---|---|---|
+| **A** unknown source (~6 s) | the runtime knows only Squid; every flowtap line is quarantined; the monitor fires: *unknown signature*, parse success 0 % | "A sensor nobody told us about starts sending. Nothing is guessed and nothing is dropped — every line is already in the evidence log. The monitor sees it." |
+| **B** live onboarding (~60 s at 20 layers — talk) | the samples come **out of the evidence log** (raw_hash checked); the model labels them; certificates fire: `endpoint_orientation` on both addresses, `temporal_role` on the timestamp (the ports usually too); 4 mandatory attributes blocked | "The model recognised addresses, ports, a timestamp. It could not know which address initiated — the sensor sees both directions — so the system **refuses to choose** and says exactly what it cannot decide, and between which candidates." |
+| **B, the answer** | see *the dropdown* below | |
+| **C** loaded (~12 s) | runtime restarted with the signed pack (generator paused around it, its backlog delivered after); rows appear in SQLite | "Logs in through a connector, OCSF out through a connector, into somebody else's database." |
+| **D** drift (~8 s) | `--drift`: the generator switches to firmware 2.0 (ISO timestamp, a new column). Parse success falls through 80 %; **the monitor fires**; the stream quarantines | "The vendor pushed a firmware update. Nobody told us. Parse success collapses, the monitor fires — this is the first time in this project it fires on a live stream — and again nothing is lost and nothing is guessed." |
+| **E** healing (~55 s — talk) | samples from the evidence log again; the model again; **8 of 10 columns propagate** from what the operator already asserted (same source, same slot, same class); 2 new assertions (the timestamp, whose class changed; the new column); pack 1.1; restart; parse success recovers | "Same path you just watched. But the system remembers what the operator told it: eight columns need no question. Two answers, against ten mapping decisions by hand." |
+| **F** backfill (~5 s) | every quarantined line is replayed from the evidence log through the healed pack into the same database | "Everything that arrived while nobody could read it was kept. Now it can be read." |
+| **G** accounting | `generated == evidence records == database rows`; backfilled rows linked to the original evidence records by `raw_hash` | "N lines generated, N evidence records, N rows. Twice the format was unreadable; zero lines lost." |
+
+**The dropdown — what to say when the resolution is not a config line.** In step 2 the operator pastes Squid's
+`logformat` line and one document resolves every field. **There is no such document for a format we invented**, and the
+system's own request still asks for one ("provide the log-format directive") — say so: "the cheapest evidence does not
+exist here". What is left is the weakest sufficient evidence the policy admits: the operator's own statement.
+- `ULPF_LIVE_INTERACTIVE=1`: screen 5 shows one dropdown per column (the certificate's candidates first). Choose
+  `pos_4 → src_endpoint.ip`, `pos_6 → dst_endpoint.ip`, `pos_1 → time`, `pos_2 → action_id`, watch the four blockers
+  clear one by one, press **promote** — the rest is filled from the operator's notes. Scripted (default): the same
+  answers are queued one per second through the same file the dropdown writes to.
+- Say: "I am not configuring a parser — I am **answering the question the system asked**, one field at a time, and each
+  answer is recorded with my operator id inside the signed pack as `operator_assertion`. That is weaker than a vendor
+  document and the pack says so, per field. What the machine did without me: the structure, the routing signature, the
+  certificate that told me *which* fields needed a human, the signing, and keeping every byte while I was thinking."
+- **Do not claim "one question resolves many fields" here.** On this path one answer resolves one field: nine
+  assertions for nine columns, the same count as writing the mapping by hand. That claim is step 2's (one directive, all
+  fields). What this sequence adds is the *second* onboarding: two answers instead of ten, by propagation.
+
+What **not** to say: that the monitor's `parse_success_drop` signal fired *in this sequence* (what fires here is parse
+success falling below the threshold, dominated by *unknown signature* — a changed column changes the routing signature
+and never reaches the parser; the routed-then-refused signal fires on a whitespace-only change, shown separately by
+`bash demo/live/parse-drop-check.sh`, 12 s, and that kind of drift cannot be healed by re-onboarding); that healing is automatic; that the pack reload is hot (it is a restart, the
+generator paused around it); that the backfill is a product feature (it is the monitor's extraction plus an ordinary
+`run --input` into a second evidence store, linked by `raw_hash`). **Do not open an event's JSON on stage**: on the
+assertion path values are not type-coerced (`time` is the string the sensor wrote) and the pack's `source.product`
+still says Squid — both raised, both pipeline changes nobody approved yet (report §5).
+
+| symptom | do |
+|---|---|
+| phase B fails "the certificates … did not fire" | the model did not label both addresses on this draw (its labels vary with the sample lines, which carry real timestamps). Re-run; or `ULPF_DEMO_PROVIDER=fixture bash demo/live/run-live.sh` — 35 s, says FALLBACK on screen, say it too |
+| port 6515 or 8790 busy | `bash demo/reset.sh` stops the live apps too; or `ULPF_LIVE_TCP_PORT=… ULPF_LIVE_SINK=127.0.0.1:…` |
+| interactive run sits in phase B | it is waiting for you: screen 5, or press promote; it gives up after 15 minutes |
+
 ## If a judge asks for the coverage curve
 
 Show `docs/metrics/coverage.svg` and say, in this order: (1) **the traffic mix is assumed** — fixtures carry no

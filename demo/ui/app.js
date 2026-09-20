@@ -2,7 +2,7 @@
 // No framework, no network beyond localhost, no opinion — if a file is missing the screen says so.
 (() => {
   const $ = (id) => document.getElementById(id);
-  const screens = { review: "s-review", tamper: "s-tamper", flow: "s-flow", discover: "s-discover" };
+  const screens = { review: "s-review", tamper: "s-tamper", flow: "s-flow", discover: "s-discover", live: "s-live" };
   const stepScreen = { 1: "discover", 2: "review", 3: "review", 4: "review", 5: "flow", 6: "tamper" };
   let active = "review";
   let follow = true;
@@ -166,16 +166,71 @@
     el.innerHTML = `<div class="panel"><table><tr><th class="num">#</th><th class="num">events</th><th class="num">share</th><th></th><th>envelope</th><th>surface</th><th>anchor · arity</th><th>sample</th></tr>${rows}</table><div class="dim" style="margin-top:8px">clustered by the router's own surface — no parser, no pack; the order is the order to onboard in</div></div>`;
   }
 
+
+  // ---------------------------------------------------------------- screen 5: the live pipeline (generator -> ULPF -> consumer)
+  let assertKey = "";
+  async function postAssert(body) { try { await fetch("/live/assert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); } catch (e) { console.error(e); } }
+  async function renderLive() {
+    const [st, gen, w, con, pend] = await Promise.all([getJSON("live/status.json"), getJSON("live/generator.json"), getJSON("live/watch.json"), getJSON("live/consumer.json"), getJSON("live/pending.json")]);
+    const top = $("live-top"), asr = $("live-assert");
+    if (!st) { top.innerHTML = '<div class="empty">the live sequence has not run — bash demo/live/run-live.sh</div>'; asr.innerHTML = ""; assertKey = ""; return; }
+    const phases = Object.entries(st.phases || {}).map(([k, p]) => `<span class="st ${p.state || ""}">${esc(k)} ${esc((p.title || "").split(":")[0].split("(")[0].trim().slice(0, 34))}${p.state === "done" ? `<span class="t">${fmtS(p.seconds)}</span>` : p.state === "running" ? '<span class="t blink">running…</span>' : ""}</span>`).join("");
+    const cur = (st.phases || {})[st.current] || {};
+    const ps = w && w.parse_success != null ? Math.round(100 * w.parse_success) : null;
+    const fired = w && w.fired;
+    const topSig = w && w.signals && (w.signals.unknown_signatures || [])[0];
+    const events = ((w && w.events) || []).slice(-4).map((e) => `<div class="${e.state === "fired" ? "bad" : "ok"}" style="font-size:.95rem">${esc(e.message)}</div>`).join("");
+    const fmtName = gen ? (gen.format === 2 ? "v2 — firmware 2.0 (ISO time, +zone)" : "v1") : "?";
+    const box = (title, sub, body, cls) => `<div class="panel" style="flex:1;min-width:0;${cls || ""}"><h3>${title}</h3><div class="dim" style="font-size:.85rem;margin-bottom:6px">${sub}</div>${body}</div>`;
+    const arrow = (label) => `<div style="align-self:center;text-align:center;padding:0 6px;min-width:110px"><div style="font-size:2rem;line-height:1">→</div><div class="dim" style="font-size:.8rem">${label}</div></div>`;
+    top.innerHTML = `<div class="panel"><nav class="steps">${phases}</nav><div style="margin-top:6px;font-size:1.05rem">${esc(cur.title || "")}${cur.note ? ` — <span class="dim">${esc(cur.note)}</span>` : ""}</div></div>
+      <div style="display:flex;gap:0;align-items:stretch">
+        ${box("flowgen — generator app", "outside the pipeline · knows a host and a port", gen ? `<div class="kpi"><div class="k"><div class="lab">format</div><div class="big ${gen.format === 2 ? "warn" : ""}" style="font-size:1.2rem">${esc(fmtName)}</div></div><div class="k"><div class="lab">generated · sent</div><div class="big">${gen.generated} · ${gen.sent}</div></div><div class="k"><div class="lab">backlog</div><div class="big ${gen.backlog ? "warn" : ""}">${gen.backlog}${gen.paused ? ' <span class="tag enum">paused</span>' : ""}</div></div></div><div class="mono dim" style="font-size:.8rem;margin-top:6px;word-break:break-all">${esc(gen.last_line)}</div>` : '<div class="dim">not started</div>')}
+        ${arrow("ingress connector<br>syslog / TCP, RFC 6587")}
+        ${box("ULPF runtime", `packs: ${esc(((st.runtime || {}).packs || []).join(" · ") || "—")} · run #${(st.runtime || {}).run || "?"}`, w ? `<div class="kpi"><div class="k"><div class="lab">evidence records</div><div class="big">${w.frames_total}</div></div><div class="k"><div class="lab">usable</div><div class="big ok">${w.usable_total}</div></div><div class="k"><div class="lab">quarantined (bytes kept)</div><div class="big warn">${w.quarantined_total}</div></div><div class="k"><div class="lab">parse success · last ${w.window}</div><div class="big ${fired ? "bad" : "ok"}">${ps == null ? "…" : ps + "%"}</div></div></div><div class="barwrap" style="margin-top:6px"><div class="bar" style="width:${ps || 0}%;${fired ? "background:var(--bad)" : ""}"></div></div>${fired ? `<div class="bad" style="margin-top:6px;font-size:1.1rem"><b>DRIFT MONITOR FIRED</b> — ${esc(w.dominant_signal)}${topSig ? `: <span class="mono" style="font-size:.8rem">${esc(topSig.key)}</span> (${topSig.events})` : ""}</div>` : ""}` : '<div class="dim">not started</div>', fired ? "border-left:6px solid var(--bad)" : "")}
+        ${arrow("egress connector<br>HTTP POST, NDJSON")}
+        ${box("sink — consumer app", "outside the pipeline · SQLite · event_id is the key", con ? `<div class="kpi"><div class="k"><div class="lab">rows in SQLite</div><div class="big ok">${con.rows}</div></div><div class="k"><div class="lab">batches · duplicates ignored</div><div class="big">${con.batches} · ${con.duplicates_ignored}</div></div></div><div class="dim" style="font-size:.85rem;margin-top:6px">${Object.entries(con.by_family || {}).map(([k, v]) => `${esc(k)}: ${v}`).join(" · ")}</div>${con.last ? `<div class="mono dim" style="font-size:.8rem;margin-top:4px">${esc(con.last.src_ip)} → ${esc(con.last.dst_ip)} · action ${esc(con.last.action_id)} · ${esc(con.last.time)}</div>` : ""}` : '<div class="dim">not started</div>')}
+      </div>
+      <div class="panel"><h3>Drift monitor (detection only — a human re-onboards)</h3>${events || '<div class="dim">watching…</div>'}<div class="dim" style="font-size:.8rem;margin-top:6px">between the connectors: the evidence log (every byte, before any parsing) — and the normalized delivery spool the egress cursor points into</div></div>`;
+    // the operator's panel: rebuilt only when its content changes, so an open dropdown survives the polling
+    const sess = pend && pend.session ? await getJSON(`live/${pend.session}/session.json`) : null;
+    const key = JSON.stringify([pend, sess && Object.values(sess.certificates || {}).map((c) => [c.certificate_id, c.status])]);
+    if (key === assertKey) return;
+    assertKey = key;
+    if (!pend || !sess) { asr.innerHTML = ""; return; }
+    const certs = Object.values(sess.certificates || {});
+    const leafs = ["time", "start_time", "end_time", "src_endpoint.ip", "dst_endpoint.ip", "src_endpoint.port", "dst_endpoint.port", "action_id", "connection_info.protocol_name", "traffic.bytes_in", "traffic.bytes_out", "traffic.bytes", "traffic.packets", "src_endpoint.zone", "dst_endpoint.zone"];
+    const rows = (pend.fields || []).map((f) => {
+      const cert = (pend.open_certificates || []).find((c) => c.field === f.field);
+      const prov = (f.provenance || [])[0] || "";
+      const opts = [...new Set([...(cert ? cert.candidates : []), ...(f.mapped || []), ...leafs])];
+      const ctl = pend.interactive && !pend.done && prov !== "operator_assertion" ? `<select data-field="${esc(f.field)}"><option value="">choose…</option>${opts.map((o) => `<option>${esc(o)}</option>`).join("")}</select> <button data-assert="${esc(f.field)}">assert</button>` : "";
+      return `<tr><td class="mono">${esc(f.field)}</td><td class="mono dim" style="font-size:.85rem">${(f.samples || []).map(esc).join(" · ")}</td><td>${esc((f.mapped || [])[0] || "—")}</td><td><span class="tag ${prov === "operator_assertion" ? "config" : prov === "model_proposal" ? "model" : "enum"}">${esc(prov || "—")}</span></td><td>${cert ? `<span class="tag ambiguous">${esc(cert.class || cert.status)}</span>` : ""}</td><td>${ctl}</td></tr>`;
+    }).join("");
+    const blockers = (pend.blockers || []).map((b) => `<div class="warn">${esc(b)}</div>`).join("") || '<div class="ok">nothing mandatory is blocked</div>';
+    asr.innerHTML = `<div class="grid2"><div><div class="panel request"><h3>Operator assertion — ${esc(pend.session)} (no vendor document exists for this source)</h3>${blockers}
+        <table style="margin-top:8px"><tr><th>field</th><th>samples</th><th>mapped to</th><th>provenance</th><th>certificate</th><th></th></tr>${rows}</table>
+        ${pend.interactive && !pend.done ? `<button id="live-promote" style="margin-top:10px;font-size:1.05rem">promote (fill the rest from the operator's notes)</button>` : ""}
+        <div class="dim" style="font-size:.85rem;margin-top:6px">each assertion is recorded per field with the operator's id, provenance <b>operator_assertion</b>, inside the signed pack — weaker than a vendor document, and labelled so</div></div></div>
+      <div>${certs.map((c) => certCard(c)).join("")}</div></div>`;
+    for (const b of asr.querySelectorAll("button[data-assert]")) b.onclick = () => { const sel = asr.querySelector(`select[data-field="${b.dataset.assert}"]`); if (sel && sel.value) postAssert({ field: b.dataset.assert, attribute: sel.value }); };
+    const pb = $("live-promote"); if (pb) pb.onclick = () => postAssert({ promote: true });
+  }
+
   // ---------------------------------------------------------------- loop
   async function tick() {
     const st = await getJSON("status.json");
     lastStatus = st;
-    if (follow && st && st.current && stepScreen[st.current] && stepScreen[st.current] !== active) show(stepScreen[st.current]);
+    const lv = await getJSON("live/status.json");
+    const liveRunning = lv && lv.updated && (!st || !st.updated || lv.updated > st.updated) && Object.values(lv.phases || {}).some((p) => p.state === "running");
+    if (follow && liveRunning) { if (active !== "live") show("live"); }
+    else if (follow && st && st.current && stepScreen[st.current] && stepScreen[st.current] !== active && active !== "live") show(stepScreen[st.current]);
     renderSteps(st);
     try {
       if (active === "review") await renderReview();
       else if (active === "tamper") await renderTamper();
       else if (active === "flow") await renderFlow();
+      else if (active === "live") await renderLive();
       else await renderDiscover();
     } catch (e) { console.error(e); }
   }
@@ -184,7 +239,8 @@
     if (e.key === "2") { follow = false; show("tamper"); }
     if (e.key === "3") { follow = false; show("flow"); }
     if (e.key === "4") { follow = false; show("discover"); }
-    if (e.key === "f" || e.key === "F") { follow = !follow; $("foot").textContent = (follow ? "following the running step · " : "manual · ") + "keys: 1 review · 2 tamper · 3 flow · 4 discovery · F follow"; }
+    if (e.key === "5") { follow = false; show("live"); }
+    if (e.key === "f" || e.key === "F") { follow = !follow; $("foot").textContent = (follow ? "following the running step · " : "manual · ") + "keys: 1 review · 2 tamper · 3 flow · 4 discovery · 5 live pipeline · F follow"; }
   });
   show("review");
   tick();

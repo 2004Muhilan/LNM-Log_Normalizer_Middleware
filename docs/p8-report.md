@@ -596,7 +596,8 @@ Checked against plan §7 P1–P8, §2 and §5 after this pass. Everything not li
 4. **P8 — "review-interface polish" / P3 — "accept the response" through the interface.** The working surface is
    the CLI (`certificates`, `respond`); the demo UI's certificate screen is a **read-only viewer** of the same
    session files. Nothing in the browser accepts evidence.
-5. **P8 demo, §8.3 step 4 — "format broken mid-run, drift detected, re-onboarded".** Step 8 heals an in-domain
+5. *(Built after this report: [live-demo-report.md](live-demo-report.md) — a generator changes format mid-run, the monitor fires,
+   the stream is re-onboarded through the same path.)* **P8 demo, §8.3 step 4 — "format broken mid-run, drift detected, re-onboarded".** Step 8 heals an in-domain
    message id no family owned, from the previous step's quarantine, by a human (semi-automatic by design, §9). No
    step breaks a format *mid-run*; the parse-success-drop monitor exists and has never fired in a demo.
 6. **P8 demo, §8.3 step 5 — "the daily root verified on a second machine".** Step 6's witness is a container that
