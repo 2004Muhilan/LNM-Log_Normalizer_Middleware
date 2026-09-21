@@ -62,3 +62,16 @@ use, no new port except the inspector's 8770. Pre-flight still pins 20 GPU layer
 llama image is the upstream one the laptop uses; `ULPF_LLAMA_IMAGE=ulpf-llama` is a desktop-only override. A fresh
 clone needs its git-ignored inputs: `corpus/cache`, `ocsf/cache`, `models/cache/Qwen3.5-4B-Q4_K_M.gguf`
 (`docs/demo-machine-setup.md`). **Not run on the laptop** — built and gated on the desktop only.
+
+## 4. The gate (desktop, 2026-09-21, after the last change)
+
+`p1-check` … `p8-check` pass (22 / 71 / 27 / 33 / 82 / 72 / 179 s; zero skipped tests, goldens byte-identical, coverage
+figures regenerate byte for byte); the Go suite and 77 Python tests pass.
+
+| | six steps, run 1 / run 2 | live sequence, run 1 / run 2 | same facts shown |
+|---|---|---|---|
+| 20 layers (the laptop's split, pinned) | 90.0 s / 87.6 s | 196 s / 183 s | yes / yes |
+| 33 of 33 layers (desktop only) | 48.2 s / 46.6 s | 132 s / 133 s | yes / yes |
+
+On the laptop expect the six steps at 150–160 s (measured there on 2026-09-07) and the live sequence to be
+correspondingly slower: it makes two model calls.
