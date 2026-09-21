@@ -341,7 +341,7 @@ def _l2_of(spec: dict) -> str:
     if isinstance(root, list):   # a step sequence (the ASA regex drafts): a template family
         return "template"
     op = root["op"]
-    return {"positional": "positional", "csv": "csv", "kv": "kv", "regex": "template", "json": "json"}.get(op, "mixed")
+    return {"positional": "positional", "csv": "csv", "kv": "kv", "regex": "template", "json": "json", "xml": "xml"}.get(op, "mixed")
 
 
 def plan_from_proposal(structure, prop, source_id: str) -> Plan:

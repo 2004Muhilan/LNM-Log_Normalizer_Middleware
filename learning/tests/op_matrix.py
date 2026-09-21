@@ -159,3 +159,19 @@ for cls, ok, bad in [("uuid", "123e4567-e89b-12d3-a456-426614174000", "123e4567-
 vec("null-values", spec("m-nulls", ws_positional([cell("a", "ipv4"), cell("b", "integer", null_values=["N/A"]), cell("c", "word", null_values=[]), cell("d", "integer", coerce=coerce("int"))]), null_values=["-"]),
     ["- N/A - 5", "10.0.0.1 7 x -"], ["- - - 5", "10.0.0.1 N/A y notint", "1.2.3.4 - x 1"])  # b's override replaces the spec default: '-' is not a null there
 vec("v1-0-0-plain", spec("m-v100", ws_positional([cell("a", "word"), cell("b", "integer", coerce=coerce("int"))]), version="1.0.0"), ["x 1"], ["x y"])
+
+# ---------------------------------------------------------------- parser-spec 1.2.0: structured payloads (json, xml)
+_JSON_KEYS = {"ts": cell("time", "integer"), "src.ip": cell("src_ip", "ipv4"), "src.port": cell("src_port", coerce=coerce("int")), "msg": cell("message"), "tags": cell("tags"), "raw": opaque("raw_blob")}
+vec("json-opaque-unknowns", spec("m-json-1", {"op": "json", "keys": _JSON_KEYS, "unknown_keys": "opaque"}, version="1.2.0"),
+    [' {"ts": 1758350000, "src": {"ip": "10.4.2.17", "port": 443, "asn": 64500}, "msg": "blocked \\"x\\" \\u00e9\\n \\ud83d\\ude00", "tags": ["a", {"b": "]"}], "extra": null, "raw": {"k": [1, 2]}} ',
+     '{"ts":1}', '{}', '{"msg": ""}', '{"deep": {"er": {"x": true, "y": -1.5e3}}}'],
+    ['[1,2]', '{"ts": 1} x', '{"ts": 1, "ts": 2}', '{"msg": "a\\q"}', '{"msg": "\\ud800"}', '{"msg": "\\udc00\\ud800"}', '{"src": {"ip": "not-an-ip"}}', '{"msg": "abc', '{"ts" 1}', '{"ts": }', '{"ts": 1,}', 'x'])
+vec("json-reject-unknowns", spec("m-json-2", {"op": "json", "keys": {"a": cell("a", "integer")}, "unknown_keys": "reject"}, version="1.2.0"), ['{"a": 1}'], ['{"a": 1, "b": 2}', '{"b": {"c": 1}, "a": 1}'])
+_XML_PATHS = {"Event/System/EventID": cell("event_code", "integer"), "Event/System/TimeCreated@SystemTime": cell("time"), "Event/EventData/TargetUserName": cell("user"), "Event/EventData/Note": cell("note")}
+vec("xml-opaque-unknowns", spec("m-xml-1", {"op": "xml", "paths": _XML_PATHS, "unknown": "opaque"}, version="1.2.0"),
+    ["<?xml version=\"1.0\"?><Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><!-- c --><System><EventID>4625</EventID>   <TimeCreated SystemTime=\"2026-09-20T06:33:20.042Z\"/><Computer>dc01</Computer></System>   <EventData><TargetUserName> alice </TargetUserName><Note><![CDATA[a <b> & c]]></Note></EventData></Event> ",
+     "<Event/>", "<Event><System><EventID>7</EventID></System></Event>", "<Event a = 'x' ><b:c d=\"\">t &amp; u</b:c></Event>"],
+    ["<a><b>1</a></b>", "<Event><System>", "<a>1</a><b>2</b>", "x<a>1</a>", "<Event><System><EventID>1</EventID><EventID>2</EventID></System></Event>", "<Event a=1></Event>", "   ",
+     "<Event><System><EventID>abc</EventID></System></Event>", "<Event><!-- x</Event>", "<Event><![CDATA[x</Event>", "<Event a></Event>"])
+vec("xml-reject-unknowns", spec("m-xml-2", {"op": "xml", "paths": {"r/v": cell("v", "integer")}, "unknown": "reject"}, version="1.2.0"), ["<r><v>1</v></r>", "<r>  <v>2</v> </r>"], ["<r><v>1</v><w>2</w></r>", "<r k='1'><v>1</v></r>"])
+

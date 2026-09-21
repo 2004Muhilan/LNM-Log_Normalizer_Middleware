@@ -120,10 +120,9 @@ func surfaceClass(l2 string) string {
 	switch l2 {
 	case "csv", "kv", "json":
 		return l2
-	default: // positional | template | mixed | xml (xml is not detected in v1: such families never match)
-		if l2 == "xml" {
-			return "xml"
-		}
+	case "xml": // parser-spec 1.2.0
+		return "xml"
+	default: // positional | template | mixed
 		return "tokens"
 	}
 }
@@ -186,6 +185,10 @@ func detectL2(payload []byte) surface {
 	trimmed := bytes.TrimLeft(payload, " \t")
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
 		s.l2 = "json"
+		return s
+	}
+	if len(trimmed) > 1 && trimmed[0] == '<' && (trimmed[1] == '?' || trimmed[1] == '!' || trimmed[1] >= 'A' && trimmed[1] <= 'Z' || trimmed[1] >= 'a' && trimmed[1] <= 'z' || trimmed[1] == '_') {
+		s.l2 = "xml" // parser-spec 1.2.0: a payload that opens a tag, a declaration or a comment (a syslog <PRI> was unwrapped before this)
 		return s
 	}
 	toks := strings.Fields(string(payload))

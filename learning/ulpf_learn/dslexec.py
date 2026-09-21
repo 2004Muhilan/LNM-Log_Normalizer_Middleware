@@ -42,6 +42,78 @@ class CompileError(Exception):
     pass
 
 
+def _unknown_path(p: str, seps: str) -> str:
+    """A structured path as a legal span path: every segment [A-Za-z_][A-Za-z0-9_]* (twin of unknownPath)."""
+    segs, cur = [], ""
+    for ch in p:
+        if ch in seps:
+            if cur:
+                segs.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur:
+        segs.append(cur)
+    out = []
+    for seg in segs:
+        b = bytearray(seg.encode("utf-8"))
+        for j, ch in enumerate(b):
+            if not (ch == 0x5F or 0x61 <= ch <= 0x7A or 0x41 <= ch <= 0x5A or 0x30 <= ch <= 0x39):
+                b[j] = 0x5F
+        if not b or 0x30 <= b[0] <= 0x39:
+            b = bytearray(b"_") + b
+        out.append(b.decode("ascii"))
+    return "unknown." + ".".join(out)
+
+
+def _json_unescape(inner: bytes) -> bytes | None:
+    """JSON string content -> UTF-8 bytes; None when an escape or the UTF-8 is invalid (twin of jsonUnescape)."""
+    def valid(b: bytes):
+        try:
+            b.decode("utf-8")
+            return b
+        except UnicodeDecodeError:
+            return None
+    if b"\\" not in inner:
+        return valid(inner)
+    out, i, n = bytearray(), 0, len(inner)
+    simple = {0x22: 0x22, 0x5C: 0x5C, 0x2F: 0x2F, 0x62: 0x08, 0x66: 0x0C, 0x6E: 0x0A, 0x72: 0x0D, 0x74: 0x09}
+
+    def hex4(at):
+        h = inner[at:at + 4]
+        if len(h) != 4 or any(c not in b"0123456789abcdefABCDEF" for c in h):
+            return None
+        return int(h, 16)
+    while i < n:
+        ch = inner[i]
+        if ch != 0x5C:
+            out.append(ch); i += 1
+            continue
+        i += 1
+        if i >= n:
+            return None
+        e = inner[i]
+        if e in simple:
+            out.append(simple[e]); i += 1
+        elif e == 0x75:
+            r = hex4(i + 1)
+            if r is None:
+                return None
+            i += 5
+            if 0xD800 <= r <= 0xDFFF:
+                if not (0xD800 <= r <= 0xDBFF) or inner[i:i + 2] != b"\\u":
+                    return None
+                r2 = hex4(i + 2)
+                if r2 is None or not (0xDC00 <= r2 <= 0xDFFF):
+                    return None
+                i += 6
+                r = 0x10000 + ((r - 0xD800) << 10) + (r2 - 0xDC00)
+            out += chr(r).encode("utf-8")
+        else:
+            return None
+    return valid(bytes(out))
+
+
 class Failure(Exception):
     def __init__(self, off: int, step: str, reason: str):
         super().__init__(reason)
@@ -408,7 +480,7 @@ class Node:
 
 class Program:
     def __init__(self, spec: dict, raw_bytes: bytes):
-        if spec.get("schema_version") not in ("1.0.0", "1.1.0"):
+        if spec.get("schema_version") not in ("1.0.0", "1.1.0", "1.2.0"):
             raise CompileError(f"unsupported schema_version {spec.get('schema_version')!r}")
         if spec.get("regex_dialect") != "re2":
             raise CompileError("regex_dialect must be re2")
@@ -477,6 +549,12 @@ class Program:
                                "quote": raw["quote"].encode()[0] if raw["quote"] else None, "escape": raw["escape"], "keyre": krx,
                                "pattern": raw["key_pattern"], "keys": keys, "order": list(keys), "unknown": raw["unknown_keys"],
                                "ordermode": raw["order"], "bare": raw.get("allow_bare_keys", False)})
+        if op in ("json", "xml"):   # parser-spec 1.2.0 — twin of runtime/internal/dsl/structured.go
+            table = raw["keys"] if op == "json" else raw["paths"]
+            for k, v in table.items():
+                if "parse" in v:
+                    raise CompileError(f"{path}: a {op} entry must be a cell (sub-parsing a structured value is not supported)")
+            return Node(op, {"cells": {k: self._cell(v, depth + 1) for k, v in sorted(table.items())}, "unknown": raw["unknown_keys"] if op == "json" else raw["unknown"]})
         if op == "positional":
             slots = []
             for i, s in enumerate(raw["slots"]):
@@ -806,7 +884,241 @@ class _Exec:
             return self._csv(n, start, end)
         if n.op == "kv":
             return self._kv(n, start, end)
+        if n.op == "json":
+            return self._json(n, start, end)
+        if n.op == "xml":
+            return self._xml(n, start, end)
         raise AssertionError(n.op)
+
+    # ------------------------------------------------------------ structured ops (1.2.0), twins of structured.go
+    def _walker(self, n: Node, start: int, step: str, seps: str):
+        st = {"lit": start, "seen": set()}
+
+        def value(path: str, a: int, b: int, val: bytes, enc: str):
+            self.literal(st["lit"], a)
+            st["lit"] = b
+            c = n.data["cells"].get(path)
+            if c is not None:
+                if path in st["seen"]:
+                    raise Failure(a, step, f"{path!r} occurs more than once")
+                st["seen"].add(path)
+                self.emit_cell(c, a, b, val, enc, f"{step}[{path}]")
+            elif n.data["unknown"] == "reject":
+                raise Failure(a, step, f"undeclared {path!r}")
+            else:
+                self.opaque(_unknown_path(path, seps), a, b)
+        return st, value
+
+    def _json(self, n: Node, start: int, end: int) -> int:
+        buf = self.buf
+        st, value = self._walker(n, start, ".json", ".")
+        ws = b" \t\n\r"
+
+        def skip(p):
+            while p < end and buf[p] in ws:
+                p += 1
+            return p
+
+        def string_end(p):   # p at the opening quote; index AFTER the closing quote, or -1
+            i = p + 1
+            while i < end:
+                if buf[i] == 0x5C:
+                    i += 1
+                elif buf[i] == 0x22:
+                    return i + 1
+                i += 1
+            return -1
+
+        def composite_end(p):
+            depth = 0
+            while p < end:
+                ch = buf[p]
+                if ch == 0x22:
+                    q = string_end(p)
+                    if q < 0:
+                        return -1
+                    p = q
+                    continue
+                if ch in b"[{":
+                    depth += 1
+                elif ch in b"]}":
+                    depth -= 1
+                    if depth == 0:
+                        return p + 1
+                p += 1
+            return -1
+
+        def obj(pos, path, depth):
+            if depth > 32:
+                raise Failure(pos, ".json", "nesting deeper than 32")
+            pos = skip(pos + 1)
+            if pos < end and buf[pos] == 0x7D:
+                return pos + 1
+            while True:
+                if pos >= end or buf[pos] != 0x22:
+                    raise Failure(pos, ".json", "expected a key")
+                ke = string_end(pos)
+                if ke < 0:
+                    raise Failure(pos, ".json", "unterminated key")
+                key = buf[pos + 1:ke - 1].decode("utf-8", "replace")
+                child = key if not path else path + "." + key
+                pos = skip(ke)
+                if pos >= end or buf[pos] != 0x3A:
+                    raise Failure(pos, ".json", f"expected ':' after key {key!r}")
+                pos = skip(pos + 1)
+                if pos >= end:
+                    raise Failure(pos, ".json", f"value missing for {key!r}")
+                ch = buf[pos]
+                if ch == 0x7B:
+                    pos = obj(pos, child, depth + 1)
+                elif ch == 0x5B:
+                    ve = composite_end(pos)
+                    if ve < 0:
+                        raise Failure(pos, ".json", f"unterminated array at {child!r}")
+                    value(child, pos, ve, buf[pos:ve], "")
+                    pos = ve
+                elif ch == 0x22:
+                    ve = string_end(pos)
+                    if ve < 0:
+                        raise Failure(pos, ".json", f"unterminated string at {child!r}")
+                    val = _json_unescape(buf[pos + 1:ve - 1])
+                    if val is None:
+                        raise Failure(pos, ".json", f"invalid string escape or UTF-8 at {child!r}")
+                    value(child, pos, ve, val, "json-string")
+                    pos = ve
+                else:
+                    ve = pos
+                    while ve < end and buf[ve] not in b" \t\n\r,}]":
+                        ve += 1
+                    if ve == pos:
+                        raise Failure(pos, ".json", f"value missing for {key!r}")
+                    value(child, pos, ve, buf[pos:ve], "")
+                    pos = ve
+                pos = skip(pos)
+                if pos < end and buf[pos] == 0x2C:
+                    pos = skip(pos + 1)
+                    continue
+                if pos < end and buf[pos] == 0x7D:
+                    return pos + 1
+                raise Failure(pos, ".json", "expected ',' or '}'")
+
+        pos = skip(start)
+        if pos >= end or buf[pos] != 0x7B:
+            raise Failure(pos, ".json", "expected a JSON object")
+        p = skip(obj(pos, "", 1))
+        if p != end:
+            raise Failure(p, ".json", "bytes after the JSON object")
+        self.literal(st["lit"], end)
+        return end
+
+    def _xml(self, n: Node, start: int, end: int) -> int:
+        buf = self.buf
+        st, value = self._walker(n, start, ".xml", "/@")
+        ws = b" \t\n\r"
+        stack: list[str] = []
+
+        def text(a, b):
+            while a < b and buf[a] in ws:
+                a += 1
+            while b > a and buf[b - 1] in ws:
+                b -= 1
+            if a == b:
+                return
+            if not stack:
+                raise Failure(a, ".xml", "text outside the root element")
+            value("/".join(stack), a, b, buf[a:b], "")
+
+        pos, root_seen = start, False
+        while pos < end:
+            lt = buf.find(b"<", pos, end)
+            if lt < 0:
+                text(pos, end)
+                pos = end
+                break
+            text(pos, lt)
+            pos = lt
+            if buf.startswith(b"<!--", pos, end):
+                e = buf.find(b"-->", pos, end)
+                if e < 0:
+                    raise Failure(pos, ".xml", "unterminated comment")
+                pos = e + 3
+            elif buf.startswith(b"<![CDATA[", pos, end):
+                e = buf.find(b"]]>", pos, end)
+                if e < 0:
+                    raise Failure(pos, ".xml", "unterminated CDATA")
+                if not stack:
+                    raise Failure(pos, ".xml", "CDATA outside the root element")
+                if e > pos + 9:
+                    value("/".join(stack), pos + 9, e, buf[pos + 9:e], "")
+                pos = e + 3
+            elif buf.startswith(b"<?", pos, end) or buf.startswith(b"<!", pos, end):
+                e = buf.find(b">", pos, end)
+                if e < 0:
+                    raise Failure(pos, ".xml", "unterminated declaration")
+                pos = e + 1
+            elif buf.startswith(b"</", pos, end):
+                e = buf.find(b">", pos, end)
+                if e < 0:
+                    raise Failure(pos, ".xml", "unterminated end tag")
+                name = buf[pos + 2:e].decode("utf-8", "replace").strip(" \t\n\r")
+                if not stack or stack[-1] != name:
+                    raise Failure(pos, ".xml", f"end tag </{name}> does not close the open element")
+                stack.pop()
+                pos = e + 1
+            else:
+                p = ns = pos + 1
+                while p < end and buf[p] not in ws and buf[p] not in b">/":
+                    p += 1
+                if p == ns:
+                    raise Failure(pos, ".xml", "tag without a name")
+                if not stack:
+                    if root_seen:
+                        raise Failure(pos, ".xml", "a second root element")
+                    root_seen = True
+                if len(stack) >= 32:
+                    raise Failure(pos, ".xml", "nesting deeper than 32")
+                stack.append(buf[ns:p].decode("utf-8", "replace"))
+                closed = False
+                while True:
+                    while p < end and buf[p] in ws:
+                        p += 1
+                    if p >= end:
+                        raise Failure(pos, ".xml", "unterminated start tag")
+                    if buf[p] == 0x3E:
+                        p += 1
+                        break
+                    if buf[p] == 0x2F and p + 1 < end and buf[p + 1] == 0x3E:
+                        p += 2
+                        closed = True
+                        break
+                    a_s = p
+                    while p < end and buf[p] != 0x3D and buf[p] not in ws and buf[p] != 0x3E:
+                        p += 1
+                    attr = buf[a_s:p].decode("utf-8", "replace")
+                    while p < end and buf[p] in ws:
+                        p += 1
+                    if p >= end or buf[p] != 0x3D or not attr:
+                        raise Failure(a_s, ".xml", "attribute without a value")
+                    p += 1
+                    while p < end and buf[p] in ws:
+                        p += 1
+                    if p >= end or buf[p] not in b"\"'":
+                        raise Failure(p, ".xml", "attribute value must be quoted")
+                    ve = buf.find(bytes([buf[p]]), p + 1, end)
+                    if ve < 0:
+                        raise Failure(p, ".xml", "unterminated attribute value")
+                    if ve > p + 1:
+                        value("/".join(stack) + "@" + attr, p + 1, ve, buf[p + 1:ve], "")
+                    p = ve + 1
+                if closed:
+                    stack.pop()
+                pos = p
+        if stack:
+            raise Failure(end, ".xml", f"element <{stack[-1]}> is not closed")
+        if not root_seen:
+            raise Failure(start, ".xml", "no root element")
+        self.literal(st["lit"], end)
+        return end
 
     def _csv(self, n: Node, start: int, end: int) -> int:
         buf, d = self.buf, n.data
