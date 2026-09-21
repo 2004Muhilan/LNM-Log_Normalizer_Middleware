@@ -1,0 +1,70 @@
+<!doctype html><meta charset=utf-8><title>System — ULPF demo</title><link rel=stylesheet href=theme.css>
+<header><span class=brand>ULPF<small>Universal Log Pre-processing Framework — SIH 2026 · PS 26156</small></span>
+<a class=pill href="http://127.0.0.1:8780/">1 Generator</a><a class="pill here" href="http://127.0.0.1:8765/">2 System</a><a class=pill href="http://127.0.0.1:8790/">3 Database</a></header>
+<main>
+<div id=alerts></div>
+<div class=row>
+ <div class=panel><h2>Applications sending logs (ingress)</h2><table><thead><tr><th>application</th><th>connector</th><th>events</th><th></th></tr></thead><tbody id=apps></tbody></table>
+  <p class=lab id=ingress></p></div>
+ <div class=panel style="flex:0 0 330px"><h2>ULPF runtime</h2><div id=rt></div>
+  <div class=lab style="margin-top:10px">policy</div><div class=btns style="margin-top:4px"><button id=p1></button><button id=p2></button></div></div>
+ <div class=panel><h2>Consumers receiving events (egress)</h2><table><thead><tr><th>consumer</th><th>connector</th><th>delivered</th><th>state</th></tr></thead><tbody id=egress></tbody></table></div>
+</div>
+<div id=openjobs></div>
+<div id=logsec style="display:none"><h1 id=logtitle></h1>
+ <div class=panel><div class=scroll style="max-height:330px"><table><thead><tr><th>received</th><th>connector</th><th>format</th><th>result</th><th>raw line</th></tr></thead><tbody id=logs></tbody></table></div></div>
+ <div class=row id=detail style="display:none">
+  <div class=panel><h2>Raw log — exactly as received</h2><pre class=raw id=d_raw></pre><p class=lab id=d_rawmeta></p><h2 style="margin-top:16px">Detected format</h2><table id=d_fmt></table></div>
+  <div class=panel><h2 id=d_title>Normalized event (OCSF)</h2><div id=d_parsed></div></div>
+ </div>
+</div>
+<div id=donejobs></div>
+</main>
+<script>
+Object.defineProperty(HTMLElement.prototype,'html',{set(h){if(this._h!==h){this.innerHTML=h;this._h=h}}}); // re-render only what changed: a click must not land on a node that is being replaced
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const post=(p,d)=>fetch(p,{method:'POST',body:JSON.stringify(d)}).then(tick);
+let host=null, sel=null, S=null, picks={};
+const STATE={starting:'starting',sampling:'taking samples',model:'labelling fields',answering:'waiting for the operator’s answers',promoting:'promoting',waiting_approval:'waiting for the operator',asking:'loaded — operator asked about withheld fields',done:'done',failed:'failed'};
+function jobHtml(j){
+ const open=!['done','failed'].includes(j.state), ask=j.state=='answering'||j.state=='asking';
+ let h=`<details class=panel ${open?'open':''}><summary><h2 style="display:inline">${j.kind=='heal'?'Self-healing':'Onboarding'} · ${esc(j.app||'')} · ${esc(j.format||'')} <span class="tag ${j.state=='done'?'ok':j.state=='failed'?'bad':''}">${STATE[j.state]||j.state}</span></h2>${open?'':' <span class=lab>'+esc(j.pack?j.pack.pack_id+' v'+j.pack.pack_version:'')+' — click to see the steps</span>'}</summary>`;
+ if(j.state=='waiting_approval')h+=`<p><button class="go on" onclick="post('/api/approve',{job:'${j.id}'})">Onboard this application’s format</button></p>`;
+ h+=`<ol class=steps>${j.steps.map(s=>`<li><span class="dim mono">${s.at}</span> ${esc(s.text)}</li>`).join('')}</ol>`;
+ if(j.fields.length&&(open||j.kind=='heal'))h+=`<table style="margin-top:10px"><thead><tr><th>field</th><th>samples</th><th>maps to</th><th>on what evidence</th>${ask?'<th>operator says</th>':''}</tr></thead><tbody>`+j.fields.map(f=>{
+   const need=ask&&!f.evidenced, k=j.id+'/'+f.field;
+   return `<tr><td class=m>${esc(f.field)}</td><td class="m dim">${esc(f.samples.join('  '))}</td><td class=m>${f.evidenced?esc(f.mapped.join(', ')):'<span class=amber>withheld</span> <span class=dim>(proposed: '+esc((f.mapped.concat(f.candidates))[0]||'nothing')+')</span>'}</td>
+   <td>${f.propagated?'<span class="tag ok">carried over</span>':f.evidenced?'<span class="tag blue">'+esc((f.provenance[0]||'').replace(/_/g,' '))+'</span>':f.ambiguity?'<span class=tag>ambiguous: '+esc(f.ambiguity.replace(/_/g,' '))+'</span>':'<span class=tag>proposal only</span>'}</td>
+   ${ask?`<td>${need?`<select onchange="picks['${k}']=this.value;post('/api/answer',{job:'${j.id}',field:'${f.field}',attribute:this.value})"><option value="">choose…</option>${S.attributes.map(a=>`<option ${(picks[k]||j.answers[f.field])==a?'selected':''}>${a}</option>`).join('')}</select>`:''}</td>`:''}</tr>`}).join('')+`</tbody></table>`;
+ if(ask)h+=`<p><button class="go on" onclick="post('/api/promote',{job:'${j.id}'})">${j.state=='asking'?'Apply answers and load the corrected pack':'Promote'}</button></p>`;
+ return h+'</details>'}
+async function tick(){try{S=await (await fetch('/api/state')).json()}catch(e){return}
+ $('alerts').html=S.alerts.slice().reverse().map((a,n)=>n?`<div class="lab" style="margin:0 0 6px 4px">earlier alert · ${esc(a.format)} · ${a.at} · ${esc(a.outcome)}</div>`:`<div class="alert ${a.outcome.startsWith('healed')?'ok':a.outcome.startsWith('heal')?'':'bad'}"><b>DRIFT ALERT · ${esc(a.app)} · ${esc(a.format)}</b> <span class=dim>${a.at} · ${a.policy_version}</span><br>${esc(a.outcome)}
+   ${a.propagated?`<br><span class=lab>carried over: ${esc(a.propagated.join(', '))}${a.withheld&&a.withheld.length?' · withheld: '+esc(a.withheld.map(w=>w.field).join(', ')):''}${a.pack?' · pack '+esc(a.pack.pack_id)+' v'+a.pack.pack_version+' '+a.pack.sha256.slice(0,19)+'…':''}</span>`:''}
+   ${a.pack&&!a.rolled_back?` <button onclick="post('/api/rollback',{alert:'${a.id}'})" style="padding:2px 10px;margin-left:8px">Roll back</button>`:''}</div>`).join('');
+ $('apps').html=S.apps.map(a=>`<tr class="click ${a.host==host?'sel':''}" onpointerdown="host='${a.host}';sel=null;tick()"><td><span class="dot ${a.connected?'ok':''}"></span><b>${esc(a.name)}</b>${a.alert?' <span class=tag>attention</span>':''}<div class="lab mono">${esc(a.peer||'')}</div></td>
+   <td>${esc(a.connector||'')}<div class="lab mono">${esc(a.channel||'')}</div></td><td class=m>${a.events}<div class=lab><span class=ok>${a.usable} parsed</span> · <span class=amber>${a.quarantined} quarantined</span></div></td><td class=lab>${a.connected?'sending':'silent '+a.idle_s+' s'}</td></tr>`).join('')||'<tr><td colspan=4 class=dim>no application has sent anything yet</td></tr>';
+ $('ingress').html='listening: '+S.runtime.ingress.map(i=>`${i.label} <span class=mono>${i.addr}</span>`).join(' · ')+' — click an application to see its logs';
+ $('rt').html=`<div><span class="dot ${S.runtime.up?'ok':'bad'}"></span>${S.runtime.up?'running':'DOWN'} · hot reloads ${S.runtime.reloads} · restarts 0</div>
+   <div class=lab style="margin-top:6px">parse success, last 40 events</div><div class=big style="font-size:2rem">${S.parse_success==null?'—':Math.round(S.parse_success*100)+'%'}</div>
+   <div class=lab>${S.counts.frames} received · ${S.counts.usable} parsed · ${S.counts.quarantined} quarantined (bytes kept)</div>
+   <div class=lab style="margin-top:8px">onboarded formats</div>${S.runtime.packs.map(p=>`<div class=mono style="font-size:.85rem">${esc(p.family)} <span class=dim>v${p.pack_version}</span></div>`).join('')||'<div class=dim>none yet</div>'}
+   <div class=lab style="margin-top:6px">field labels: ${S.runtime.provider=='model'?'local model':'fixture (fallback, not the model)'}</div>`;
+ $('p1').textContent='Auto-onboard: '+(S.policy.auto_onboard?'ON':'OFF');$('p1').className=S.policy.auto_onboard?'on':'';$('p1').onclick=()=>post('/api/policy',{auto_onboard:!S.policy.auto_onboard});
+ $('p2').textContent='Answers: '+(S.policy.prepared_answers?'prepared sheet':'ask me');$('p2').className=S.policy.prepared_answers?'on':'';$('p2').onclick=()=>post('/api/policy',{prepared_answers:!S.policy.prepared_answers});
+ $('egress').html=S.egress.map(e=>`<tr><td>${esc(e.consumer)}</td><td>${esc(e.label)}<div class="lab mono">${esc(e.url)}</div></td><td class=m>${e.delivered}</td>
+   <td><span class="dot ${e.state=='delivering'?'ok':e.state=='stalled'?'amber':''}"></span>${e.state=='stalled'?'not connected — events kept, cursor holds':e.state=='delivering'?'connected, delivering':'idle'}</td></tr>`).join('');
+ const isOpen=j=>!['done','failed'].includes(j.state);$('openjobs').html=S.jobs.filter(isOpen).reverse().map(jobHtml).join('');$('donejobs').html=(S.jobs.some(j=>!isOpen(j))?'<h1>Finished onboarding and healing</h1>':'')+S.jobs.filter(j=>!isOpen(j)).reverse().map(jobHtml).join('');
+ if(host){$('logsec').style.display='';const a=S.apps.find(x=>x.host==host);$('logtitle').textContent='Incoming logs — '+(a?a.name:host);
+  const rows=await (await fetch('/api/logs?host='+host)).json();
+  $('logs').html=rows.map(r=>`<tr class="click ${r.event_id==sel?'sel':''}" onpointerdown="show('${r.event_id}')"><td class=m>${r.at}</td><td>${r.connector}</td><td>${esc(r.format)}</td><td>${r.ok?'<span class="tag ok">'+esc(r.outcome)+'</span>':r.ok===false?'<span class=tag>'+esc(r.outcome)+'</span>':'<span class=dim>…</span>'}</td><td class="m dim">${esc(r.preview)}</td></tr>`).join('');}}
+async function show(id){sel=id;const d=await (await fetch('/api/log?id='+id)).json();$('detail').style.display='';
+ $('d_raw').textContent=d.raw.text;
+ $('d_rawmeta').html=`${d.raw.bytes} bytes · stored at ${esc(d.raw.segment)} + ${d.raw.offset} · ${esc(d.raw.raw_hash.slice(0,23))}… <span class="${d.raw.hash_verified_now?'ok':'bad'}">${d.raw.hash_verified_now?'hash verified just now':'HASH MISMATCH'}</span><br>arrived on <span class=mono>${esc(d.raw.ingest_channel)}</span> from <span class=mono>${esc(d.raw.peer)}</span> · framing ${esc(d.raw.framing&&d.raw.framing.method)}`;
+ const f=d.format;$('d_fmt').html=[['envelope',f.envelope+(f.envelope_header?' — '+Object.entries(f.envelope_header).filter(([k,v])=>['device_vendor','device_product','device_version','signature_id'].includes(k)).map(([k,v])=>k+'='+v).join(', '):'')],['payload format',f.surface],['fields counted by the router',f.arity!='0'&&f.arity],['token classes',f.token_classes&&f.token_classes.join(' ')],['routing signature',f.routing_signature]].filter(x=>x[1]).map(x=>`<tr><td class=lab>${x[0]}</td><td class=m>${esc(x[1])}</td></tr>`).join('');
+ const p=d.parsed;$('d_title').textContent=p.status=='normalized'?'Normalized event (OCSF)':'Not normalized';
+ $('d_parsed').html=p.status=='normalized'?`<p class=lab>pack <span class=mono>${esc(p.pack)} v${esc(p.pack_version)}</span> · family <span class=mono>${esc(p.family)}</span></p><pre class=json>${esc(JSON.stringify(p.event,null,2))}</pre><h2 style="margin-top:14px">Lineage — back to the raw bytes</h2><pre class=json style="max-height:220px">${esc(JSON.stringify(p.lineage,null,2))}</pre>`
+   :p.status=='quarantined'?`<div class=alert><b>Quarantined at stage “${esc(p.stage)}”</b><br>${esc(p.reason)}<br><span class=lab>The bytes are kept in the evidence log; nothing was guessed.</span></div>`:'<span class=dim>still in flight</span>';
+ tick()}
+tick();setInterval(tick,900);
+</script>

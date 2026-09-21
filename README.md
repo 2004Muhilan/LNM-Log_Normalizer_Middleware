@@ -23,29 +23,16 @@ was tried and rejected, and what the next phase inherits.
 
 ## Three ways in
 
-### 1. I just want to see it — 5 minutes, any laptop
-
-A recorded run of the six-step demo, replayed through the demo's own UI. Needs **Python 3 (standard
-library only) and a browser**. No GPU, no Docker, no Go, no model, no venv, no network.
+### 1. The demo with pages — three applications, everything a button (laptop branch)
 
 ```bash
-unzip demo-replay.zip && cd demo-replay
-python3 serve.py          # open http://localhost:8765/ and press 1
+bash demo/llama-server.sh start       # the 4B on the GPU (skip it with ULPF_DEMO_PROVIDER=fixture — the page then says "fallback, not the model")
+bash demo/start-demo.sh               # 1 Generator :8780 · 2 System :8765 · 3 Database :8790   (stop: bash demo/start-demo.sh stop)
 ```
 
-The bundle's `README.md` has the keys; its `PRESENTER.md` has what to say per step and the real timings.
-The bundle **is not in this repository**: its recording contains lines from Elastic-licensed test
-fixtures, which this project never commits (see "Fixtures and licences"). Get it from a teammate, or
-produce your own on a machine set up for the live demo:
-
-```bash
-bash demo/replay/capture.sh     # one real run of the demo, recorded outside the tree (~3 min)
-bash demo/replay/build.sh       # -> ~/demo-replay.zip (8.5 MB), with the notices ELv2 requires
-```
-
-Optional inside the bundle: `real/run-real.sh` runs the runtime, committer and verifier for real (static
-Linux binaries) on any capture you give it — steps 5 and 6 live, the rest recorded. Details:
-[demo/replay/README.md](demo/replay/README.md).
+What to press and what each page shows: [docs/laptop-branch.md](docs/laptop-branch.md) §5. The six-step page, the earlier
+live pages, the standalone log inspector and the recorded-replay bundle (`demo/replay/`) were REMOVED on this branch —
+they are on `main`; the six steps and the scripted live sequence still run, in the terminal, and remain the repeatable gate.
 
 ### 2. I want to run the live demo — a few hours the first time on a fresh machine, 30 minutes after
 
@@ -76,7 +63,6 @@ Then:
 
 ```bash
 bash demo/llama-server.sh start                    # the 4B on the GPU, port 8081
-python3 demo/serve-ui.py &                         # the offline read-only UI, http://localhost:8765
 bash demo/reset.sh && bash demo/preflight.sh       # clean state; 15 checks that fail loudly and early
 bash demo/run.sh                                   # the six steps (~2 min 40 s; step 2 is the model)
 ```

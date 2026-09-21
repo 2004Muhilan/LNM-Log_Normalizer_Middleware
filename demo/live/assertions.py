@@ -6,7 +6,7 @@
 
 Scripted: the listed answers (the truth about flowgen — the operator's own notes on their sensor) are queued one by
 one, exactly as the UI queues a dropdown choice, and applied. Interactive: nothing is queued; the operator chooses in
-the System page (demo/ui/live.html). When they press "promote", whatever they did not answer themselves is filled from the notes — an
+a page (removed on the laptop branch: the interactive demo is demo/start-demo.sh; this script is used scripted only). When they press "promote", whatever they did not answer themselves is filled from the notes — an
 unanswered column would keep the model's label, and two columns carrying the same label make a pack the contract refuses.
 Ends when no mandatory attribute is blocked and every expected answer was applied.
 """

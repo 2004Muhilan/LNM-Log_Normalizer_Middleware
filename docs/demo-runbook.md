@@ -1,5 +1,10 @@
 # Demo runbook — what to say, what to click, what to do when something hangs
 
+> **Laptop branch (2026-09-22): the pages this runbook describes were removed.** The demo with pages is now three
+> applications started by `bash demo/start-demo.sh` — see [laptop-branch.md](laptop-branch.md) §5 for what to press.
+> The six steps (`demo/run.sh`) and the scripted live sequence (`demo/live/run-live.sh`) still run exactly as described
+> here, in the TERMINAL; wherever this text says \"the UI\", \"press N\" or names `live.html`, read the terminal output instead.
+
 The demo is assembly over P1–P7: six steps, one runnable order, each step a script under `demo/steps/`
 that calls the same CLIs the phase checks call and copies its artifacts into `~/ulpf-demo/`. The UI
 (`demo/ui/`, served by `demo/serve-ui.py`) is a read-only layer over those files — polls them, renders
@@ -19,7 +24,6 @@ repository root and a browser window on the projector.
 
 ```bash
 bash demo/llama-server.sh start          # the 4B on the GPU, 20/33 layers, 8k context; ~10 s (PTX cache warm)
-python3 demo/serve-ui.py &               # http://localhost:8765  (once; it survives resets)
 bash demo/reset.sh                       # clean state, dev keys, vendor packs rebuilt from the corpus (~25 s)
 bash demo/preflight.sh                   # 17 checks; must end "PRE-FLIGHT: all clear"
 ```

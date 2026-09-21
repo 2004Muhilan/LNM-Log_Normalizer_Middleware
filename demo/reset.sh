@@ -16,8 +16,8 @@ pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/live/sink.py" 2>/dev
 docker rm -f ulpf-demo-witness >/dev/null 2>&1
 if [ "${1:-}" = "--all" ]; then
   bash "$ROOT/demo/llama-server.sh" stop
-  pkill -f "demo/serve-ui.py" 2>/dev/null && echo "ui server stopped"
 fi
+bash "$ROOT/demo/start-demo.sh" stop > /dev/null 2>&1   # the three demo apps live under $STATE/app: never wipe it under them
 echo "=== reset: state directory $STATE"
 chmod -R u+w "$STATE" 2>/dev/null; rm -rf "$STATE"; mkdir -p "$STATE"
 echo "=== reset: binaries and dev keys"

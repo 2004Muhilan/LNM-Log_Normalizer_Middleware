@@ -31,7 +31,6 @@ check "llama-server on $LLAMA_PORT (ngl $LLAMA_NGL, ctx $LLAMA_CTX)" bash -c "cu
 check "llama-server answers a completion" bash -c "curl -s -m 60 http://127.0.0.1:$LLAMA_PORT/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the single word ok.\"}],\"max_tokens\":4,\"temperature\":0}' | python3 -c 'import json,sys; d=json.load(sys.stdin); c=d[\"choices\"][0]; n=d[\"usage\"][\"completion_tokens\"]; assert n > 0, \"no tokens generated\"; print(str(n)+\" tokens generated, finish=\"+str(c.get(\"finish_reason\")))'"
 check "witness image (ulpf-verify)" bash -c 'docker image inspect ulpf-verify --format "{{.Size}}" | awk "{printf \"%.1f MB\", \$1/1048576}"'
 check "tcp port $TCP_PORT free for the mixed stream" bash -c "$(declare -f freeport_check); freeport_check $TCP_PORT && echo free"
-check "ui serving on $UI_PORT" bash -c "curl -s -m 3 http://127.0.0.1:$UI_PORT/ | grep -q 'ULPF' && curl -s -m 3 http://127.0.0.1:$UI_PORT/state/status.json | grep -q run_id && echo 'index and /state/status.json reachable'"
 check "memory headroom" bash -c 'a=$(free -m | awk "/Mem:/{print \$7}"); [ "$a" -gt 1500 ] && echo "${a} MB available in WSL"'
 mkdir -p "$STATE"
 python3 - "$STATE/preflight.json" "$fails" "${results[@]}" <<'EOF'

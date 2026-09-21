@@ -1,0 +1,5 @@
+{
+  "_note": "The operator's inventory: which application sits behind which peer host, and who listens behind each egress address. Declared by a human; ULPF itself only sees a channel and a peer.",
+  "127.0.0.1": {"source_id": "flowtap-01", "name": "flowtap generator", "vendor": "flowtap", "product": "flowtap flow sensor (demo generator)"},
+  "_consumers": {"127.0.0.1:8790": "events database (SQLite)", "127.0.0.1:8791": "events database (SQLite)", "stdout:": "a file; ULPF cannot see who reads it"}
+}

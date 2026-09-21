@@ -165,7 +165,7 @@ func (l *Loader) Validate(kind Kind, doc map[string]any, packDir string) []error
 
 // ---------------------------------------------------------------- parser spec
 
-var consumingOps = map[string]bool{"literal": true, "regex": true, "csv": true, "kv": true, "positional": true, "quoted": true, "optional": true, "repeated": true}
+var consumingOps = map[string]bool{"literal": true, "regex": true, "csv": true, "kv": true, "positional": true, "quoted": true, "optional": true, "repeated": true, "json": true, "xml": true}
 
 type specCtx struct {
 	errs       []error
@@ -222,6 +222,14 @@ func walkSpec(step any, ctx *specCtx, depth int64, path string) {
 		}
 		for k, c := range m["keys"].(map[string]any) {
 			checkCsvCell(c.(map[string]any), ctx, depth+1, path+".keys["+k+"]")
+		}
+	case "json": // parser-spec 1.2.0
+		for k, c := range m["keys"].(map[string]any) {
+			checkCell(c.(map[string]any), ctx, depth+1, path+".keys["+k+"]")
+		}
+	case "xml": // parser-spec 1.2.0
+		for k, c := range m["paths"].(map[string]any) {
+			checkCell(c.(map[string]any), ctx, depth+1, path+".paths["+k+"]")
 		}
 	case "positional":
 		for i, s := range m["slots"].([]any) {

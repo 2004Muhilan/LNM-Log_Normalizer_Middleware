@@ -42,7 +42,7 @@ Desktop invocation used for every figure below:
 ```bash
 export ULPF_LLAMA_IMAGE=ulpf-llama ULPF_LLAMA_NGL=99      # ULPF_LLAMA_CTX stays 8192
 mkdir -p ~/ulpf-models && cp models/cache/Qwen3.5-4B-Q4_K_M.gguf ~/ulpf-models/
-bash demo/llama-server.sh start && (setsid -f python3 demo/serve-ui.py) && bash demo/reset.sh && bash demo/preflight.sh
+bash demo/llama-server.sh start && bash demo/reset.sh && bash demo/preflight.sh
 ```
 
 Pre-flight: 15/15 clear on the desktop (20 s). Its `gpu visible to docker` check pulls

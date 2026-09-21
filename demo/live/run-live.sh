@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The LIVE sequence (parallel to the six rehearsed steps; everything it writes is under $STATE/live):
 #
-#   flowgen x2 (generator apps) --syslog/TCP + HTTP POST--> ONE ULPF runtime --HTTP POST + stdout--> sink (consumer app, SQLite, its own page)
+#   flowgen x2 (generator apps) --syslog/TCP + HTTP POST--> ONE ULPF runtime --HTTP POST + stdout--> database.py (consumer app, SQLite, its own page)
 #
 #   A  an unrecognised source arrives: quarantined, bytes kept, nothing parsed or guessed — UNTIL A HUMAN SAYS "onboard this" (Tier 1)
 #   B  onboarding, automatic from there except for ambiguity: samples out of the evidence log, the model, certificates, the
@@ -14,12 +14,12 @@
 #   F  the operator answers those two: pack 1.2
 #   G  backfill from the evidence log;  H  the accounting;  I  whitespace drift, the case no policy can heal
 #
-# The two apps are demo/live/flowgen.py and demo/live/sink.py (standard library only). ULPF_LIVE_INTERACTIVE=1 waits for the
-# operator on the System page, demo/ui/live.html (the onboard decision, the dropdowns) instead of applying the scripted answers.
+# The two apps are demo/live/flowgen.py and demo/apps/database.py (standard library only). This sequence is SCRIPTED — it is the
+# repeatable gate (twice-live.sh). The interactive demo, driven by buttons on three pages, is demo/start-demo.sh.
 source "$(dirname "$(readlink -f "$0")")/../lib.sh"
 cd "$ROOT"
 LIVE="$STATE/live"; IN_PORT="${ULPF_LIVE_TCP_PORT:-6515}"; SINK_ADDR="${ULPF_LIVE_SINK:-127.0.0.1:8790}"; RATE="${ULPF_LIVE_RATE:-8}"
-SRC="flowtap-01"; INTERACTIVE="${ULPF_LIVE_INTERACTIVE:-0}"
+SRC="flowtap-01"; INTERACTIVE=0   # scripted only: the interactive demo is demo/start-demo.sh (three apps, three pages)
 T_START=$(date +%s.%N)
 
 stop_all() {
@@ -93,7 +93,7 @@ reload_packs() { # pack dirs... -> packs.txt, SIGHUP; the runtime swaps between 
 wait_reloads() { wait_for 15 "the runtime to reload" bash -c "[ \$(grep -ac '^reloaded:' '$LIVE/run-1/runtime.err') -ge $1 ]"; packs_status; }
 gaps_json() { local t="$LIVE/gaps.json.$BASHPID.tmp"; "$VF" gaps --evidence "$LIVE/ev" --trust keys/trust --json 2>/dev/null > "$t" && mv "$t" "$LIVE/gaps.json"; }
 gap_count() { gaps_json; python3 -c 'import json,sys; print(sum(1 for l in open(sys.argv[1]) if l.strip() and json.loads(l)["record"]["kind"] == sys.argv[2]))' "$LIVE/gaps.json" "$1" 2>/dev/null || echo 0; }
-start_sink() { python3 "$ROOT/demo/live/sink.py" --listen "$SINK_ADDR" --db "$LIVE/events.sqlite" --status "$LIVE/consumer.json" & echo $! > "$LIVE/sink.pid"; }
+start_sink() { python3 "$ROOT/demo/apps/database.py" --listen "$SINK_ADDR" --tcp "${ULPF_LIVE_SINK_TCP:-127.0.0.1:8791}" --connector http --db "$LIVE/events.sqlite" --status "$LIVE/consumer.json" & echo $! > "$LIVE/sink.pid"; }
 provider_args() {
   if [ "$DEMO_PROVIDER" = "model" ]; then
     curl -s -m 3 "http://127.0.0.1:$LLAMA_PORT/health" | grep -q ok || fail "llama-server not up on $LLAMA_PORT (fallback: ULPF_DEMO_PROVIDER=fixture)"
@@ -141,7 +141,7 @@ EOF
 }
 
 # ------------------------------------------------------------------------------------------------ set-up
-stop_all 2>/dev/null; pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/live/sink.py" 2>/dev/null; pkill -f "tools/drift.py --watch" 2>/dev/null
+stop_all 2>/dev/null; pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/apps/[d]atabase.py" 2>/dev/null; pkill -f "tools/drift.py --watch" 2>/dev/null
 chmod -R u+w "$LIVE" 2>/dev/null; rm -rf "$LIVE"; mkdir -p "$LIVE"
 [ -f "$GOLDEN/pack.json.sig" ] || fail "golden pack unsigned (demo/reset.sh)"
 start_sink

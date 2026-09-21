@@ -73,10 +73,22 @@ class Session:
                       "samples_path": str(samples_path), "sample_count": len(lines), "state": "induced", "timeline": [], "certificates": {}, "resolutions": [],
                       "product": product, "transport_hint": transport_hint}
         self.log("session_started", samples=len(lines))
-        structure = induce(lines)
-        self.state["structure"] = {"arity": structure.arity, "other_arities": dict(structure.other_arities),
-                                  "slots": [asdict(s) for s in structure.slots], "routing_sketch": structure.routing_sketch()}
-        self.log("induced", arity=structure.arity, families_seen=1 + len(structure.other_arities))
+        from .draft import draft, leef_payload
+        d = draft(lines, f"{source_id}-draft")   # None for whitespace-token text: induction, as before
+        if d is not None:
+            structure = d.structure
+            d.spec["spec_id"] = f"{source_id}-{d.l2}-{structure.arity}"
+            self.state["app_envelope"] = d.l1 if d.l1 != "raw" else None
+            self.state["drafted"] = {"l1": d.l1, "l2": d.l2, "named": d.named}
+            if d.l1 == "leef":
+                lines = [leef_payload(l) for l in lines]
+            self.state["structure"] = {"arity": structure.arity, "other_arities": {}, "slots": [asdict(s) for s in structure.slots], "routing_sketch": d.routing}
+            self.log("induced", arity=structure.arity, families_seen=1, structure_from=f"drafted_{d.l2}")
+        else:
+            structure = induce(lines)
+            self.state["structure"] = {"arity": structure.arity, "other_arities": dict(structure.other_arities),
+                                      "slots": [asdict(s) for s in structure.slots], "routing_sketch": structure.routing_sketch()}
+            self.log("induced", arity=structure.arity, families_seen=1 + len(structure.other_arities))
         provider = provider or FixtureProvider(DEFAULT_FIXTURE)
         if hasattr(provider, "set_samples"):
             provider.set_samples(lines)   # the prompt shows the onboarding samples — and only those
@@ -85,6 +97,8 @@ class Session:
         self.log("proposed", provider=provider.name, event_class=prop.event_class_uid, seconds=round(time.time() - t_prop, 3))
         self.state["proposal_provenance"] = prop.notes.get("provenance") if isinstance(prop.notes, dict) else None
         self.plan = plan_from_proposal(structure, prop, source_id)
+        if d is not None:
+            self.plan.given_spec, self.plan.drafted, self.plan.family_id = d.spec, True, f"{d.l1 + '-' if d.l1 != 'raw' else ''}{d.l2}-{structure.arity}"
         self.state["proposal"] = {"provider": provider.name, "event_class_uid": prop.event_class_uid,
                                   "slots": [{"slot": p.slot_index + 1, "candidates": p.candidates, "note": p.note} for p in prop.slots]}
         self._propagate(propagation_store)
@@ -98,7 +112,7 @@ class Session:
         if not store_path:
             return
         store = PropagationStore(store_path)
-        hits = store.apply(self.plan, self.state["source_id"], self.state["structure"]["routing_sketch"])
+        hits = store.apply(self.plan, self.state["source_id"], self.state["structure"]["routing_sketch"], by_name=bool((self.state.get("drafted") or {}).get("named")))
         self.state["propagated"] = hits
         self.log("propagated", slots=len(hits), from_families=sorted({h["from_family"] for h in hits}))
 
@@ -308,7 +322,7 @@ class Session:
             anchor_values = {}
             if self.state.get("vendor", "squid") != "squid":
                 # no vendor table: the pack says what the operator said the source is — never the Squid default
-                source_meta = {"vendor": self.state["vendor"], "product": self.state.get("product") or "unknown", "declared_envelope": "raw",
+                source_meta = {"vendor": self.state["vendor"], "product": self.state.get("product") or "unknown", "declared_envelope": self.state.get("app_envelope") or "raw",
                                "transport_hint": self.state.get("transport_hint") or "file"}
         path = emit_pack(self.plan, spec, verdict, certs, resolutions, samples, self.state["sample_count"], self.state["operator_id"],
                          pack_id, out_dir, now_iso(), routing, self.lib.version,
@@ -318,7 +332,8 @@ class Session:
                          f"{self.plan.event_class_name} family induced from {self.state['sample_count']} samples; resolved by: " + ", ".join(sorted({r["discriminator_id"] for r in self.state["resolutions"]} | ({"propagation"} if self.state.get("propagated") else set()))) + ".")
         if self.state.get("propagation_store"):
             store = PropagationStore(Path(self.state["propagation_store"]))
-            n = store.record(self.plan, self.state["source_id"], routing, self.plan.family_id or f"positional-{len(self.plan.slots)}", str(self.path))
+            n = store.record(self.plan, self.state["source_id"], routing, self.plan.family_id or f"positional-{len(self.plan.slots)}", str(self.path),
+                             by_name=bool((self.state.get("drafted") or {}).get("named")))
             store.save()
             self.log("propagation_recorded", slots=n)
         self.state["state"] = "promoted"
@@ -333,6 +348,9 @@ class Session:
         lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
         if self.state.get("unwrap_envelope"):
             lines = [envelope_payload(l) for l in lines]   # the parser sees the payload, exactly as the runtime unwraps it
+        if self.state.get("app_envelope") == "leef":
+            from .draft import leef_payload
+            lines = [leef_payload(l) for l in lines]
         return lines
 
 
@@ -374,4 +392,4 @@ def _plan_from_json(d: dict) -> Plan:
         slots.append(Slot(s["index"], s["token_class"], parts, s["split"], s["samples"]))
     return Plan(d["source_id"], d["event_class_uid"], d["event_class_name"], slots, d["null_values"],
                 [Mapping(**m) for m in d["constants"]], d["source_timezone"], d["timezone_confidence"], d["proposed_by"], d["model_hash"],
-                d.get("given_spec"), d.get("family_id"), [EnvelopeMapping(**e) for e in d.get("envelope_mappings", [])])
+                d.get("given_spec"), d.get("family_id"), [EnvelopeMapping(**e) for e in d.get("envelope_mappings", [])], d.get("drafted", False))

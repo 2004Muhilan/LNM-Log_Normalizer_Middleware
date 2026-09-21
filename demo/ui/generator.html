@@ -1,21 +1,30 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Generator — raw logs</title><meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="plain.css"></head>
-<body>
-<h1>Generator — the raw logs being produced, and the connector each one leaves through</h1>
-<div class="log" id="log"><span class="muted">not running — bash demo/live/run-live.sh</span></div>
+<!doctype html><meta charset=utf-8><title>Generator — ULPF demo</title><link rel=stylesheet href=theme.css>
+<header><span class=brand>Generator<small>a log-producing application, outside ULPF</small></span>
+<a class="pill here" href="http://127.0.0.1:8780/">1 Generator</a><a class=pill href="http://127.0.0.1:8765/">2 System</a><a class=pill href="http://127.0.0.1:8790/">3 Database</a></header>
+<main>
+<div class=row>
+ <div class=panel><h2>1 · Connect to ULPF through an ingress connector</h2><div class=btns id=conn></div><p class=lab id=connstate></p></div>
+ <div class=panel><h2>2 · Log format</h2><div class=btns id=shape></div></div>
+ <div class=panel><h2>3 · Generate</h2><div class=btns><button id=run class=go></button><button id=drift class=warn></button></div>
+  <p class=lab>Drift = "firmware 2.0": the protocol becomes a number and a zone field appears, in whatever format is on.</p></div>
+</div>
+<div class=row>
+ <div class=panel style="flex:0 0 260px;min-width:220px"><div class=lab>generated</div><div class=big id=gen>0</div><div class=lab>sent <b id=sent>0</b> · waiting to be sent <b id=back>0</b></div><table id=by style="margin-top:12px"></table></div>
+ <div class=panel><h2>Lines as they are produced (newest first)</h2><div id=recent class=scroll></div></div>
+</div>
+</main>
 <script>
-// Read-only: polls the two generators' status files. Lines are ordered by their own first column (the sensor's timestamp).
-async function get(p) { try { const r = await fetch(`/state/live/${p}?t=${Date.now()}`); return r.ok ? await r.json() : null; } catch { return null; } }
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-async function tick() {
-  const [a, b] = await Promise.all([get("generator.json"), get("generator-http.json")]);
-  const rows = [];
-  for (const [g, name] of [[a, "syslog TCP"], [b, "HTTP POST"]]) for (const l of (g && g.recent) || []) rows.push([parseFloat(l), name, l]);
-  if (!rows.length) return;
-  rows.sort((x, y) => x[0] - y[0]);
-  document.getElementById("log").innerHTML = rows.slice(-26).map((r) => `<span class="c">${r[1]}</span>${esc(r[2])}`).join("\n");
-}
-tick(); setInterval(tick, 400);
+Object.defineProperty(HTMLElement.prototype,'html',{set(h){if(this._h!==h){this.innerHTML=h;this._h=h}}}); // re-render only what changed: a click must not land on a node that is being replaced
+const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const set=d=>fetch('/api/set',{method:'POST',body:JSON.stringify(d)}).then(tick);
+async function tick(){let s;try{s=await (await fetch('/api/state')).json()}catch(e){return}
+ $('conn').html=Object.entries(s.connectors).map(([k,c])=>`<button class="${s.connector==k?'on':''}" onclick="set({connector:'${k}'})">${c.label}</button>`).join('')+`<button class="${s.connector=='none'?'on':''}" onclick="set({connector:'none'})">Disconnected</button>`;
+ $('connstate').html=s.connector=='none'?'<span class=dot></span>not connected':`<span class="dot ${s.connected?'ok':'bad'}"></span>${s.connected?'connected to':'cannot reach'} <span class=mono>${s.connectors[s.connector].to}</span>`;
+ $('shape').html=s.shapes.map(k=>`<button class="${s.shape==k?'on':''}" onclick="set({shape:'${k}'})">${({positional:'Positional text',csv:'CSV',kv:'key=value',json:'JSON',xml:'XML',leef:'LEEF'})[k]||k}</button>`).join('');
+ $('run').textContent=s.running?'Generating — press to stop':'Start generating';$('run').className='go'+(s.running?' on':'');$('run').onclick=()=>set({running:!s.running});
+ $('drift').textContent=s.drift?'Format drift ON — press to go back':'Trigger format drift';$('drift').className='warn'+(s.drift?' on':'');$('drift').onclick=()=>set({drift:!s.drift});
+ $('gen').textContent=s.generated;$('sent').textContent=s.sent;$('back').textContent=s.backlog;
+ $('by').html=Object.entries(s.by_shape).map(([k,v])=>`<tr><td>${k}</td><td class=m style="text-align:right">${v}</td></tr>`).join('');
+ $('recent').html=s.recent.map(r=>`<div style="margin-bottom:8px"><span class="tag blue">${r.shape}</span><pre class=raw style="margin-top:4px">${esc(r.line)}</pre></div>`).join('')||'<span class=dim>nothing yet</span>';}
+tick();setInterval(tick,700);
 </script>
-</body></html>

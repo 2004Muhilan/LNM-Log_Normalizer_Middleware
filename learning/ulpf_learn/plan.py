@@ -66,6 +66,7 @@ class Plan:
     given_spec: dict | None = None          # P6: a hand-authored spec (csv/kv/regex) — the plan maps its fields, it does not rebuild the structure
     family_id: str | None = None
     envelope_mappings: list[EnvelopeMapping] = field(default_factory=list)
+    drafted: bool = False                   # laptop branch: given_spec was DRAFTED from the samples (draft.py); its cells are rebuilt from the parts
 
     def parts(self):
         for s in self.slots:
@@ -74,7 +75,17 @@ class Plan:
 
     def spec(self, spec_id: str, description: str) -> dict:
         if self.given_spec is not None:
-            return copy.deepcopy(self.given_spec)
+            out = copy.deepcopy(self.given_spec)
+            if self.drafted:   # the structure is the draft's; every cell carries what the plan knows now (observed class, coercion)
+                by_field = {p.field: p for _, p in self.parts()}
+                root = out["root"]
+                cells = root.get("keys") or root.get("paths")
+                if cells is not None:
+                    for k, c in cells.items():
+                        cells[k] = _cell(by_field[c["field"]]) if c["field"] in by_field else c
+                else:
+                    root["fields"] = [_cell(by_field[c["field"]]) if c["field"] in by_field else c for c in root["fields"]]
+            return out
         slots = []
         for s in self.slots:
             if s.split is None:

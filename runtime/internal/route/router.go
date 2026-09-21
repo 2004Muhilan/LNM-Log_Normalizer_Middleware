@@ -8,8 +8,10 @@
 // L1 semantics (P6 decision, raised in the report): a family that declares `raw` has no envelope
 // requirement — the same payload arrives with or without a relay header, and P5's tests already route
 // syslog-wrapped Squid. A family that declares a syslog envelope requires one (either RFC form, since
-// relays rewrite 3164 into 5424). L2 detection collapses `positional`, `template` and `mixed` into one
-// surface class (whitespace tokens); the anchors and the L4 sketch separate them.
+// relays rewrite 3164 into 5424). Laptop branch: a `raw` family does NOT match a payload that arrived inside an
+// APPLICATION envelope (CEF, LEEF) — that envelope names the format; only a relay's syslog header imposes nothing.
+// L2 detection collapses `positional`, `template` and `mixed` into one surface class (whitespace tokens); the
+// anchors and the L4 sketch separate them.
 package route
 
 import (
@@ -396,6 +398,9 @@ func (r *Router) RouteChain(payload []byte, ch frame.Chain) Decision {
 		}
 		switch f.family.Routing.L1 {
 		case "raw":
+			if hasCEF || hasLEEF {
+				continue // laptop branch: an APPLICATION envelope (CEF, LEEF) names its format — a bare family does not own what arrived inside one (a relay's syslog header is still no requirement)
+			}
 		case "cef":
 			if !hasCEF {
 				continue // the family requires a CEF header and none arrived

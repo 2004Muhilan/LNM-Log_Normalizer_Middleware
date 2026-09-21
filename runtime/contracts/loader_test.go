@@ -104,3 +104,22 @@ func TestRuntimeRegexIsRE2(t *testing.T) {
 		t.Fatal("backreference accepted — runtime regex engine is not RE2-only")
 	}
 }
+
+// parser-spec 1.2.0: the loader's own semantic walk (not only the schema) must know the json and xml ops — a pack whose
+// family is a drafted JSON or XML spec is loaded through this path, and was refused by it before this test existed.
+func TestStructuredOpsPassTheSemanticWalk(t *testing.T) {
+	l := newLoader(t)
+	for _, root := range []string{
+		`{"op":"json","unknown_keys":"reject","keys":{"src.ip":{"field":"src_ip","kind":"semantic","class":"ipv4"}}}`,
+		`{"op":"xml","unknown":"reject","paths":{"flow@ts":{"field":"ts","kind":"semantic","class":"float"}}}`,
+	} {
+		var doc map[string]any
+		src := `{"schema_version":"1.2.0","spec_id":"t-structured","description":"t","regex_dialect":"re2","bounds":{"max_event_bytes":8192,"max_fields":64,"max_nesting":4,"max_repeat":16},"root":` + root + `}`
+		if err := json.Unmarshal([]byte(src), &doc); err != nil {
+			t.Fatal(err)
+		}
+		if errs := l.Validate(ParserSpec, doc, ""); len(errs) != 0 {
+			t.Fatalf("%s: %v", root, errs)
+		}
+	}
+}

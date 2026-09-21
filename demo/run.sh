@@ -2,8 +2,8 @@
 # The demo sequence, one runnable order. Usage: run.sh [first-step] [last-step]   (default 1 6)
 #   demo/run.sh        # all six steps
 #   demo/run.sh 2 2    # re-run step 2 only (e.g. re-onboarding after drift, by hand — the same path)
-# Every step is its own script under demo/steps/ and runs standalone; the UI (demo/serve-ui.py) only
-# reads what they write under $ULPF_DEMO_STATE. Timings land in status.json and are printed at the end.
+# Every step is its own script under demo/steps/ and runs standalone, in the TERMINAL (the six-step page was removed on the laptop
+# branch; the demo with pages is demo/start-demo.sh). Steps write under $ULPF_DEMO_STATE; timings land in status.json and are printed at the end.
 set -uo pipefail
 source "$(dirname "$(readlink -f "$0")")/lib.sh"
 first="${1:-1}"; last="${2:-6}"

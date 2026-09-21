@@ -271,3 +271,24 @@ func TestDetectL2(t *testing.T) {
 		t.Fatalf("kv surface: %d pairs, devname=%q", kv.arity, kv.pairs["devname"])
 	}
 }
+
+// Laptop branch (narrows the P6 L1 decision): a `raw` family imposes no requirement on a RELAY's syslog header, but it does
+// not own a payload that arrived inside an APPLICATION envelope (CEF, LEEF) — that envelope names the format. Without this, a
+// bare key=value family and a LEEF family of the same pair count were two candidates for every LEEF line: quarantined.
+func TestRawFamilyDoesNotOwnWhatArrivedInAnApplicationEnvelope(t *testing.T) {
+	p := &pack.Pack{PackID: "src"}
+	p.Families = []pack.Family{family("bare-kv-3", "raw", "kv", "3", nil), family("leef-kv-3", "leef", "kv", "3", nil)}
+	r := New(p)
+	payload := []byte("a=1\tb=2\tc=3")
+	leef := frame.Chain{Envelopes: []frame.Envelope{{Kind: "leef"}}}
+	if d := r.RouteChain(payload, leef); d.Family == nil || d.Family.FamilyID != "leef-kv-3" {
+		t.Fatalf("inside a LEEF header: %+v", d)
+	}
+	if d := r.RouteChain(payload, frame.Chain{}); d.Family == nil || d.Family.FamilyID != "bare-kv-3" {
+		t.Fatalf("bare: %+v", d)
+	}
+	relayed := frame.Chain{Envelopes: []frame.Envelope{{Kind: "rfc3164", Hostname: "relay"}}}
+	if d := r.RouteChain(payload, relayed); d.Family == nil || d.Family.FamilyID != "bare-kv-3" {
+		t.Fatalf("a relay's syslog header is still no requirement for a raw family: %+v", d)
+	}
+}

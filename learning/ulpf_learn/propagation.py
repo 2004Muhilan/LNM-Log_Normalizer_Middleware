@@ -24,7 +24,9 @@ from pathlib import Path
 from .plan import SUFFICIENT, Mapping, Part, Plan, Slot
 
 
-def key_of(source_id: str, l1: str, l2: str, l3_anchor_values: list, slot_index: int, token_class: str) -> str:
+def key_of(source_id: str, l1: str, l2: str, l3_anchor_values: list, slot_index, token_class: str) -> str:
+    """slot_index is the position — or, for a DRAFTED self-describing family (json/xml/kv), `name:<field>`: a key that
+    moves when a new key is inserted before it must not inherit its neighbour's answer (laptop branch)."""
     anchors = ",".join(sorted(f"{a['anchor_id']}={v}" for a in l3_anchor_values for v in a.get("values", [])))
     return f"{source_id}|{l1}|{l2}|{anchors}|{slot_index}|{token_class}"
 
@@ -40,7 +42,7 @@ class Store:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self.entries, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    def record(self, plan: Plan, source_id: str, routing: dict, family_id: str, session_dir: str) -> int:
+    def record(self, plan: Plan, source_id: str, routing: dict, family_id: str, session_dir: str, by_name: bool = False) -> int:
         """Store every slot whose mapped parts all rest on sufficient provenance, under its key."""
         n = 0
         for slot in plan.slots:
@@ -49,16 +51,16 @@ class Store:
                 continue
             if not mapped and any(p.proposed_by in ("fixture", "model") for p in slot.parts):
                 continue   # an unmapped slot counts only when the evidence (not a proposal) named it — e.g. Squid's `%[un` carried as a vendor extension
-            k = key_of(source_id, routing["l1_envelope"], routing["l2_structure"], routing.get("l3_anchor_values", []), slot.index, slot.token_class)
+            k = key_of(source_id, routing["l1_envelope"], routing["l2_structure"], routing.get("l3_anchor_values", []), f"name:{slot.parts[0].field}" if by_name else slot.index, slot.token_class)
             self.entries[k] = {"split": slot.split, "parts": [asdict(p) for p in slot.parts], "from": {"family_id": family_id, "session": session_dir}}
             n += 1
         return n
 
-    def apply(self, plan: Plan, source_id: str, routing: dict) -> list[dict]:
+    def apply(self, plan: Plan, source_id: str, routing: dict, by_name: bool = False) -> list[dict]:
         """Rewrite the plan's slots from stored resolutions with the same key. Returns what propagated."""
         hits = []
         for slot in plan.slots:
-            k = key_of(source_id, routing["l1_envelope"], routing["l2_structure"], routing.get("l3_anchor_values", []), slot.index, slot.token_class)
+            k = key_of(source_id, routing["l1_envelope"], routing["l2_structure"], routing.get("l3_anchor_values", []), f"name:{slot.parts[0].field}" if by_name else slot.index, slot.token_class)
             e = self.entries.get(k)
             if e is None:
                 continue
