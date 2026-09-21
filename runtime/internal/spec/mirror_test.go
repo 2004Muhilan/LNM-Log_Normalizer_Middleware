@@ -104,6 +104,8 @@ func TestMirrorMatchesSchema(t *testing.T) {
 		{"op_quoted", reflect.TypeOf(Quoted{})},
 		{"op_optional", reflect.TypeOf(Optional{})},
 		{"op_repeated", reflect.TypeOf(Repeated{})},
+		{"op_json", reflect.TypeOf(JSONOp{})},
+		{"op_xml", reflect.TypeOf(XMLOp{})},
 	}
 	for _, c := range cases {
 		name := c.def

@@ -11,7 +11,7 @@ import (
 // the envelope is an inner one of a relay chain — see UnwrapChain). Header fields are carried verbatim.
 // P7 adds Level (1 = outermost) and the CEF header fields (kind cef).
 type Envelope struct {
-	Kind           string `json:"kind"` // none | rfc3164 | rfc5424 | cef
+	Kind           string `json:"kind"` // none | rfc3164 | rfc5424 | cef | leef
 	Level          int    `json:"level,omitempty"`
 	PayloadOffset  int    `json:"payload_offset"`
 	PayloadLength  int    `json:"payload_length"`
@@ -32,6 +32,8 @@ type Envelope struct {
 	SignatureID   string `json:"signature_id,omitempty"`
 	Name          string `json:"name,omitempty"`
 	CEFSeverity   string `json:"cef_severity,omitempty"`
+	// LEEF header (kind leef): LEEF:Version|Vendor|Product|Version|EventID|[Delimiter|] — EventID is carried in SignatureID
+	LEEFDelimiter string `json:"leef_delimiter,omitempty"`
 }
 
 // Unwrap recognises a syslog envelope at the START of raw and returns it with the payload bounds.
@@ -232,7 +234,10 @@ func unwrap3164(raw []byte) (Envelope, bool) {
 	// TAG: "app[pid]: " or "app: " — optional; a payload that does not start with a tag is left intact
 	if colon := bytes.IndexByte(raw[pos:min(len(raw), pos+64)], ':'); colon > 0 {
 		tag := string(raw[pos : pos+colon])
-		if !bytes.ContainsAny([]byte(tag), " \t") {
+		// "LEEF:1.0|…" / "CEF:0|…" directly after the host is an application header, not a syslog tag (1.4.0): senders of
+		// LEEF or CEF commonly omit the tag, and taking the format name as app_name would hide the header from UnwrapChain
+		appHeader := (tag == "LEEF" || tag == "CEF") && pos+colon+1 < len(raw) && raw[pos+colon+1] >= '0' && raw[pos+colon+1] <= '9'
+		if !appHeader && !bytes.ContainsAny([]byte(tag), " \t") {
 			if lb := bytes.IndexByte([]byte(tag), '['); lb > 0 && tag[len(tag)-1] == ']' {
 				e.AppName, e.ProcID = tag[:lb], tag[lb+1:len(tag)-1]
 			} else {

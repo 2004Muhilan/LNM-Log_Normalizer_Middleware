@@ -18,7 +18,7 @@ import (
 )
 
 // CompilerVersion is folded into parser_hash so that a compiler change changes the hash.
-const CompilerVersion = "ulpf-compile-0.2.0"
+const CompilerVersion = "ulpf-compile-0.2.0" // unchanged by 1.2.0: the json and xml ops are additive, so every existing parser_hash stays what it was
 
 type node interface {
 	// consuming ops implement exec; value ops are attached to cells.
@@ -251,6 +251,10 @@ func (c *compiler) step(raw json.RawMessage, depth int, path string) node {
 			n.keys[k] = c.csvCell(v.Keys[k], depth+1, fmt.Sprintf("%s.keys[%s]", path, k))
 		}
 		return n
+	case "json": // parser-spec 1.2.0
+		return c.jsonOp(raw, depth, path)
+	case "xml": // parser-spec 1.2.0
+		return c.xmlOp(raw, depth, path)
 	case "positional":
 		var v spec.Positional
 		if err := json.Unmarshal(raw, &v); err != nil {

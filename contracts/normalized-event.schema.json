@@ -83,9 +83,10 @@
             "1.0.0",
             "1.1.0",
             "1.2.0",
-            "1.3.0"
+            "1.3.0",
+            "1.4.0"
           ],
-          "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds the optional envelope record; 1.3.0 (P7) adds the relay chain (recursive unwrap), the CEF application envelope, the batch record of a de-batched element, and the udp_datagram framing method; every bump is additive and earlier documents remain valid."
+          "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 (P5) adds the optional envelope record; 1.3.0 (P7) adds the relay chain (recursive unwrap), the CEF application envelope, the batch record of a de-batched element, and the udp_datagram framing method; 1.4.0 adds the LEEF application envelope (kind leef: the header is carried in version, device_vendor, device_product, device_version, signature_id = the LEEF event id, and leef_delimiter for LEEF 2.0; the payload is the attribute list); every bump is additive and earlier documents remain valid."
         },
         "event_id": {
           "type": "string",
@@ -317,7 +318,8 @@
             "none",
             "rfc3164",
             "rfc5424",
-            "cef"
+            "cef",
+            "leef"
           ]
         },
         "payload_offset": {
@@ -401,6 +403,11 @@
         "cef_severity": {
           "type": "string",
           "maxLength": 1024
+        },
+        "leef_delimiter": {
+          "type": "string",
+          "description": "1.4.0, kind leef, LEEF 2.0 only: the attribute delimiter the header declares, as written (a character or 0xHH / xHH).",
+          "maxLength": 8
         }
       }
     }

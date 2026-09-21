@@ -373,13 +373,15 @@ func (r *Router) RouteChain(payload []byte, ch frame.Chain) Decision {
 	if len(kinds) > 0 {
 		l1 = kinds[len(kinds)-1]
 	}
-	hasSyslog, hasCEF := false, false
+	hasSyslog, hasCEF, hasLEEF := false, false, false
 	for _, k := range kinds {
 		switch k {
 		case "rfc3164", "rfc5424":
 			hasSyslog = true
 		case "cef":
 			hasCEF = true
+		case "leef":
+			hasLEEF = true
 		}
 	}
 	// L2
@@ -394,6 +396,10 @@ func (r *Router) RouteChain(payload []byte, ch frame.Chain) Decision {
 		case "cef":
 			if !hasCEF {
 				continue // the family requires a CEF header and none arrived
+			}
+		case "leef":
+			if !hasLEEF {
+				continue // the family requires a LEEF header and none arrived
 			}
 		default:
 			if !hasSyslog {

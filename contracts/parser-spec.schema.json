@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "spec_id", "regex_dialect", "bounds", "root"],
   "properties": {
-    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.0.0 documents remain valid." },
+    "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0"], "description": "1.1.0 (P3 boundary) is additive over 1.0.0; 1.2.0 adds the json and xml ops (structured payloads under the same span-tiling rule). Every bump is additive: earlier documents remain valid and compile to the same parser_hash." },
     "spec_id": { "$ref": "#/$defs/slug" },
     "description": { "type": "string", "maxLength": 2000 },
     "regex_dialect": { "const": "re2" },
@@ -161,7 +161,9 @@
         { "$ref": "#/$defs/op_positional" },
         { "$ref": "#/$defs/op_quoted" },
         { "$ref": "#/$defs/op_optional" },
-        { "$ref": "#/$defs/op_repeated" }
+        { "$ref": "#/$defs/op_repeated" },
+        { "$ref": "#/$defs/op_json" },
+        { "$ref": "#/$defs/op_xml" }
       ]
     },
     "op_literal": {
@@ -287,6 +289,28 @@
       "additionalProperties": false,
       "required": ["op", "step"],
       "properties": { "op": { "const": "optional" }, "step": { "$ref": "#/$defs/step" } }
+    },
+    "op_json": {
+      "type": "object",
+      "description": "1.2.0. One JSON object to end of input. `keys` maps a dotted path from the root object to a cell. A string value's span includes its quotes and its value is the unescaped text (encoding json-string); numbers, true, false and null are their own bytes; an array is one value, verbatim; objects are descended into. All syntax and whitespace are literal spans. A scalar or array at an undeclared path is an opaque span at unknown.<path>, or the parse is rejected. A declared key occurring twice fails.",
+      "additionalProperties": false,
+      "required": ["op", "keys", "unknown_keys"],
+      "properties": {
+        "op": { "const": "json" },
+        "keys": { "type": "object", "minProperties": 1, "maxProperties": 1024, "propertyNames": { "pattern": "^[^\\s]{1,256}$" }, "additionalProperties": { "$ref": "#/$defs/cell" } },
+        "unknown_keys": { "type": "string", "enum": ["opaque", "reject"] }
+      }
+    },
+    "op_xml": {
+      "type": "object",
+      "description": "1.2.0. One XML document to end of input. `paths` maps element names joined by '/' from the root (an attribute is path@name) to a cell. An element's value is its trimmed text, CDATA content verbatim; entities are not decoded; namespaces are part of the name. Markup, attribute names and quotes, comments, declarations and whitespace are literal spans. Undeclared text or attribute values are opaque spans at unknown.<path>, or the parse is rejected. A declared path occurring twice (repeated siblings, mixed content) fails.",
+      "additionalProperties": false,
+      "required": ["op", "paths", "unknown"],
+      "properties": {
+        "op": { "const": "xml" },
+        "paths": { "type": "object", "minProperties": 1, "maxProperties": 1024, "propertyNames": { "pattern": "^[^\\s]{1,256}$" }, "additionalProperties": { "$ref": "#/$defs/cell" } },
+        "unknown": { "type": "string", "enum": ["opaque", "reject"] }
+      }
     },
     "op_repeated": {
       "type": "object",

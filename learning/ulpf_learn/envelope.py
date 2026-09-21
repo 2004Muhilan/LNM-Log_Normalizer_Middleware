@@ -119,7 +119,8 @@ def _u3164(raw: bytes):
     colon = raw.find(b":", pos, min(len(raw), pos + 64))
     if colon > pos:
         tag = raw[pos:colon]
-        if b" " not in tag and b"\t" not in tag:
+        app_header = tag in (b"LEEF", b"CEF") and raw[colon + 1:colon + 2].isdigit()   # twin of the runtime: an application header is not a tag
+        if not app_header and b" " not in tag and b"\t" not in tag:
             app = tag.split(b"[")[0].decode(errors="replace")
             pos = colon + 1
             if raw[pos:pos + 1] == b" ":

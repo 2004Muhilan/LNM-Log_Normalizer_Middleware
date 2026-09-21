@@ -185,7 +185,7 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 		}
 	}
 	lineage := map[string]any{
-		"schema_version":        LineageSchemaVersion,
+		"schema_version":        lineageVersion(ctx),
 		"event_id":              ctx.Record.EventID,
 		"raw_hash":              ctx.Record.RawHash,
 		"segment_id":            ctx.Record.SegmentID,
@@ -378,4 +378,20 @@ func normVersion(ctx Context) int {
 		return ctx.NormalizationVersion
 	}
 	return 1
+}
+
+// lineageVersion: 1.4.0 only for an event that carries what 1.4.0 added (a LEEF envelope); everything else keeps
+// declaring 1.3.0, so no existing output — and no golden vector — changes.
+func lineageVersion(ctx Context) string {
+	if ctx.Envelope != nil && ctx.Envelope.Kind == "leef" {
+		return "1.4.0"
+	}
+	if ctx.Chain != nil {
+		for _, e := range ctx.Chain.Envelopes {
+			if e.Kind == "leef" {
+				return "1.4.0"
+			}
+		}
+	}
+	return LineageSchemaVersion
 }

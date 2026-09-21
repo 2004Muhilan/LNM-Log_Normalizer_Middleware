@@ -127,6 +127,20 @@ type KV struct {
 	AllowBareKeys     bool               `json:"allow_bare_keys,omitempty"`
 }
 
+// JSONOp (1.2.0): one JSON object to the end of input; keys are dotted paths from the root.
+type JSONOp struct {
+	Op          string             `json:"op"`
+	Keys        map[string]CsvCell `json:"keys"`
+	UnknownKeys string             `json:"unknown_keys"`
+}
+
+// XMLOp (1.2.0): one XML document to the end of input; paths are element names joined by "/", attributes path@name.
+type XMLOp struct {
+	Op      string             `json:"op"`
+	Paths   map[string]CsvCell `json:"paths"`
+	Unknown string             `json:"unknown"`
+}
+
 // Slot is a token cell, a token-with-parse, or a direct step.
 type Slot struct {
 	Cell  *Cell
@@ -216,7 +230,7 @@ func Parse(b []byte) (*Spec, error) {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return nil, err
 	}
-	if s.SchemaVersion != "1.0.0" && s.SchemaVersion != "1.1.0" {
+	if s.SchemaVersion != "1.0.0" && s.SchemaVersion != "1.1.0" && s.SchemaVersion != "1.2.0" {
 		return nil, fmt.Errorf("unsupported schema_version %q", s.SchemaVersion)
 	}
 	return &s, nil

@@ -3,6 +3,7 @@ package frame
 import (
 	"bytes"
 	"strconv"
+	"strings"
 )
 
 // MaxSyslogDepth is how many nested syslog envelopes UnwrapChain removes (plan P7: "recursive envelope
@@ -65,6 +66,13 @@ func UnwrapChain(raw []byte) Chain {
 		c.Envelopes = append(c.Envelopes, e)
 		c.PayloadOffset, c.PayloadLength = e.PayloadOffset, e.PayloadLength
 	}
+	if e, ok := UnwrapLEEF(raw[c.PayloadOffset : c.PayloadOffset+c.PayloadLength]); ok {
+		e.PayloadOffset += c.PayloadOffset
+		e.Level = len(c.Envelopes) + 1
+		c.Envelopes = append(c.Envelopes, e)
+		c.PayloadOffset, c.PayloadLength = e.PayloadOffset, e.PayloadLength
+		return c
+	}
 	if e, ok := UnwrapCEF(raw[c.PayloadOffset : c.PayloadOffset+c.PayloadLength]); ok {
 		e.PayloadOffset += c.PayloadOffset
 		e.Level = len(c.Envelopes) + 1
@@ -123,4 +131,67 @@ func UnwrapCEF(raw []byte) (Envelope, bool) {
 	e := Envelope{Kind: "cef", Version: &ver, DeviceVendor: fields[0], DeviceProduct: fields[1], DeviceVersion: fields[2],
 		SignatureID: fields[3], Name: fields[4], CEFSeverity: fields[5], PayloadOffset: pos, PayloadLength: len(raw) - pos}
 	return e, true
+}
+
+// UnwrapLEEF recognises an IBM QRadar LEEF header at the START of raw (normalized-event 1.4.0):
+//
+//	LEEF:1.0|Vendor|Product|Version|EventID|attr=value<TAB>attr=value…
+//	LEEF:2.0|Vendor|Product|Version|EventID|Delimiter|attr=value<Delimiter>attr=value…
+//
+// The payload is the attribute list (parsed by a pack's kv family whose pair separator is the delimiter: TAB for
+// 1.0, the declared character for 2.0). The header fields are not escaped in LEEF. In 2.0 the delimiter field is a
+// single character or a hex code (0x09, x7c); it is a delimiter field only when the sixth field is one of those forms
+// and is followed by a pipe — otherwise the sixth field is already the payload (a 2.0 sender may omit it). A header must
+// be followed by a non-empty payload; "LEEF:" anywhere but at offset 0 is payload text, exactly like CEF.
+func UnwrapLEEF(raw []byte) (Envelope, bool) {
+	if !bytes.HasPrefix(raw, []byte("LEEF:")) {
+		return Envelope{}, false
+	}
+	pos := 5
+	vs := pos
+	for pos < len(raw) && (raw[pos] >= '0' && raw[pos] <= '9' || raw[pos] == '.') {
+		pos++
+	}
+	if pos == vs || pos >= len(raw) || raw[pos] != '|' {
+		return Envelope{}, false
+	}
+	verText := string(raw[vs:pos])
+	major, err := strconv.Atoi(strings.SplitN(verText, ".", 2)[0])
+	if err != nil {
+		return Envelope{}, false
+	}
+	pos++
+	var fields [4]string
+	for i := range fields {
+		e := bytes.IndexByte(raw[pos:], '|')
+		if e < 0 {
+			return Envelope{}, false
+		}
+		fields[i] = string(raw[pos : pos+e])
+		pos += e + 1
+	}
+	delim := ""
+	if major >= 2 {
+		if e := bytes.IndexByte(raw[pos:], '|'); e > 0 && e <= 4 {
+			d := string(raw[pos : pos+e])
+			if len(d) == 1 || isHexCode(d) {
+				delim = d
+				pos += e + 1
+			}
+		}
+	}
+	if pos >= len(raw) {
+		return Envelope{}, false // header with no attributes is not an envelope
+	}
+	return Envelope{Kind: "leef", Version: &major, DeviceVendor: fields[0], DeviceProduct: fields[1], DeviceVersion: fields[2],
+		SignatureID: fields[3], LEEFDelimiter: delim, PayloadOffset: pos, PayloadLength: len(raw) - pos}, true
+}
+
+func isHexCode(d string) bool {
+	h := strings.TrimPrefix(strings.TrimPrefix(d, "0x"), "x")
+	if h == d || len(h) != 2 {
+		return false
+	}
+	_, err := strconv.ParseUint(h, 16, 8)
+	return err == nil
 }
