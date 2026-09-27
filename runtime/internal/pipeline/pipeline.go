@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -145,6 +146,7 @@ type Stats struct {
 	Egress        []egress.Stats `json:"egress,omitempty"` // P8: per sink — delivered, retries, stalls, undelivered bytes
 	Commits       int64          `json:"evidence_commits"` // group commit: batches made durable (one write + two fsyncs each)
 	StoreID       string         `json:"store_id"`
+	Recovered     int            `json:"recovered_after_crash,omitempty"` // frames committed by a previous run and interpreted at this start
 	// the evidence archive: DISABLED (development override) or the local buffer's accounting
 	EvidenceArchive string       `json:"evidence_archive,omitempty"`
 	EvidenceBuffer  *BufferStats `json:"evidence_buffer,omitempty"`
@@ -301,6 +303,16 @@ func (p *Pipeline) Reload(packs []*pack.Pack, reason string) error {
 	return nil
 }
 
+// Refused records a pack the runtime REFUSED to load on a hot reload (parser transparency log, signature, contract):
+// a `pack_refused` leaf in the evidence log — the attempt is provable from the log alone, like an activation.
+func (p *Pipeline) Refused(what, reason string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.commitLocked()
+	p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "pack_refused", SourceID: p.source, Channel: "control:reload", Peer: "pack:" + what, DetectedAt: p.now().UnixMilli(),
+		Detail: "a pack was pushed to this runtime and REFUSED; the running packs stay loaded: " + reason}, "pack:"+what)
+}
+
 // retention keeps the segmented spool bounded (laptop branch). Every tick: closed segments every destination has passed
 // are removed (the slowest destination governs retention); a destination whose lag passes the warning mark gets one
 // `egress_lagging` record (re-armed below half of it); when the retained bytes pass the cap, every destination still
@@ -447,6 +459,53 @@ func (p *Pipeline) bufferLoop(store *evidence.Store, o Options, st *Stats, sourc
 	}
 }
 
+// recover interprets the evidence records committed after the spool's last event (see RunFramesWith).
+func (p *Pipeline) recover(store *evidence.Store, spool *egress.Spool, interpret func(frame.Frame, evidence.Record, string) error) (int, error) {
+	last := egress.LastLine(spool.Dir)
+	if last == nil {
+		return 0, nil
+	}
+	var ev struct {
+		L struct {
+			SegmentID string `json:"segment_id"`
+			Offset    int64  `json:"offset"`
+			StoreID   string `json:"store_id"`
+		} `json:"_lineage"`
+	}
+	if json.Unmarshal(last, &ev) != nil || ev.L.SegmentID == "" || (ev.L.StoreID != "" && ev.L.StoreID != store.ID()) {
+		return 0, nil
+	}
+	dir := p.o.EvidenceDir
+	n := 0
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, seg := range evidence.Segments(dir) {
+		if seg < ev.L.SegmentID {
+			continue
+		}
+		recs, err := evidence.ReadIndex(dir, seg)
+		if err != nil {
+			continue // the segment this run just opened: no index lines yet
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, seg+evidence.SuffixRaw))
+		if err != nil {
+			return n, err
+		}
+		for _, r := range recs {
+			if (seg == ev.L.SegmentID && r.Offset <= ev.L.Offset) || r.Framing.Method == evidence.MethodGapRecord || r.Offset+int64(r.Length) > int64(len(raw)) {
+				continue
+			}
+			r.StoreID = store.ID()
+			b := raw[r.Offset : r.Offset+int64(r.Length)]
+			if err := interpret(frame.Frame{Raw: b, Framing: r.Framing, Peer: r.Peer, Channel: r.Channel}, r, r.Channel); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (p *Pipeline) appendGap(r gap.Record, peer string) {
 	b := gap.Canonical(r)
 	fr := frame.Framing{Method: evidence.MethodGapRecord, RawPrefix: []byte{}, RawSuffix: []byte{}, FragmentCount: 1, OriginalMessageLength: len(b), TruncationStatus: "none", FramingConfidence: "high"}
@@ -554,12 +613,13 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 			timeout = 5 * time.Second
 		}
 		for _, e := range o.Egress {
-			sink, err := egress.Open(e.URL, timeout)
+			url, batch := egress.SplitBatch(e.URL) // ?batch=N: events per batch for this destination (default 100)
+			sink, err := egress.Open(url, timeout)
 			if err != nil {
 				return st, err
 			}
 			name := sink.Name()
-			f := &egress.Forwarder{Spool: o.SpoolPath, Seg: spool, CursorPath: e.CursorPath, Sink: sink, StallAfter: o.EgressStallAfter,
+			f := &egress.Forwarder{Spool: o.SpoolPath, Seg: spool, CursorPath: e.CursorPath, Sink: sink, StallAfter: o.EgressStallAfter, BatchLines: batch,
 				OnSkip: func(s egress.Skip) {
 					p.mu.Lock()
 					defer p.mu.Unlock()
@@ -813,6 +873,21 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 			st.MLRecords++
 		}
 		return nil
+	}
+	// crash recovery (scale-out, 2026-09-27): a batch is durable BEFORE it is interpreted (invariant 3), so a crash can
+	// fall between the two — committed frames, never parsed, never delivered. With a resumed spool, every evidence record
+	// committed after the last event the spool holds is interpreted now, before anything new is accepted, with its
+	// original event id (destinations stay exactly-once). One `interpretation_recovered` record says how many.
+	if spool != nil && !o.SpoolFresh {
+		if n, err := p.recover(store, spool, interpret); err != nil {
+			return st, err
+		} else if n > 0 {
+			st.Recovered = n
+			p.mu.Lock()
+			p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "interpretation_recovered", SourceID: sourceID, Channel: "control:restart", Peer: "restart", DetectedAt: now().UnixMilli(),
+				Missing: int64(n), Detail: fmt.Sprintf("%d frame(s) were committed to the evidence log by the previous run and never interpreted (it stopped between the commit and the interpretation): interpreted now, before new intake, with their original event ids", n)}, "restart")
+			p.mu.Unlock()
+		}
 	}
 	// the local evidence buffer: shipped segments deleted when every condition holds; the cap stops intake
 	stopBuffer := make(chan struct{})

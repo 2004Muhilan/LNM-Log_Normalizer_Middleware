@@ -19,6 +19,7 @@ import (
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/keys"
 	"ulpf/runtime/internal/spec"
+	"ulpf/runtime/internal/tlog"
 )
 
 type MappingField struct {
@@ -129,6 +130,7 @@ type Pack struct {
 		SignatureFile string `json:"signature_file"`
 	} `json:"signing"`
 	SignatureVerified bool           `json:"-"`
+	TLog              tlog.Verified  `json:"-"` // where the pack sits in the parser transparency log (index, checkpoint, witnesses)
 	FileSHA256        string         `json:"-"` // sha256 of the exact pack.json bytes the signature covers: what a `pack_activated` evidence record names
 	Dir               string         `json:"-"`
 	Location          *time.Location `json:"-"`
@@ -145,6 +147,9 @@ type LoadOptions struct {
 	// refuses the pack before anything in it is compiled (fail closed).
 	AllowUnsigned bool
 	TrustDir      string
+	// TLogMinWitnesses: trusted witness cosignatures the pack's log checkpoint must carry (0: the log's signature
+	// and the inclusion proof are required, cosignatures are verified and reported when present).
+	TLogMinWitnesses int
 }
 
 // Load validates pack.json against the contract, compiles every family spec, and verifies hashes.
@@ -178,6 +183,34 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 			return nil, fmt.Errorf("pack rejected: %w (fail closed)", err)
 		}
 	}
+	// 1b. Parser Transparency Log (2026-09-27): the pack must be IN the log — a valid c2sp.org/tlog-proof beside it
+	//     binds the exact bytes of pack.json (their sha256, id and version) to a checkpoint signed by a log the trust store
+	//     names, with at least TLogMinWitnesses witness cosignatures. No option turns this off: startup, hot reload and
+	//     auto-heal all load through here, and --allow-unsigned does not skip it.
+	if opts.TrustDir == "" {
+		return nil, errors.New("pack rejected: no trust store, so no transparency-log key to verify the pack's inclusion against (fail closed)")
+	}
+	pol, err := tlog.LoadPolicy(opts.TrustDir, opts.TLogMinWitnesses)
+	if err != nil {
+		return nil, fmt.Errorf("pack rejected: %w (fail closed)", err)
+	}
+	if len(pol.Logs) == 0 {
+		return nil, errors.New("pack rejected: the trust store names no transparency log (*.vkey) (fail closed)")
+	}
+	var head struct {
+		ID      string `json:"pack_id"`
+		Version string `json:"pack_version"`
+	}
+	_ = json.Unmarshal(raw, &head)
+	sum0 := sha256.Sum256(raw)
+	proofB, err := os.ReadFile(filepath.Join(dir, tlog.ProofFile))
+	if err != nil {
+		return nil, fmt.Errorf("pack rejected: %s v%s is not in the parser transparency log — no inclusion proof (%s) (fail closed)", head.ID, head.Version, tlog.ProofFile)
+	}
+	tv, err := tlog.VerifyProof(proofB, "sha256:"+hex.EncodeToString(sum0[:]), head.ID, head.Version, pol)
+	if err != nil {
+		return nil, fmt.Errorf("pack rejected: transparency log: %w (fail closed)", err)
+	}
 	// 2. Contract, over bytes now known to be the authority's.
 	if _, err := loader.Load(contracts.ParserPack, packPath); err != nil {
 		return nil, fmt.Errorf("pack rejected: %w", err)
@@ -194,6 +227,7 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 		p.SignatureVerified = true
 	}
 	p.Dir = dir
+	p.TLog = tv
 	sum := sha256.Sum256(raw)
 	p.FileSHA256 = "sha256:" + hex.EncodeToString(sum[:])
 	p.CategoryUIDs = map[int]int64{}

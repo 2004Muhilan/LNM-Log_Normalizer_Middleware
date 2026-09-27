@@ -18,7 +18,7 @@ SUPPORTED_VERSIONS = {kind: {"1.0.0", "1.1.0"} for kind in KINDS}
 SUPPORTED_VERSIONS["ml-feature"] = {"1.0.0"}   # P6 boundary: the ML feature tuple (requirement h), the sixth contract
 SUPPORTED_VERSIONS["parser-pack"] = {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}  # P5: proposal provenance, live signing; P6: envelope-sourced mappings
 SUPPORTED_VERSIONS["parser-spec"] = {"1.0.0", "1.1.0", "1.2.0"}   # 1.2.0: the json and xml ops
-SUPPORTED_VERSIONS["normalized-event"] = {"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"}   # P5: _lineage.envelope; P7: relay_chain, batch, cef, udp_datagram; 1.4.0 leef; 1.5.0 store_id (evidence archive)
+SUPPORTED_VERSIONS["normalized-event"] = {"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"}   # P5: _lineage.envelope; P7: relay_chain, batch, cef, udp_datagram; 1.4.0 leef; 1.5.0 store_id (evidence archive)
 FORBIDDEN_KEYS = {"confidence", "probability", "score", "likelihood"}
 CONSUMING_OPS = {"literal", "regex", "csv", "kv", "positional", "quoted", "optional", "repeated", "json", "xml"}
 

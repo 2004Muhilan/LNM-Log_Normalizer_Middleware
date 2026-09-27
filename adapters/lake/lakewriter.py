@@ -7,8 +7,18 @@ class, partitioned by day, following Amazon Security Lake's layout convention:
 
 We claim this FOLLOWS Security Lake's layout conventions; it has not been tested against Security Lake. Local disk only.
 
-    python adapters/lake/lakewriter.py --lake DIR [--listen 127.0.0.1:8792] [--rotate-bytes 8MiB] [--rotate-seconds 30]
-    ulpf-runtime run ... --spool SPOOL --forward http://127.0.0.1:8792/ingest
+    python adapters/lake/lakewriter.py --lake DIR [--listen 127.0.0.1:8792] [--rotate-bytes 128MiB] [--rotate-seconds 300] [--writer-id ID]
+    ulpf-runtime run ... --spool SPOOL --forward "http://127.0.0.1:8792/ingest?batch=1000"
+
+Speed (profiled 2026-09-27, scripts/bench/lake_profile.py, docs/throughput.md): the time went to (1) a FIXED COST PER
+FILE of ~0.45 s — the full fixed schema from the pinned tables (~3,600 elements) is set up and written for every file —
+times many small files (rotation every few seconds, per class, per event day); (2) writing the wide rows; (3) an fsync
+pair per 100-event batch. Hence: production rotates on SIZE (128 MiB staged, or 5 minutes at most) and the demo keeps
+its short rotation on the command line; DuckDB is told that row order inside a file carries no meaning
+(preserve_insertion_order=false: 1.6x on the wide write — exactly-once rests on the spool marks and the file names,
+never on row order); ULPF sends the lake 1,000-event batches (?batch=1000). The full fixed schema is kept. Scale-out:
+one writer per ULPF process (--writer-id), all writing into the same lake root — their files are named by their own
+spool ids, their staging and state are their own.
 
 Why each event lands exactly once, through outages and crashes of either side:
   * ULPF sends every batch with its place in its spool (X-ULPF-Spool-Id / -Start / -End). The writer keeps a DURABLE
@@ -59,11 +69,12 @@ def fsync_dir(d: Path):
 
 
 class Lake:
-    def __init__(self, lake: Path, pinned: Path, rotate_bytes: int, rotate_seconds: float, region: str, account: str):
+    def __init__(self, lake: Path, pinned: Path, rotate_bytes: int, rotate_seconds: float, region: str, account: str, writer_id: str = "", keep_order: bool = False):
         import duckdb  # noqa: F401  (fail at start, not at the first rotation, when the wheel is missing)
         self.lake, self.pinned = Path(lake), str(pinned)
         self.rotate_bytes, self.rotate_seconds, self.region, self.account = rotate_bytes, rotate_seconds, region, account
-        self.wdir = self.lake / "_writer"
+        self.keep_order = keep_order
+        self.wdir = self.lake / ("_writer" + (f"-{writer_id}" if writer_id else ""))   # one staging area and state per writer
         self.wdir.mkdir(parents=True, exist_ok=True)
         self.staging, self.state_path = self.wdir / "staging.jsonl", self.wdir / "state.json"
         self.lock = threading.Lock()
@@ -143,6 +154,8 @@ class Lake:
             written = 0
             try:
                 con = duckdb.connect()
+                if not self.keep_order:
+                    con.execute("SET preserve_insertion_order=false")   # row order inside a file carries no meaning here
                 for (spool, cu, day), rows in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]), kv[0][2])):
                     name = f"ulpf_{classes[cu]['name']}" if cu in classes else f"ulpf_class_{cu}"
                     d = self.lake / "ext" / name / f"region={self.region}" / f"accountId={self.account}" / f"eventDay={day}"
@@ -212,10 +225,14 @@ def handler(lake: Lake):
 def main() -> int:
     ap = argparse.ArgumentParser(description="ULPF lake writer: OCSF Parquet in Security Lake's layout convention")
     ap.add_argument("--lake", required=True); ap.add_argument("--listen", default="127.0.0.1:8792")
-    ap.add_argument("--pinned", default=str(ROOT / "ocsf" / "pinned")); ap.add_argument("--rotate-bytes", default="8MiB"); ap.add_argument("--rotate-seconds", type=float, default=30)
+    ap.add_argument("--pinned", default=str(ROOT / "ocsf" / "pinned"))
+    ap.add_argument("--rotate-bytes", default="128MiB", help="rotate when this much is staged (production: few, large files — every file pays a fixed ~0.45 s for the full schema)")
+    ap.add_argument("--rotate-seconds", type=float, default=300, help="rotate at the latest this long after the oldest staged row (the demo passes 10)")
+    ap.add_argument("--writer-id", default="", help="scale-out: one writer per ULPF process into the same lake root; its staging and state live in _writer-<id>")
+    ap.add_argument("--keep-insertion-order", action="store_true", help="measurement only: the writer as it was before 2026-09-27 (slower wide writes)")
     ap.add_argument("--region", default="local"); ap.add_argument("--account-id", default="000000000000"); ap.add_argument("--status")
     a = ap.parse_args()
-    lake = Lake(Path(a.lake), Path(a.pinned), parse_bytes(a.rotate_bytes), a.rotate_seconds, a.region, a.account_id)
+    lake = Lake(Path(a.lake), Path(a.pinned), parse_bytes(a.rotate_bytes), a.rotate_seconds, a.region, a.account_id, a.writer_id, a.keep_insertion_order)
     stop = threading.Event()
 
     def rotator():

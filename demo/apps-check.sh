@@ -73,7 +73,21 @@ if [ "${ULPF_SIEM:-opensearch}" != "fake" ]; then
   for _ in $(seq 1 40); do T=$(curl -s "$S/api/trace?id=$F"); [ "$T" != "null" ] && break; sleep 1; done
   echo "$T" | jq_ "'\n'.join(('  ✓ ' if s['ok'] else '  ✗ ') + s['step'] + ': ' + s['detail'][:150] for s in d['steps'])"
   [ "$(echo "$T" | jq_ "d['ok']")" = "True" ] || fail "the round trip SIEM finding -> evidence did not complete"
+  [ "$(echo "$T" | jq_ "next((s['ok'] for s in d['steps'] if s['step'] == 'Proof of Derivation'), False)")" = "True" ] || fail "Proof of Derivation did not verify"
+  # the BSA 63(4) certificate: a DRAFT, Part A pre-filled, Part B blank, never presented as complete
+  CERT=$(curl -s -m 120 "$S/certificate?id=$F")
+  for want in "NOT COMPLETE" "Part B" "left blank" "Not legal advice" "SHA-256" "$(echo "$T" | jq_ "next(s['detail'] for s in d['steps'] if s['step'] == 'SIEM document')" | grep -o 'sha256:[0-9a-f]*' | head -1)"; do
+    echo "$CERT" | grep -q -- "$want" || fail "the certificate lacks: $want"
+  done
+  echo "certificate: draft for $F — Part A pre-filled, Part B blank, marked NOT COMPLETE and not legal advice"
 fi
+# the parser transparency log: an UNLOGGED pack pushed to one process is refused, and the refusal is in its evidence log
+PU=$(curl -s -m 30 -X POST $S/api/push-unlogged -d '{"process":1}')
+[ "$(echo "$PU" | jq_ "d['refused']")" = "True" ] || fail "an unlogged pack was not refused: $PU"
+for _ in $(seq 1 40); do [ "$(curl -s $S/api/tlog | jq_ "len(d['refusals'])")" -ge 1 ] && break; sleep 0.5; done
+[ "$(curl -s $S/api/tlog | jq_ "len(d['refusals'])")" -ge 1 ] || fail "the refusal is not in the evidence log (pack_refused)"
+echo "transparency log: $(echo "$PU" | jq_ "d['pack']") pushed to process 1 — REFUSED, recorded in its evidence log; history: $(curl -s $S/api/tlog | jq_ "', '.join(sorted({e['ProducedBy'] for e in d['entries']}))")"
+[ "$(curl -s $S/api/tlog | jq_ "any(e['ProducedBy'] == 'auto-healed' for e in d['entries']) and any(e['ProducedBy'] == 'onboarded' for e in d['entries'])")" = "True" ] || fail "the log must hold this run's onboarded and auto-healed packs"
 if [ "${ULPF_SIEM:-opensearch}" != "fake" ] && [ "$(st "d['runtime']['relay_available']")" = "True" ]; then
   # unified visibility (requirement f): every source in one SIEM, one query across devices
   agg() { curl -s "$OS/ulpf-ocsf-*/_search" -H 'Content-Type: application/json' -d "{\"size\":0,\"query\":$1,\"aggs\":{\"v\":{\"terms\":{\"field\":\"metadata.product.vendor_name\",\"size\":10}}}}" | jq_ "' | '.join(sorted(b['key'] for b in d['aggregations']['v']['buckets']))"; }
@@ -102,14 +116,17 @@ fi
 # the evidence archive: ULPF holds only a short local buffer. Shipped segments leave the local directory after the grace
 # period; an event whose local copy is gone is proven from the ARCHIVED copy, through the same lookup path "Prove it" uses
 until_true 150 "d['archive'].get('deleted_segments', 0) >= 3" "shipped segments deleted from the local buffer (grace ${ULPF_EVIDENCE_GRACE:-60s})"
-AR=$STATE/app/evidence-archive; EVD=$STATE/app/ev
+AR=$STATE/app/evidence-archive
+# the process whose evidence store has shipped and deleted the most (with N processes, traffic may miss one of them)
+SFX=$(st "(lambda p: '' if p['process'] == 1 else '-' + str(p['process']))(max(d['archive']['processes'], key=lambda x: x['deleted_segments']))")
+EVD=$STATE/app/ev$SFX; CMT=$STATE/app/commit$SFX
 echo "evidence archive: $(st "(lambda a: f\"{a['shipped_segments']} segments shipped ({a['archived_bytes']} bytes), {a['pending_segments']} pending, {a['deleted_segments']} deleted locally; local buffer {a['local_bytes']} bytes in {a['local_segments']} segments; committer running: {a['committer']}\")(d['archive'])")"
 [ "$(st "d['archive']['committer']")" = "True" ] || fail "the committer is not running"
 OLD=$(head -1 "$(ls "$EVD"/catalog/seg_*.ids | head -1)")
 SEG=$(basename "$(grep -l "^$OLD$" "$EVD"/catalog/seg_*.ids | head -1)" .ids)
 [ -f "$EVD/$SEG.raw" ] && fail "$SEG is in the catalogue of deleted segments but still local"
 rm -rf "$STATE/app/archive-proof"
-"$RT" export --evidence "$EVD" --commit "$STATE/app/commit" --evidence-archive "$AR" --event-id "$OLD" --out "$STATE/app/archive-proof" 2> "$STATE/app/archive-proof.err" || { cat "$STATE/app/archive-proof.err"; fail "export of $OLD (deleted locally) from the archive"; }
+"$RT" export --evidence "$EVD" --commit "$CMT" --evidence-archive "$AR" --event-id "$OLD" --out "$STATE/app/archive-proof" 2> "$STATE/app/archive-proof.err" || { cat "$STATE/app/archive-proof.err"; fail "export of $OLD (deleted locally) from the archive"; }
 grep -q "EVIDENCE ARCHIVE" "$STATE/app/archive-proof.err" || fail "the export of $OLD did not read the archive"
 "$VF" bundle --bundle "$STATE/app/archive-proof" --trust keys/trust | grep -q "VERIFY: OK" || fail "the bundle of $OLD, read from the archive, does not verify"
 echo "archive proof: $OLD ($SEG, deleted locally) exported from the archive, its Merkle proof verified with the public key"
@@ -117,8 +134,8 @@ if [ "${ULPF_SIEM:-opensearch}" != "fake" ]; then
   # "Prove it" on the System page, for the oldest SIEM document whose segment was deleted locally
   curl -s -m 5 $OS/ulpf-ocsf-*/_refresh > /dev/null
   PID=""
-  for id in $(curl -s "$OS/ulpf-ocsf-*/_search" -H 'Content-Type: application/json' -d '{"size":200,"sort":[{"_lineage.ingest_time":"asc"}],"_source":["_lineage.event_id"]}' | jq_ "' '.join(h['_id'] for h in d['hits']['hits'])"); do
-    grep -qx "$id" "$EVD"/catalog/seg_*.ids 2>/dev/null && { PID=$id; break; }
+  for id in $(curl -s "$OS/ulpf-ocsf-*/_search" -H 'Content-Type: application/json' -d '{"size":400,"sort":[{"_lineage.ingest_time":"asc"}],"_source":["_lineage.event_id"]}' | jq_ "' '.join(h['_id'] for h in d['hits']['hits'])"); do
+    grep -qx "$id" "$STATE"/app/ev*/catalog/seg_*.ids 2>/dev/null && { PID=$id; break; }
   done
   [ -n "$PID" ] || fail "no SIEM document whose segment was deleted locally"
   curl -s -X POST $S/api/prove -d "{\"event_id\":\"$PID\"}" > /dev/null
@@ -132,27 +149,53 @@ gset '{"running":false}'; sleep 8
 USABLE=$(st "d['counts']['usable']")
 curl -s -m 5 $OS/ulpf-ocsf-*/_refresh > /dev/null
 DOCS=$(curl -s "$OS/ulpf-ocsf-*/_count" | jq_ "d['count']")
-curl -s -m 30 http://127.0.0.1:8792/flush > /dev/null
+for port in $(st "' '.join(str(p['lake_port']) for p in d['processes'])"); do curl -s -m 60 "http://127.0.0.1:$port/flush" > /dev/null; done   # every process's lake writer
 LAKE=$(python -c "import duckdb,glob; fs=glob.glob('$STATE/app/lake/ext/*/*/*/*/*.parquet'); print(duckdb.connect().execute(f'SELECT count(*), count(DISTINCT event_id) FROM read_parquet({fs!r})').fetchone())")
 REJ=$(st "sum(e['rejected'] for e in d['egress'])")
 echo "accounting: ULPF parsed $USABLE events; SIEM holds $DOCS documents; lake (rows, distinct event ids) $LAKE; rejected $REJ"
 [ "$DOCS" = "$USABLE" ] || fail "the SIEM holds $DOCS documents for $USABLE parsed events (lost, or stored twice)"
 [ "$LAKE" = "($USABLE, $USABLE)" ] || fail "the lake holds $LAKE for $USABLE parsed events"
 [ "$REJ" = "0" ] || fail "$REJ event(s) rejected by a destination"
+# scale-out: every connection (peer address:port) was handled by exactly one process — read off every store's evidence,
+# local and archived
+AFF=$(python3 - "$STATE/app" <<'PY'
+import glob, json, os, sys
+app = sys.argv[1]; seen = {}
+for ev in sorted(glob.glob(f"{app}/ev") + glob.glob(f"{app}/ev-*")):
+    proc = 1 if ev.endswith("/ev") else int(ev.rsplit("-", 1)[1])
+    sid = json.load(open(f"{ev}/store.json"))["store_id"]
+    idx = {os.path.basename(p): p for p in glob.glob(f"{app}/evidence-archive/{sid}/segments/seg_*.idx.jsonl")}
+    idx.update({os.path.basename(p): p for p in glob.glob(f"{ev}/seg_*.idx.jsonl")})
+    for p in idx.values():
+        for l in open(p, encoding="utf-8"):
+            r = json.loads(l)
+            if r.get("framing", {}).get("method") != "gap_record" and r.get("peer"):
+                seen.setdefault(r["peer"], set()).add(proc)
+split = {k: sorted(v) for k, v in seen.items() if len(v) > 1}
+procs = sorted({p for v in seen.values() for p in v})
+print(f"{len(seen)} connections over processes {procs}; split across processes: {split or 'none'}")
+sys.exit(1 if split else 0)
+PY
+) || fail "a connection was handled by more than one process: $AFF"
+echo "affinity: $AFF"
 # local evidence disk, before and after shipping: without the archive every segment would still be local
 python3 - "$STATE/app" <<'PY'
 import glob, json, os, sys
-app = sys.argv[1]; ev = f"{app}/ev"
-sid = json.load(open(f"{ev}/store.json"))["store_id"]
+app = sys.argv[1]
 size = lambda ps: sum(os.path.getsize(p) for p in ps if os.path.exists(p))
-local = size([p for p in glob.glob(f"{ev}/seg_*") if p.endswith((".raw", ".idx.jsonl", ".seal.json"))])
-arch = {os.path.basename(p): os.path.getsize(p) for p in glob.glob(f"{app}/evidence-archive/{sid}/segments/seg_*") if not p.endswith(".part")}
-local_names = {os.path.basename(p) for p in glob.glob(f"{ev}/seg_*")}
-written = local + sum(v for k, v in arch.items() if k not in local_names)
-kept = size(glob.glob(f"{ev}/catalog/*")) + size([f"{ev}/deleted.jsonl", f"{ev}/store.json"])
-print(f"local evidence disk: {written} bytes written in {len({n.split('.')[0] for n in local_names | set(arch)})} segments — without shipping all of it would be local; "
-      f"after shipping {local} bytes are local ({local / max(written, 1):.0%}) in {len({n.split('.')[0] for n in local_names})} segments, "
-      f"plus {kept} bytes of catalogue and deletion log")
+written = local = kept = segs_all = segs_local = 0
+for ev in sorted(glob.glob(f"{app}/ev") + glob.glob(f"{app}/ev-*")):   # every process's evidence store
+    if not os.path.exists(f"{ev}/store.json"):
+        continue
+    sid = json.load(open(f"{ev}/store.json"))["store_id"]
+    loc = size([p for p in glob.glob(f"{ev}/seg_*") if p.endswith((".raw", ".idx.jsonl", ".seal.json"))])
+    arch = {os.path.basename(p): os.path.getsize(p) for p in glob.glob(f"{app}/evidence-archive/{sid}/segments/seg_*") if not p.endswith(".part")}
+    names = {os.path.basename(p) for p in glob.glob(f"{ev}/seg_*")}
+    written += loc + sum(v for k, v in arch.items() if k not in names); local += loc
+    kept += size(glob.glob(f"{ev}/catalog/*")) + size([f"{ev}/deleted.jsonl", f"{ev}/store.json"])
+    segs_all += len({n.split(".")[0] for n in names | set(arch)}); segs_local += len({n.split(".")[0] for n in names})
+print(f"local evidence disk (every process): {written} bytes written in {segs_all} segments — without shipping all of it would be local; "
+      f"after shipping {local} bytes are local ({local / max(written, 1):.0%}) in {segs_local} segments, plus {kept} bytes of catalogue and deletion log")
 PY
 [ "${KEEP:-0}" = "1" ] || bash demo/start-demo.sh stop > /dev/null
 echo "apps-check: PASS ($ULPF_DEMO_PROVIDER, SIEM ${ULPF_SIEM:-opensearch})"

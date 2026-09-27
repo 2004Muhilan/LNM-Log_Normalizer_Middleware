@@ -216,6 +216,11 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 			"framing_confidence":      ctx.Record.Framing.FramingConfidence,
 		},
 	}
+	if ctx.Pack.FileSHA256 != "" {
+		// 1.6.0 (Proof of Derivation): the exact pack bytes that produced this event — its entry in the parser
+		// transparency log; parser_id + parser_version alone may name more than one logged pack
+		lineage["parser_sha256"] = ctx.Pack.FileSHA256
+	}
 	if ctx.Record.StoreID != "" {
 		// 1.5.0 (evidence archive): segment ids are unique only within a store; the store id makes segment_id +
 		// offset + raw_hash an address in the archive
@@ -389,6 +394,9 @@ func normVersion(ctx Context) int {
 // archive; 1.5.0 includes 1.4.0's LEEF envelope); 1.4.0 for one that carries a LEEF envelope and no store id; else
 // 1.3.0.
 func lineageVersion(ctx Context) string {
+	if ctx.Pack.FileSHA256 != "" {
+		return "1.6.0" // names the exact pack (parser_sha256); includes 1.5.0's store_id and 1.4.0's LEEF envelope
+	}
 	if ctx.Record.StoreID != "" {
 		return "1.5.0"
 	}

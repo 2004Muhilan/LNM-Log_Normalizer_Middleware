@@ -1,0 +1,114 @@
+{
+ "rows_in": 152914,
+ "jsonl_bytes": 299076081,
+ "configs": {
+  "before": {
+   "batch": 100,
+   "writer_args": [
+    "--rotate-bytes",
+    "8MiB",
+    "--rotate-seconds",
+    "30",
+    "--keep-insertion-order"
+   ]
+  },
+  "after": {
+   "batch": 1000,
+   "writer_args": []
+  }
+ },
+ "runs": {
+  "before": {
+   "runs": [
+    {
+     "rows": 152914,
+     "wall_s": 95.7,
+     "eps": 1598,
+     "eps_acknowledged": 1641,
+     "cpu_s": 268.1,
+     "eps_per_core": 570,
+     "files": 171,
+     "parquet_bytes": 75262170,
+     "parquet_vs_jsonl": 0.2516
+    },
+    {
+     "rows": 152914,
+     "wall_s": 81.8,
+     "eps": 1869,
+     "eps_acknowledged": 1948,
+     "cpu_s": 225.9,
+     "eps_per_core": 677,
+     "files": 135,
+     "parquet_bytes": 60875454,
+     "parquet_vs_jsonl": 0.2035
+    },
+    {
+     "rows": 152914,
+     "wall_s": 92.14,
+     "eps": 1660,
+     "eps_acknowledged": 1736,
+     "cpu_s": 260.8,
+     "eps_per_core": 586,
+     "files": 162,
+     "parquet_bytes": 71728543,
+     "parquet_vs_jsonl": 0.2398
+    }
+   ],
+   "median": {
+    "eps": 1660,
+    "eps_acknowledged": 1736,
+    "wall_s": 92.14,
+    "cpu_s": 260.8,
+    "eps_per_core": 586,
+    "files": 162,
+    "parquet_vs_jsonl": 0.2398
+   }
+  },
+  "after": {
+   "runs": [
+    {
+     "rows": 152914,
+     "wall_s": 32.79,
+     "eps": 4664,
+     "eps_acknowledged": 8131,
+     "cpu_s": 76.0,
+     "eps_per_core": 2013,
+     "files": 18,
+     "parquet_bytes": 14267163,
+     "parquet_vs_jsonl": 0.0477
+    },
+    {
+     "rows": 152914,
+     "wall_s": 34.49,
+     "eps": 4434,
+     "eps_acknowledged": 8325,
+     "cpu_s": 79.0,
+     "eps_per_core": 1936,
+     "files": 18,
+     "parquet_bytes": 14277345,
+     "parquet_vs_jsonl": 0.0477
+    },
+    {
+     "rows": 152914,
+     "wall_s": 34.37,
+     "eps": 4448,
+     "eps_acknowledged": 8224,
+     "cpu_s": 77.7,
+     "eps_per_core": 1969,
+     "files": 18,
+     "parquet_bytes": 14276784,
+     "parquet_vs_jsonl": 0.0477
+    }
+   ],
+   "median": {
+    "eps": 4448,
+    "eps_acknowledged": 8224,
+    "wall_s": 34.37,
+    "cpu_s": 77.7,
+    "eps_per_core": 1969,
+    "files": 18,
+    "parquet_vs_jsonl": 0.0477
+   }
+  }
+ }
+}

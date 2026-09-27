@@ -3,8 +3,11 @@ package pack
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+
+	"ulpf/runtime/internal/keys"
 )
 
 func root(t *testing.T) string {
@@ -98,8 +101,75 @@ func TestPackSignatureFailClosed(t *testing.T) {
 	// development escape hatch loads, but says so
 	d = copyPack(t, golden)
 	os.Remove(filepath.Join(d, "pack.json.sig"))
-	p, err = Load(d, LoadOptions{ContractsDir: base.ContractsDir, PinnedIndex: base.PinnedIndex, AllowUnsigned: true})
+	p, err = Load(d, LoadOptions{ContractsDir: base.ContractsDir, PinnedIndex: base.PinnedIndex, TrustDir: base.TrustDir, AllowUnsigned: true})
 	if err != nil || p.SignatureVerified {
 		t.Fatalf("allow-unsigned must load without claiming verification: %v", err)
+	}
+}
+
+// Parser Transparency Log: a pack loads only with a valid inclusion proof. A copy without its proof is refused; a pack
+// changed after it was logged — re-signed, so its SIGNATURE is valid — is refused because its bytes differ from the
+// logged entry; the development escape hatch for signatures does not skip the log.
+func TestPackMustBeInTheTransparencyLog(t *testing.T) {
+	r := root(t)
+	golden := filepath.Join(r, "contracts", "golden", "squid-native")
+	base := LoadOptions{ContractsDir: filepath.Join(r, "contracts"), PinnedIndex: filepath.Join(r, "ocsf", "pinned", "index.json"), TrustDir: filepath.Join(r, "keys", "trust")}
+	p, err := Load(golden, base)
+	if err != nil || p.TLog.Log != "ulpf-tlog-dev" || p.TLog.Entry.PackSHA256 != p.FileSHA256 {
+		t.Fatalf("the golden pack must load with its log entry: %+v %v", p.TLog, err)
+	}
+	d := copyPack(t, golden)
+	os.Remove(filepath.Join(d, "pack.json.tlog-proof"))
+	if _, err := Load(d, base); err == nil || !strings.Contains(err.Error(), "not in the parser transparency log") {
+		t.Fatalf("a pack without an inclusion proof must be refused: %v", err)
+	}
+	if _, err := Load(d, LoadOptions{ContractsDir: base.ContractsDir, PinnedIndex: base.PinnedIndex, TrustDir: base.TrustDir, AllowUnsigned: true}); err == nil {
+		t.Fatal("--allow-unsigned must not skip the transparency log")
+	}
+	// changed after logging, and RE-SIGNED: the signature verifies, the log does not
+	d = copyPack(t, golden)
+	b, _ := os.ReadFile(filepath.Join(d, "pack.json"))
+	changed := strings.Replace(string(b), "ulpf-gen-0.1", "ulpf-gen-0.1x", 1)
+	os.WriteFile(filepath.Join(d, "pack.json"), []byte(changed), 0o644)
+	k, err := keys.Load(filepath.Join(r, "keys", "dev", "ulpf-pack-authority-dev.json"))
+	if err != nil {
+		t.Skip("no dev pack authority key (scripts/keys-bootstrap.sh)")
+	}
+	sig, _ := k.Sign([]byte(changed))
+	os.WriteFile(filepath.Join(d, "pack.json.sig"), []byte(k.AuthorityID+" "+sig+"\n"), 0o644)
+	if _, err := Load(d, base); err == nil || !strings.Contains(err.Error(), "differ from its logged entry") {
+		t.Fatalf("a pack whose bytes differ from its logged entry must be refused: %v", err)
+	}
+	// a trust store that names no log
+	td := t.TempDir()
+	for _, f := range []string{"ulpf-pack-authority-dev.pub.json"} {
+		bb, _ := os.ReadFile(filepath.Join(base.TrustDir, f))
+		os.WriteFile(filepath.Join(td, f), bb, 0o644)
+	}
+	if _, err := Load(golden, LoadOptions{ContractsDir: base.ContractsDir, PinnedIndex: base.PinnedIndex, TrustDir: td}); err == nil || !strings.Contains(err.Error(), "names no transparency log") {
+		t.Fatalf("no log key must refuse: %v", err)
+	}
+}
+
+// No bypass: a loaded pack exists only through Load. Outside this package nothing constructs a pack.Pack, and every
+// program that loads packs (the runtime: startup and hot reload — auto-heal reaches the runtime as a hot reload; the
+// bench) calls Load.
+func TestEveryPackLoadGoesThroughTheTransparencyCheck(t *testing.T) {
+	r := root(t)
+	construct := regexp.MustCompile(`(^|[^*\]])pack\.Pack\{|new\(pack\.Pack\)|json\.Unmarshal\([^)]*&[a-zA-Z_]*[pP]ack\b`) // a []*pack.Pack{…} literal holds loaded packs
+	loads := 0
+	filepath.Walk(filepath.Join(r, "runtime"), func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") || strings.Contains(p, filepath.Join("internal", "pack")) {
+			return nil
+		}
+		b, _ := os.ReadFile(p)
+		if construct.Match(b) && strings.Contains(string(b), "internal/pack") {
+			t.Errorf("%s constructs a pack.Pack outside pack.Load", p)
+		}
+		loads += strings.Count(string(b), "pack.Load(")
+		return nil
+	})
+	if loads < 2 {
+		t.Fatalf("expected the runtime and the bench to load through pack.Load, found %d call(s)", loads)
 	}
 }

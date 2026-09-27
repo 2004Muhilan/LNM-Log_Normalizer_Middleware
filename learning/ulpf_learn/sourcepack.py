@@ -61,7 +61,7 @@ def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict
     pack["hashes"] = {"parser_hash": sha("".join(parser).encode()), "dsl_hash": sha("".join(dsl).encode()),
                       "mapping_hash": sha("".join(mapping).encode()), "corpus_hash": sha("".join(corpus).encode())}
     (out_dir / "pack.json").write_text(json.dumps(pack, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    sign_pack(out_dir, key_path)
+    sign_pack(out_dir, key_path, produced_by="vendor-onboarded")
     errs = validate_document("parser-pack", pack, pack_dir=out_dir)
     if errs:
         raise RuntimeError("merged source pack fails the contract: " + "; ".join(errs))

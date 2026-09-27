@@ -1,0 +1,43 @@
+{
+ "rows": 152914,
+ "jsonl_bytes": 299076081,
+ "A_ingest_s": 17.92894697189331,
+ "B_group_s": 4.854494333267212,
+ "groups": 9,
+ "C_convert_s": 23.703513622283936,
+ "C_parquet_bytes": 10614315,
+ "C_files": 9,
+ "C_small_files": {
+  "files": 0,
+  "s": 0,
+  "rows": 0
+ },
+ "C_fixed_cost_per_file_s": 0.4454,
+ "C2a_full_read_lineage_write_s": 3.5404372215270996,
+ "C2b_narrow_read_lineage_write_s": 5.025500535964966,
+ "C3_convert_one_file_per_class_s": 18.719155073165894,
+ "C3_files": 2,
+ "P_flush_rows": 152914,
+ "P_profile_top": [
+  "         3980753 function calls (3980733 primitive calls) in 6.625 seconds",
+  "   Ordered by: cumulative time",
+  "   List reduced from 95 to 12 due to restriction <12>",
+  "   ncalls  tottime  percall  cumtime  percall filename:lineno(function)",
+  "   152914    0.215    0.000    3.893    0.000 /usr/lib/python3.12/json/__init__.py:299(loads)",
+  "   152914    0.263    0.000    3.187    0.000 /usr/lib/python3.12/json/decoder.py:332(decode)",
+  "   152914    2.717    0.000    2.717    0.000 /usr/lib/python3.12/json/decoder.py:343(raw_decode)",
+  "   152914    0.719    0.000    0.719    0.000 {method 'strftime' of 'datetime.date' objects}",
+  "        9    0.339    0.038    0.702    0.078 {method 'join' of 'bytes' objects}",
+  "        9    0.000    0.000    0.549    0.061 /usr/lib/python3.12/pathlib.py:1032(write_bytes)",
+  "        9    0.377    0.042    0.377    0.042 {method 'write' of '_io.BufferedWriter' objects}",
+  "   152923    0.257    0.000    0.363    0.000 /mnt/c/VSCode/sih-2026/SIH26156/laptop-commit-pull/adapters/lake/lakewriter.py:152(<genexpr>)",
+  "   152914    0.155    0.000    0.278    0.000 /usr/lib/python3.12/json/__init__.py:244(detect_encoding)",
+  "   305828    0.197    0.000    0.197    0.000 {method 'decode' of 'bytes' objects}",
+  "       21    0.131    0.006    0.131    0.006 {built-in method _io.open}",
+  "       20    0.127    0.006    0.127    0.006 {built-in method posix.fsync}"
+ ],
+ "total_A_B_C_s": 46.48695492744446,
+ "A_ingest_share": 0.386,
+ "B_group_share": 0.104,
+ "C_convert_share": 0.51
+}

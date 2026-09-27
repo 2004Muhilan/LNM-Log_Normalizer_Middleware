@@ -26,7 +26,7 @@ SCALARS = {"integer_t": "INTEGER", "port_t": "INTEGER", "long_t": "BIGINT", "tim
 LINEAGE = [("event_id", "VARCHAR", "event_id"), ("raw_hash", "VARCHAR", "raw_hash"), ("segment_id", "VARCHAR", "segment_id"),
            ("offset", "BIGINT", "offset"), ("length", "INTEGER", "length"), ("source_id", "VARCHAR", "source_id"),
            ("parser_id", "VARCHAR", "parser_id"), ("parser_version", "VARCHAR", "parser_version"), ("family_id", "VARCHAR", "family_id"),
-           ("ingest_time", "BIGINT", "ingest_time"), ("store_id", "VARCHAR", "store_id")]   # store_id: normalized-event 1.5.0 (evidence archive)
+           ("ingest_time", "BIGINT", "ingest_time"), ("store_id", "VARCHAR", "store_id"), ("parser_sha256", "VARCHAR", "parser_sha256")]   # store_id: normalized-event 1.5.0 (evidence archive)
 
 
 def q(name: str) -> str:

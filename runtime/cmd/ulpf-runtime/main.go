@@ -30,6 +30,7 @@ import (
 
 	"ulpf/runtime/internal/archive"
 	"ulpf/runtime/internal/checkpoint"
+	"ulpf/runtime/internal/derivation"
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/egress"
 	"ulpf/runtime/internal/evidence"
@@ -123,6 +124,9 @@ func main() {
 		maxFrames := fs.Int("max-frames", 0, "with --listen: stop after N frames (0 = until SIGINT)")
 		pullDir := fs.String("pull-dir", "", "P7: directory-drop collector; files are ingested in name order and renamed .done")
 		pullOnce := fs.Bool("pull-once", false, "with --pull-dir: one pass, then exit")
+		tlogMinWitnesses := fs.Int("tlog-min-witnesses", 0, "parser transparency log: trusted witness cosignatures a pack's checkpoint must carry (0: the log's signature and the inclusion proof are required; cosignatures are verified when present)")
+		reusePort := fs.Bool("reuse-port", false, "scale-out: open --listen addresses with SO_REUSEPORT so N runtime processes share them; the kernel hashes each flow (source+destination address and port) to one process, so a sender's connection — and its per-source state — stays in one process. Each process has its own --evidence (its own store_id), spool and outputs; they share the evidence archive and the destinations")
+		pullShard := fs.String("pull-shard", "", "scale-out for --pull-dir: i/N — this process takes only the files whose source key (the name before the first _) hashes to i of N")
 		maxConns := fs.Int("max-conns", 256, "tcp: connections served at once; more are accepted and closed (invariant 7)")
 		idle := fs.Duration("idle-timeout", 30*time.Second, "tcp: close a connection silent for this long; its partial frame is retained")
 		maxBody := fs.Int64("max-body-bytes", 8<<20, "http: bytes read per request; the rest is not read, what arrived is framed and flagged")
@@ -176,9 +180,11 @@ func main() {
 			}
 			var out []*pack.Pack
 			for _, d := range all {
-				p, err := pack.Load(d, loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned))
+				lo := loadOptions(*contractsDir, *pinned, *trust, *allowUnsigned)
+				lo.TLogMinWitnesses = *tlogMinWitnesses
+				p, err := pack.Load(d, lo)
 				if err != nil {
-					return nil, fmt.Errorf("%s: %w", d, err)
+					return nil, &refusal{dir: d, err: err}
 				}
 				out = append(out, p)
 			}
@@ -201,6 +207,12 @@ func main() {
 				}
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "reload REFUSED, the running packs stay loaded: %v\n", err)
+					what := "reload"
+					var rf *refusal
+					if errors.As(err, &rf) {
+						what = filepath.Base(rf.dir)
+					}
+					livePipe.Refused(what, err.Error()) // the refusal is an evidence-log record (pack_refused)
 					continue
 				}
 				fmt.Fprintf(os.Stderr, "reloaded: %d pack(s)\n", len(next))
@@ -312,11 +324,11 @@ func main() {
 			for _, l := range listens {
 				switch {
 				case strings.HasPrefix(l, "tcp:") && t == nil:
-					t = &frame.TCP{Addr: strings.TrimPrefix(l, "tcp:"), MaxEventBytes: *maxEvent, MaxConns: *maxConns, IdleTimeout: *idle, MaxFrames: int64(*maxFrames), Multiline: multi}
+					t = &frame.TCP{Addr: strings.TrimPrefix(l, "tcp:"), MaxEventBytes: *maxEvent, MaxConns: *maxConns, IdleTimeout: *idle, MaxFrames: int64(*maxFrames), Multiline: multi, ReusePort: *reusePort}
 					tl, err = t.Listen()
 					die(err)
 				case strings.HasPrefix(l, "http:") && h == nil:
-					h = &frame.HTTP{Addr: strings.TrimPrefix(l, "http:"), MaxBodyBytes: *maxBody, MaxEventBytes: *maxEvent, MaxFrames: int64(*maxFrames)}
+					h = &frame.HTTP{Addr: strings.TrimPrefix(l, "http:"), MaxBodyBytes: *maxBody, MaxEventBytes: *maxEvent, MaxFrames: int64(*maxFrames), ReusePort: *reusePort}
 					hl, err = h.Listen()
 					die(err)
 				default:
@@ -345,7 +357,7 @@ func main() {
 			// syslog over UDP: one datagram per frame; every received byte is evidence, the envelope is
 			// unwrapped after the raw write, the payload is routed and parsed.
 			addr := strings.TrimPrefix(*listen, "udp:")
-			u := frame.UDP{Addr: addr, MaxEventBytes: *maxEvent, MaxFrames: *maxFrames}
+			u := frame.UDP{Addr: addr, MaxEventBytes: *maxEvent, MaxFrames: *maxFrames, ReusePort: *reusePort}
 			conn, err := u.Listen()
 			die(err)
 			if *channel == "file:" {
@@ -358,7 +370,7 @@ func main() {
 			// syslog over TCP (P7): RFC 6587 octet counting with non-transparent fallback, bounded per
 			// connection; a connection that ends mid-frame leaves a partial frame and a gap record.
 			addr := strings.TrimPrefix(*listen, "tcp:")
-			t := &frame.TCP{Addr: addr, MaxEventBytes: *maxEvent, MaxConns: *maxConns, IdleTimeout: *idle, MaxFrames: int64(*maxFrames), Multiline: multi}
+			t := &frame.TCP{Addr: addr, MaxEventBytes: *maxEvent, MaxConns: *maxConns, IdleTimeout: *idle, MaxFrames: int64(*maxFrames), Multiline: multi, ReusePort: *reusePort}
 			ln, err := t.Listen()
 			die(err)
 			if *channel == "file:" {
@@ -372,7 +384,7 @@ func main() {
 		case strings.HasPrefix(*listen, "http:"):
 			// HTTP receive (P7): POST newline-delimited events or a JSON array; bodies read through a cap.
 			addr := strings.TrimPrefix(*listen, "http:")
-			h := &frame.HTTP{Addr: addr, MaxBodyBytes: *maxBody, MaxEventBytes: *maxEvent, MaxFrames: int64(*maxFrames)}
+			h := &frame.HTTP{Addr: addr, MaxBodyBytes: *maxBody, MaxEventBytes: *maxEvent, MaxFrames: int64(*maxFrames), ReusePort: *reusePort}
 			ln, err := h.Listen()
 			die(err)
 			if *channel == "file:" {
@@ -387,6 +399,11 @@ func main() {
 		case *pullDir != "":
 			// directory-drop collector (P7): the drop directory is the queue.
 			pl := &frame.Pull{Dir: *pullDir, MaxEventBytes: *maxEvent, Once: *pullOnce, Multiline: multi}
+			if *pullShard != "" {
+				if _, err := fmt.Sscanf(*pullShard, "%d/%d", &pl.Shard, &pl.Shards); err != nil || pl.Shards < 1 || pl.Shard < 0 || pl.Shard >= pl.Shards {
+					die(fmt.Errorf("--pull-shard must be i/N with 0 <= i < N, got %q", *pullShard))
+				}
+			}
 			if *channel == "file:" {
 				o.Channel = "dir:" + *pullDir
 			}
@@ -543,6 +560,28 @@ func main() {
 		b, err := checkpoint.ExportFrom(evidence.NewLocator(*evDir, *exArchive), *cdir, *eventID, *outDir)
 		die(err)
 		fmt.Fprintf(os.Stderr, "exported %s: leaf %d of %s (%s), root %s, checkpoint %s -> %s\n", b.EventID, b.LeafIndex, b.Record.SegmentID, map[string]string{"local": "local buffer", "archive": "EVIDENCE ARCHIVE — the local copy was deleted after shipping"}[b.EvidenceSource], b.SegmentRoot, b.CheckpointID, *outDir)
+	case "derive":
+		// Proof of Derivation (2026-09-27): one offline-verifiable bundle — the raw bytes, the segment index, the Merkle
+		// proof and the signed checkpoint, the exact pack from the parser transparency log with its inclusion proof, the
+		// engine version, and the event the SIEM holds. `ulpf-verify derivation --bundle FILE` checks it.
+		fs := flag.NewFlagSet("derive", flag.ExitOnError)
+		evDir := fs.String("evidence", "", "evidence store directory")
+		arch := fs.String("evidence-archive", "", "the evidence archive (a segment deleted locally is read from it)")
+		cdir := fs.String("commit", "", "commit directory (default <evidence>/commit)")
+		tl := fs.String("tlog", filepath.Join(repoRoot(), "tlog"), "the parser transparency log (its content store holds the exact pack)")
+		eventID := fs.String("event-id", "", "event id")
+		expected := fs.String("expected", "", "the event as the SIEM holds it (a JSON file: the document's _source)")
+		outPath := fs.String("out", "", "bundle file to write")
+		contractsDir, pinned := commonFlags(fs)
+		fs.Parse(os.Args[2:])
+		exp, err := os.ReadFile(*expected)
+		die(err)
+		b, err := derivation.Build(derivation.BuildOptions{Locator: evidence.NewLocator(*evDir, *arch), CommitDir: *cdir, TLogDir: *tl, EventID: *eventID, Expected: exp,
+			ContractsDir: *contractsDir, PinnedIndex: *pinned})
+		die(err)
+		data, _ := json.MarshalIndent(b, "", " ")
+		die(os.WriteFile(*outPath, append(data, '\n'), 0o644))
+		fmt.Fprintf(os.Stderr, "derivation bundle for %s: %d bytes of evidence (%s), pack %s, %d bytes -> %s\n", b.EventID, len(b.Evidence.Raw), b.Evidence.Source, b.Pack.SHA256[:23], len(data), *outPath)
 	case "reconstruct":
 		fs := flag.NewFlagSet("reconstruct", flag.ExitOnError)
 		evDir := fs.String("evidence", "", "evidence store directory")
@@ -657,3 +696,12 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "usage: ulpf-runtime compile|parse|verify-pack|run|forward|renormalize|lake verify|lake get|export|reconstruct [flags]")
 	os.Exit(2)
 }
+
+// refusal is a pack the loader refused, with the directory it came from (the pack_refused record names it).
+type refusal struct {
+	dir string
+	err error
+}
+
+func (r *refusal) Error() string { return fmt.Sprintf("%s: %v", r.dir, r.err) }
+func (r *refusal) Unwrap() error { return r.err }

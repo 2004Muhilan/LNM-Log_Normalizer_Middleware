@@ -123,12 +123,12 @@ def trace(event_id, ev_dir, lake_dir, os_url, work, archive=None, commit_dir=Non
         return ok
 
     # 1. the SIEM's document
-    lin = None
+    lin, doc = None, None
     try:
         r = http_json(f"{os_url}/ulpf-ocsf-*/_search", {"query": {"ids": {"values": [event_id]}}, "size": 1})
         hit = (r.get("hits", {}).get("hits") or [None])[0]
         if hit:
-            lin = hit["_source"]["_lineage"]
+            lin, doc = hit["_source"]["_lineage"], hit["_source"]
             step("SIEM document", True, f"index {hit['_index']}, _id {hit['_id']} (= ULPF's event_id); its lineage names raw_hash {lin['raw_hash'][:23]}… at {lin['segment_id']} + {lin['offset']}",
                  document={k: hit["_source"].get(k) for k in ("time", "action_id", "src_endpoint", "dst_endpoint", "class_uid")})
         else:
@@ -177,6 +177,27 @@ def trace(event_id, ev_dir, lake_dir, os_url, work, archive=None, commit_dir=Non
     v = subprocess.run([str(BIN / "ulpf-verify"), "bundle", "--bundle", str(bundle), "--trust", str(ROOT / "keys" / "trust")], capture_output=True, text=True, cwd=ROOT)
     out = (v.stdout + v.stderr).strip()
     step("Merkle proof verified", v.returncode == 0 and "VERIFY: OK" in out, out.splitlines()[-1] if out else "no output", verifier=out[-800:])
+    # 5b. Proof of Derivation: the exact logged pack, re-run on these raw bytes, must reproduce the SIEM's document
+    if doc is not None:
+        exp = Path(work) / f"expected-{event_id}.json"; exp.write_text(json.dumps(doc), encoding="utf-8")
+        bpath = Path(work) / f"derivation-{event_id}.json"
+        d = subprocess.run([str(BIN / "ulpf-runtime"), "derive", "--evidence", ev_dir, *extra, "--event-id", event_id, "--expected", str(exp), "--out", str(bpath)],
+                           capture_output=True, text=True, cwd=ROOT, env={**os.environ, "ULPF_ROOT": str(ROOT)})
+        if d.returncode != 0:
+            step("Proof of Derivation", False, (d.stderr or d.stdout).strip()[-300:])
+        else:
+            vv = subprocess.run([str(BIN / "ulpf-verify"), "derivation", "--bundle", str(bpath), "--trust", str(ROOT / "keys" / "trust"), "--json"],
+                                capture_output=True, text=True, cwd=ROOT, env={**os.environ, "ULPF_ROOT": str(ROOT)})
+            try:
+                rep = json.loads(vv.stdout)
+            except ValueError:
+                rep = {"ok": False, "steps": [], "culprit": "verifier", "error": (vv.stderr or vv.stdout)[-300:]}
+            tl = rep.get("transparency_log") or {}
+            e = tl.get("Entry") or {}
+            detail = (f"the logged pack {e.get('PackID')} v{e.get('PackVersion')} (entry {tl.get('Index')} of {tl.get('Log')}, {e.get('ProducedBy')}, logged {e.get('LoggedAt')}), re-run on these raw bytes, "
+                      f"reproduces the SIEM document field for field (excluded: {', '.join(rep.get('excluded_from_comparison', {}))}) — checked offline by ulpf-verify" if rep.get("ok") else
+                      f"FAILED — {rep.get('culprit')}: " + "; ".join(x["name"] + ": " + x["detail"][:120] for x in rep.get("steps", []) if not x["ok"])[:400])
+            step("Proof of Derivation", bool(rep.get("ok")), detail, derivation=rep, bundle=str(bpath))
     # 6. the same event in the lake
     try:
         import duckdb

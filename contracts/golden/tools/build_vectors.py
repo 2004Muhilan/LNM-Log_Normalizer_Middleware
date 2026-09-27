@@ -197,7 +197,7 @@ def sign_golden():
     (keys/dev, demo-grade). The Go loader refuses the pack without it since P5."""
     sys.path.insert(0, str(ROOT / "learning"))
     from ulpf_learn.signing import sign_pack, verify_pack  # noqa: E402
-    sign_pack(SQ)
+    sign_pack(SQ, produced_by="hand-written")
     verify_pack(SQ)
 
 
@@ -230,7 +230,7 @@ def check() -> int:
     runtime's current output, every hash, the negatives, the index — and then "checked" them, so a regression
     that stayed schema-valid rewrote its own expectation and passed (audit §3.1). The checks now call this:
     the committed files are the expectation, regeneration is a deliberate `--write` whose diff gets reviewed.
-    `pack.json.sig` is excluded: it is git-ignored and signed per machine by keys-bootstrap."""
+    `pack.json.sig` and `pack.json.tlog-proof` are excluded: git-ignored, signed and logged per machine by keys-bootstrap."""
     global GOLDEN, SQ, NEG
     committed = GOLDEN
     tmp = Path(tempfile.mkdtemp(prefix="ulpf-golden-check-"))
@@ -239,7 +239,7 @@ def check() -> int:
         shutil.copytree(committed, scratch, ignore=shutil.ignore_patterns("__pycache__"))
         GOLDEN, SQ, NEG = scratch, scratch / "squid-native", scratch / "negative"
         main()
-        skip = {"pack.json.sig"}
+        skip = {"pack.json.sig", "pack.json.tlog-proof"}   # both local to the machine (git-ignored): the signature and the transparency-log proof
         def files(root):
             return {str(f.relative_to(root)).replace(chr(92), "/"): f for f in root.rglob("*") if f.is_file() and f.name not in skip and "__pycache__" not in f.parts}
         old, new = files(committed), files(scratch)

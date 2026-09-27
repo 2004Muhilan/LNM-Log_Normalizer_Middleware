@@ -73,7 +73,7 @@ TEMPLATE = {"index_patterns": ["ulpf-ocsf-*"], "priority": 100, "template": {
             "time": {"type": "date", "format": "epoch_millis"}, "class_uid": {"type": "integer"}, "action_id": {"type": "integer"},
             "src_endpoint": {"properties": {"ip": {"type": "ip"}, "port": {"type": "integer"}}}, "dst_endpoint": {"properties": {"ip": {"type": "ip"}, "port": {"type": "integer"}}},
             "unmapped": {"type": "flat_object"}, "metadata": {"properties": {"product": {"properties": {"vendor_name": {"type": "keyword"}, "name": {"type": "keyword"}}}}},
-            "_lineage": {"properties": {"event_id": {"type": "keyword"}, "raw_hash": {"type": "keyword"}, "segment_id": {"type": "keyword"}, "store_id": {"type": "keyword"}, "offset": {"type": "long"},
+            "_lineage": {"properties": {"event_id": {"type": "keyword"}, "raw_hash": {"type": "keyword"}, "segment_id": {"type": "keyword"}, "store_id": {"type": "keyword"}, "parser_sha256": {"type": "keyword"}, "offset": {"type": "long"},
                                          "source_id": {"type": "keyword"}, "parser_id": {"type": "keyword"}, "family_id": {"type": "keyword"},
                                          "event_time": {"type": "date", "format": "epoch_millis"}, "ingest_time": {"type": "date", "format": "epoch_millis"},
                                          "processing_time": {"type": "date", "format": "epoch_millis"}}}}}}}
@@ -200,7 +200,7 @@ def dashboards(osd_url):
                 for name, typ, es in (("_lineage.ingest_time", "date", "date"), ("_lineage.event_time", "date", "date"), ("_lineage.processing_time", "date", "date"),
                                       ("_lineage.event_id", "string", "keyword"), ("_lineage.raw_hash", "string", "keyword"), ("_lineage.segment_id", "string", "keyword"),
                                       ("_lineage.offset", "number", "long"), ("_lineage.source_id", "string", "keyword"), ("_lineage.parser_id", "string", "keyword"),
-                                      ("_lineage.family_id", "string", "keyword"), ("_lineage.store_id", "string", "keyword")):
+                                      ("_lineage.family_id", "string", "keyword"), ("_lineage.store_id", "string", "keyword"), ("_lineage.parser_sha256", "string", "keyword")):
                     if name not in have:
                         fields.append({"name": name, "type": typ, "esTypes": [es], "searchable": True, "aggregatable": True, "readFromDocValues": True})
             must(call(osd_url, "PUT", f"/api/saved_objects/index-pattern/{pid}", {"attributes": {"fields": json.dumps(fields)}}, headers={"osd-xsrf": "true"}), "index pattern fields " + pid)

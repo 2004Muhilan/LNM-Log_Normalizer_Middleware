@@ -296,3 +296,23 @@ func writeFileAtomic(path string, b []byte) error {
 	}
 	return os.Rename(tmp, path)
 }
+
+// LastLine is the last complete line in the spool (nil when there is none): the last event handed to delivery.
+// After a crash the pipeline re-interprets every evidence record committed after it (the invariant-3 window: a batch
+// is durable before it is interpreted, so a crash can fall between the two).
+func LastLine(dir string) []byte {
+	segs := ListSegments(dir)
+	for i := len(segs) - 1; i >= 0; i-- {
+		b, err := os.ReadFile(segs[i].Path)
+		if err != nil || len(b) == 0 {
+			continue
+		}
+		end := bytes.LastIndexByte(b, '\n')
+		if end <= 0 {
+			continue
+		}
+		start := bytes.LastIndexByte(b[:end], '\n') + 1
+		return b[start:end]
+	}
+	return nil
+}

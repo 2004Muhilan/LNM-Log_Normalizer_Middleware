@@ -27,6 +27,10 @@ was tried and rejected, and what the next phase inherits.
 
 **Evidence archive (required):** `ulpf-runtime run` refuses to start without `--evidence-archive` (development: `--dev-no-evidence-archive`, loudly). ULPF keeps only a short local evidence buffer: the always-running committer ships sealed, committed segments and their signed checkpoints to the archive byte-exact; the store deletes a local copy only when every deletion condition holds; "Prove it", export and the verifier read the archive when the local copy is gone. [docs/evidence-archive-design.md](docs/evidence-archive-design.md).
 
+**Parser Transparency Log and Proof of Derivation:** every parser pack is appended to an append-only Merkle log (C2SP signed-note checkpoints, `c2sp.org/tlog-proof` beside the pack, a witness that cosigns only consistent checkpoints) before any runtime may load it — the runtime refuses a pack without a valid inclusion proof. "Prove it" re-runs the exact logged pack on the committed raw bytes and shows the output equals the SIEM's event (one offline bundle, `ulpf-verify derivation`), and prints a DRAFT BSA §63(4) certificate for a person and an expert to complete. [docs/transparency-and-derivation.md](docs/transparency-and-derivation.md).
+
+**Scale-out:** N runtime processes on the same ports (SO_REUSEPORT; `ULPF_PROCESSES=N bash demo/start-demo.sh`), each with its own evidence store, committer and lake writer — measured in [docs/throughput.md](docs/throughput.md).
+
 **The gate, one command:** `bash scripts/gate.sh` — every check, the demo check with the real SIEM, and six steps + the live
 sequence twice on both model configurations, in parallel lanes: 12.7 min on the desktop (`--laptop` on the laptop).
 

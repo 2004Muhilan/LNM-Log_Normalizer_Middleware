@@ -42,10 +42,38 @@ is not a production configuration.**
    original bytes out of the evidence log, hashed again right now, their Merkle proof checked under a signed checkpoint by a
    verifier that holds only a public key — and the same event in the lake, same hash. A SIEM finding back to the original
    evidence, provably unaltered." (The committer runs in the development seam — sealed, not kernel-immutable; say so if asked.)
+   **Then the derivation (Proof of Derivation, 2026-09-27):**
+   - Say: "The bytes are unaltered — but was THIS the parser that made the SIEM's event? The trace fetches the exact pack
+     from the parser transparency log, verifies its inclusion proof, re-runs it on these bytes, and the output equals the
+     SIEM's document field for field. The only field left out is the moment of normalization: it records WHEN, not WHAT."
+   - *Download the derivation bundle*: one file, verified offline by `ulpf-verify derivation`, with no ULPF running. If a
+     byte of the raw record, the pack or the SIEM document is changed, it says which one.
+   - *BSA §63(4) certificate — DRAFT*: say "Part A is filled from what ULPF knows: the device, how the record was produced,
+     SHA-256 and the hash. The declaration and Part B are left blank for people to complete and sign — it is never
+     presented as complete, and it is not legal advice."
 6. Drift, self-healing and the per-log view are unchanged (docs/laptop-branch.md §5).
+7. **Scale-out (2026-09-27):** the runtime block lists N processes (default 2; `ULPF_PROCESSES=N bash demo/start-demo.sh`),
+   all on the same ports.
+   - Say: "The kernel hashes each connection to one process, so a sender's per-source state stays in one place."
+   - The application list says which process each application reached.
+   - What not to say: that one busy sender is spread over processes (it is not: one connection, one process); that a
+     sender keeps its state when its process dies (it reconnects to another and starts fresh there).
+8. **The evidence archive block:** segments shipped, pending, local buffer against its cap.
+   - Say: "ULPF keeps only a short local buffer. The rest is shipped byte-exact to the archive and deleted here only
+     when every condition holds."
+   - *Prove it* on an old event reads the archive.
+9. **The parser transparency log block:** every pack ULPF may load, how it was produced (hand-written, vendor-onboarded,
+   onboarded, auto-healed) and when it was logged, with the witness's cosignature.
+   - *Push an UNLOGGED pack to process 1*: the pack is validly signed, but not in the log. The process refuses it, the
+     running packs stay, and the refusal is a `pack_refused` record in that process's evidence log (shown in red).
+   - Say: "The witness runs on this machine; it stands in for an independent site. Real deployments put witnesses on
+     separate machines."
 
 What not to say: that the lake is "Security Lake compatible" (it follows the layout convention; never tested against it);
-that Splunk or a CEF SIEM was tested (fake receivers only); that the security plugin is on.
+that Splunk or a CEF SIEM was tested (fake receivers only); that the security plugin is on; that the certificate is a
+complete or signed BSA certificate (it is a draft for a person and an expert to complete); that the witness is
+independent (it is on the same machine in the demo); anything about the laptop (the laptop has not been re-verified
+since the scale-out, archive, transparency-log and derivation work).
 
 ## 1. Before the judges walk in (T-30 min)
 

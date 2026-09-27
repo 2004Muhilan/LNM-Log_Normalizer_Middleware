@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""SYSTEM — ULPF's operator console for the demo (http://127.0.0.1:8765/): it runs ONE runtime, watches what it
-writes, and drives onboarding and drift healing through the same CLIs as everything else. Standard library only, offline.
+"""SYSTEM — ULPF's operator console for the demo (http://127.0.0.1:8765/): it runs N runtime PROCESSES on the same
+ingress addresses (SO_REUSEPORT: the kernel keeps each sender's connection on one process), watches what they write, and
+drives onboarding and drift healing through the same CLIs as everything else. Standard library only, offline.
 Demo assembly, not pipeline: it parses no log and decides no mapping; every step is `ulpf-runtime …` or `python -m ulpf_learn …`.
 
     system.py --state DIR            (started by demo/start-demo.sh, which exports what demo/lib.sh resolves)
@@ -82,10 +83,50 @@ class Tail:
         self.off += pos
 
 
+class Proc:
+    """One ULPF runtime process of N (scale-out). Its own evidence directory (its own store_id), outputs, spool, commit
+    tree and lake writer; shared: the ingress addresses (SO_REUSEPORT), the packs, the evidence archive, the SIEM, the lake
+    root. Process 1 keeps the single-process names (ev, run-1, spool, commit)."""
+    def __init__(self, i, base, a):
+        sfx = "" if i == 1 else f"-{i}"
+        self.i = i
+        self.ev, self.run, self.spool = base / ("ev" + sfx), base / f"run-{i}", base / ("spool" + sfx)
+        self.commit = (a.commit_dir + sfx) if a.commit_dir else None
+        self.lake_port = a.lake_port + i - 1
+        self.packs = base / ("packs.txt" if i == 1 else f"packs-{i}.txt")
+        self.runtime = None
+
+    def err_text(self):
+        try:
+            return (self.run / "runtime.err").read_text(errors="replace")
+        except OSError:
+            return ""
+
+    def store_id(self):
+        try:
+            return json.loads((self.ev / "store.json").read_text())["store_id"]
+        except (OSError, ValueError, KeyError):
+            return None
+
+
+def dest_for(d, proc):
+    """A destination as one process sees it: {lake_port} is that process's lake writer."""
+    return {k: (v.replace("{lake_port}", str(proc.lake_port)) if isinstance(v, str) else v) for k, v in d.items()}
+
+
+def sink_name(url):
+    """What the runtime names a sink (its cursor file): the URL without the batch parameter."""
+    base, _, q = url.partition("?")
+    keep = [kv for kv in q.split("&") if kv and not kv.startswith("batch=")]
+    return base + ("?" + "&".join(keep) if keep else "")
+
+
 class System:
     def __init__(self, a):
-        self.dir = Path(a.state); self.ev = self.dir / "ev"; self.run = self.dir / "run-1"
+        self.dir = Path(a.state)
         self.a = a
+        self.procs = [Proc(i, self.dir, a) for i in range(1, a.processes + 1)]
+        self.ev, self.run = self.procs[0].ev, self.procs[0].run   # process 1 (the single-process names)
         self.policy = {"auto_onboard": True, "prepared_answers": True, "operator": "op-014", "heal_policy": POLICY_VERSION,
                        "vendor_relay": bool(a.vendor_capture and Path(a.vendor_capture).exists())}
         self.relay_sent = 0
@@ -97,7 +138,6 @@ class System:
         self.jobs, self.alerts = [], []
         self.active = {}                          # family key -> {"pack": dir, "job": id, "l1", "l2"}
         self.ignore = {}                          # trigger key -> event id: quarantines at or before it are history
-        self.runtime = None
         self.reloads = 0
         self.tick_lock = threading.Lock()
         self.destinations = json.loads(Path(a.destinations).read_text())
@@ -105,46 +145,63 @@ class System:
         self.siem_action = None                   # outage / recover in progress
         self.traces = {}                          # event id -> the round trip's result
         self.held = set()                         # trigger keys the operator rolled back: no automatic healing until a restart
+        self.tlog_refusals = []                   # packs a process refused (pack_refused records in its evidence log)
 
     # ------------------------------------------------------------------ runtime
     def start_runtime(self):
-        self.run.mkdir(parents=True, exist_ok=True)
-        (self.dir / "packs.txt").write_text("")
+        for p in self.procs:
+            p.packs.write_text("")
+        for p in self.procs:
+            self.start_proc(p)
+
+    def start_proc(self, p):
+        p.run.mkdir(parents=True, exist_ok=True)
         a = self.a
         vendor = [x for v in ("cisco-asa", "panos", "fortigate") if a.vendor_packs and (Path(a.vendor_packs) / v / "pack.json").exists() for x in ("--pack", str(Path(a.vendor_packs) / v))]
         self.vendors_loaded = len(vendor) // 2
-        cmd = [a.rt, "run", "--pack", a.golden, *vendor, "--packs-file", str(self.dir / "packs.txt"), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
-               "--idle-timeout", "3600s", "--evidence", str(self.ev), "--out", str(self.run / "out.jsonl"), "--quarantine", str(self.run / "q.jsonl"),
-               "--spool", str(self.dir / "spool"), "--spool-cap", a.spool_cap, "--forward-stall-after", "2s", "--forward-drain", "5s"]
+        cmd = [a.rt, "run", "--pack", a.golden, *vendor, "--packs-file", str(p.packs), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
+               "--idle-timeout", "3600s", "--evidence", str(p.ev), "--out", str(p.run / "out.jsonl"), "--quarantine", str(p.run / "q.jsonl"),
+               "--spool", str(p.spool), "--spool-cap", a.spool_cap, "--forward-stall-after", "2s", "--forward-drain", "5s"]
+        if len(self.procs) > 1:
+            cmd += ["--reuse-port"]   # N processes on the same addresses; the kernel keeps each connection on one
         # the evidence archive: the local evidence directory is a short buffer; the committer (started beside this console)
         # ships, the runtime deletes a shipped segment when every condition holds
-        cmd += (["--evidence-archive", a.archive, "--commit-dir", a.commit_dir, "--evidence-grace", a.evidence_grace, "--evidence-buffer-cap", a.evidence_buffer_cap]
+        cmd += (["--evidence-archive", a.archive, "--commit-dir", p.commit, "--evidence-grace", a.evidence_grace, "--evidence-buffer-cap", a.evidence_buffer_cap]
                 if a.archive else ["--dev-no-evidence-archive"])
         for d in self.destinations:   # N destinations, any kind: the list decides, not the code
-            cmd += ["--forward", d["url"]]
-        self.runtime = subprocess.Popen(cmd, stdout=open(self.run / "egress-stdout.ndjson", "wb"), stderr=open(self.run / "runtime.err", "wb"), cwd=str(ROOT))
+            cmd += ["--forward", dest_for(d, p)["url"]]
+        p.runtime = subprocess.Popen(cmd, stdout=open(p.run / "egress-stdout.ndjson", "wb"), stderr=open(p.run / "runtime.err", "wb"), cwd=str(ROOT))
 
     def err_text(self):
-        try:
-            return (self.run / "runtime.err").read_text(errors="replace")
-        except OSError:
-            return ""
+        return "".join(p.err_text() for p in self.procs)
 
     def reload(self):
-        before = self.err_text().count("\nreloaded:") + self.err_text().startswith("reloaded:")
-        refused = self.err_text().count("reload REFUSED")
+        """Every process reloads the same packs (SIGHUP); each must confirm, or the refusal is reported."""
+        before = {p.i: p.err_text().count("\nreloaded:") + p.err_text().startswith("reloaded:") for p in self.procs}
+        refused = {p.i: p.err_text().count("reload REFUSED") for p in self.procs}
         dirs = [v["pack"] for v in self.active.values()]
-        tmp = self.dir / "packs.txt.tmp"; tmp.write_text("".join(d + "\n" for d in dirs)); os.replace(tmp, self.dir / "packs.txt")
-        self.runtime.send_signal(signal.SIGHUP)
-        for _ in range(100):
-            t = self.err_text()
-            if t.count("reload REFUSED") > refused:
-                raise RuntimeError("the runtime refused the pack: " + t.rsplit("reload REFUSED", 1)[1][:300])
-            if t.count("\nreloaded:") + t.startswith("reloaded:") > before:
+        for p in self.procs:
+            tmp = p.packs.with_suffix(".tmp"); tmp.write_text("".join(d + "\n" for d in dirs)); os.replace(tmp, p.packs)
+        for p in self.procs:
+            p.runtime.send_signal(signal.SIGHUP)
+        waiting = {p.i for p in self.procs}
+        for _ in range(150):
+            for p in self.procs:
+                if p.i not in waiting:
+                    continue
+                t = p.err_text()
+                if t.count("reload REFUSED") > refused[p.i]:
+                    raise RuntimeError(f"process {p.i} refused the pack: " + t.rsplit("reload REFUSED", 1)[1][:300])
+                if t.count("\nreloaded:") + t.startswith("reloaded:") > before[p.i]:
+                    waiting.discard(p.i)
+            if not waiting:
                 self.reloads += 1
                 return
             time.sleep(0.1)
-        raise RuntimeError("the runtime did not confirm the reload")
+        raise RuntimeError(f"process(es) {sorted(waiting)} did not confirm the reload")
+
+    def proc_of(self, rec):
+        return self.procs[(rec.get("_proc") or 1) - 1]
 
     # ------------------------------------------------------------------ monitor
     def raw(self, rec):
@@ -152,7 +209,7 @@ class System:
         sys.path.insert(0, str(ROOT / "demo" / "apps"))
         import trace
         try:
-            return trace.read_raw(str(self.ev), self.a.archive, rec)[0]
+            return trace.read_raw(str(self.proc_of(rec).ev), self.a.archive, rec)[0]
         except OSError:
             return None
 
@@ -163,7 +220,8 @@ class System:
         sys.path.insert(0, str(ROOT / "demo" / "apps"))
         import trace
         seg = os.path.basename(path)[:-len(".idx.jsonl")]
-        p, where = trace.seg_file(str(self.ev), self.a.archive, seg, ".idx.jsonl")
+        ev = os.path.dirname(path)
+        p, where = trace.seg_file(ev, self.a.archive, seg, ".idx.jsonl")
         return p if where == "archive" else None
 
     def archive_status(self):
@@ -179,32 +237,37 @@ class System:
                 except OSError:
                     pass
             return n
-        try:
-            sid = json.loads((self.ev / "store.json").read_text())["store_id"]
-        except (OSError, ValueError, KeyError):
-            sid = None
-        local = sorted(p[:-4] for p in glob.glob(str(self.ev / "seg_*.raw")))
-        local_bytes = size([p + s for p in local for s in (".raw", ".idx.jsonl", ".seal.json")])
-        base = Path(a.archive) / sid if sid else None
-        shipped = {Path(p).stem for p in glob.glob(str(base / "receipts" / "seg_*.json"))} if base else set()
-        pending = [Path(p).name for p in local if Path(p).name not in shipped]
-        deleted = len(glob.glob(str(self.ev / "catalog" / "seg_*.ids")))
-        archived = size([p for p in glob.glob(str(base / "segments" / "seg_*")) if not p.endswith(".part")]) if base else 0
+        per = []
+        for pr in self.procs:
+            sid = pr.store_id()
+            local = sorted(x[:-4] for x in glob.glob(str(pr.ev / "seg_*.raw")))
+            base = Path(a.archive) / sid if sid else None
+            shipped = {Path(x).stem for x in glob.glob(str(base / "receipts" / "seg_*.json"))} if base else set()
+            per.append({"process": pr.i, "store_id": sid, "local_segments": len(local), "local_bytes": size([x + s for x in local for s in (".raw", ".idx.jsonl", ".seal.json")]),
+                        "shipped_segments": len(shipped), "pending_segments": len([x for x in local if Path(x).name not in shipped]),
+                        "deleted_segments": len(glob.glob(str(pr.ev / "catalog" / "seg_*.ids"))),
+                        "archived_bytes": size([x for x in glob.glob(str(base / "segments" / "seg_*")) if not x.endswith(".part")]) if base else 0,
+                        "checkpoints": len(glob.glob(os.path.join(pr.commit, "checkpoints", "ckpt_*.json"))) if pr.commit else 0,
+                        "committer": bool(subprocess.run(["pgrep", "-f", f"ulpf-committer commit --evidence {pr.ev} "], capture_output=True).stdout.strip())})
+        tot = {k: sum(x[k] for x in per) for k in ("local_segments", "local_bytes", "shipped_segments", "pending_segments", "deleted_segments", "archived_bytes", "checkpoints")}
         cap = parse_bytes(a.evidence_buffer_cap)
-        return {"configured": True, "archive": a.archive, "store_id": sid, "grace": a.evidence_grace, "cap": cap,
-                "local_segments": len(local), "local_bytes": local_bytes, "shipped_segments": len(shipped), "pending_segments": len(pending),
-                "deleted_segments": deleted, "archived_bytes": archived, "checkpoints": len(glob.glob(os.path.join(a.commit_dir, "checkpoints", "ckpt_*.json"))),
-                "buffer_event": getattr(self, "buffer_event", None),
-                "committer": bool(subprocess.run(["pgrep", "-f", f"ulpf-committer commit --evidence {self.ev}"], capture_output=True).stdout.strip())}
+        return {"configured": True, "archive": a.archive, "store_id": per[0]["store_id"], "grace": a.evidence_grace, "cap": cap * len(self.procs), "cap_per_process": cap, **tot,
+                "buffer_event": getattr(self, "buffer_event", None), "committer": all(x["committer"] for x in per), "processes": per}
 
     def tick(self):
+        for pr in self.procs:
+            self.tick_proc(pr)
+
+    def tick_proc(self, pr):
         # the local index files, and any partly read one deleted since (finished from the archive)
-        for p in sorted(set(glob.glob(str(self.ev / "seg_*.idx.jsonl"))) | {k for k, t in self.tails.items() if k.endswith(".idx.jsonl") and not t.done and not os.path.exists(k)}):
+        mine = str(pr.ev) + os.sep
+        for p in sorted(set(glob.glob(str(pr.ev / "seg_*.idx.jsonl"))) | {k for k, t in self.tails.items() if k.startswith(mine) and k.endswith(".idx.jsonl") and not t.done and not os.path.exists(k)}):
             for _, l in self.tails.setdefault(p, Tail(p, self.archived_index)).lines():
                 try:
                     r = json.loads(l)
                 except ValueError:
                     continue
+                r["_proc"] = pr.i   # which process (evidence store) holds it
                 e = {"rec": r, "ok": None}
                 if r.get("framing", {}).get("method") == "gap_record":
                     e["record"] = True
@@ -217,6 +280,8 @@ class System:
                         self.buffer_event = {"kind": g["kind"], "at": g.get("detected_at"), "detail": g.get("detail")}
                     if g.get("kind") in ("egress_stalled", "egress_resumed"):
                         self.egress[g.get("peer")] = {"state": "stalled" if g["kind"] == "egress_stalled" else "delivering", "since": g.get("detected_at"), "detail": g.get("detail")}
+                    if g.get("kind") == "pack_refused":
+                        self.tlog_refusals.append({"process": pr.i, "pack": g.get("peer"), "at": g.get("detected_at"), "detail": g.get("detail"), "event_id": r["event_id"], "segment": r["segment_id"]})
                     if g.get("kind") in ("pack_activated", "pack_deactivated"):
                         self.pack_records.append({"kind": g["kind"], "pack": g.get("peer"), "at": g.get("detected_at"), "detail": g.get("detail")})
                 with LOCK:
@@ -224,10 +289,11 @@ class System:
         # an outcome line can be read before its evidence record: the index files were listed first, and a batch committed
         # and interpreted since then (group commit) writes its index lines and its outcomes between the two reads. Such a
         # line is kept and matched on a later tick, never dropped (dropping it left the event without an outcome: miscounted)
-        out = str(self.run / "out.jsonl")
-        waiting, self.unmatched = getattr(self, "unmatched", []), []
+        out = str(pr.run / "out.jsonl")
+        um = getattr(self, "unmatched", {})
+        waiting = um.get(pr.i, []); um[pr.i] = []; self.unmatched = um
         fresh = [("out", off, l) for off, l in self.tails.setdefault(out, Tail(out)).lines()]
-        q = str(self.run / "q.jsonl")
+        q = str(pr.run / "q.jsonl")
         fresh += [("q", 0, l) for _, l in self.tails.setdefault(q, Tail(q)).lines()]
         for kind, off, l in waiting[-20000:] + fresh:
             try:
@@ -237,7 +303,7 @@ class System:
                 continue
             e = self.events.get(eid)
             if e is None:
-                self.unmatched.append((kind, off, l))
+                self.unmatched[pr.i].append((kind, off, l))
                 continue
             if kind == "out":
                 lin = r["_lineage"]
@@ -305,11 +371,14 @@ class System:
         """UP / DOWN per destination, from its own health URL (one probe per second, not per page refresh)."""
         import urllib.request
         for d in self.destinations:
-            try:
-                with urllib.request.urlopen(d["health"], timeout=1.5) as r:
-                    self.health[d["name"]] = (r.status < 500, f"HTTP {r.status}", time.time())
-            except Exception as ex:
-                self.health[d["name"]] = (False, type(ex).__name__, time.time())
+            ups, why = [], "HTTP 200"
+            for pr in (self.procs if "{lake_port}" in d.get("health", "") else self.procs[:1]):
+                try:
+                    with urllib.request.urlopen(dest_for(d, pr)["health"], timeout=1.5) as r:
+                        ups.append(r.status < 500); why = f"HTTP {r.status}"
+                except Exception as ex:
+                    ups.append(False); why = type(ex).__name__ + (f" (process {pr.i})" if len(self.procs) > 1 else "")
+            self.health[d["name"]] = (all(ups), why, time.time())
         siem = next((d for d in self.destinations if d.get("kind") == "siem" and d.get("metrics")), None)
         if siem and self.health.get(siem["name"], (False,))[0] and time.time() - getattr(self, "_metrics_at", 0) >= 5:
             self._metrics_at = time.time()   # the quarantine panel in the SIEM's dashboard: the console's counts, posted as documents
@@ -346,7 +415,8 @@ class System:
         out = {"sources": [], "latest": [], "lookup": None, "writer": None}
         try:
             import urllib.request
-            out["writer"] = json.loads(urllib.request.urlopen(self.a.lake_status, timeout=1).read())
+            ws = [json.loads(urllib.request.urlopen(f"http://127.0.0.1:{pr.lake_port}/status", timeout=1).read()) for pr in self.procs]
+            out["writer"] = ws[0] if len(ws) == 1 else {**ws[0], "writers": len(ws), **{k: sum(w.get(k) or 0 for w in ws) for k in ("rows_written", "files_written", "staged_rows", "received_rows", "duplicate_rows_ignored")}}
         except Exception:
             pass
         for src in sorted((lake / "ext").glob("*")) if (lake / "ext").exists() else []:
@@ -386,9 +456,80 @@ class System:
         import trace
         siem = next((d for d in self.destinations if d.get("kind") == "siem"), {})
         work = self.dir / "trace"; work.mkdir(exist_ok=True)
-        t = trace.trace(event_id, str(self.ev), self.a.lake, siem.get("findings", "http://127.0.0.1:9200"), str(work), self.a.archive, self.a.commit_dir if self.a.archive else None)
+        with LOCK:
+            e = self.events.get(event_id)
+        pr = self.proc_of(e["rec"]) if e else next((x for x in self.procs if trace.find_record(str(x.ev), self.a.archive, event_id)[0]), self.procs[0])
+        t = trace.trace(event_id, str(pr.ev), self.a.lake, siem.get("findings", "http://127.0.0.1:9200"), str(work), self.a.archive, pr.commit if self.a.archive else None)
+        t["process"] = pr.i
         self.traces[event_id] = t
         return t
+
+    def tlog_view(self):
+        """The parser history: every pack ULPF may load — when it was logged and how it was produced."""
+        r = subprocess.run([str(ROOT / "runtime" / "bin" / "ulpf-tlog"), "list", "--json"], capture_output=True, text=True, env={**os.environ, "ULPF_ROOT": str(ROOT)})
+        try:
+            d = json.loads(r.stdout)
+        except ValueError:
+            d = {"entries": [], "checkpoint": {}, "error": (r.stderr or r.stdout)[-300:]}
+        active = {v["pack_id"] + " " + v["pack_version"] for v in self.active.values()}
+        for e in d.get("entries") or []:
+            e["active"] = (e.get("PackID", "") + " " + e.get("PackVersion", "")) in active
+        d["entries"] = list(reversed(d.get("entries") or []))[:60]
+        d["refusals"] = self.tlog_refusals[-10:]
+        d["witness"] = os.environ.get("ULPF_TLOG_WITNESS")
+        return d
+
+    def push_unlogged(self, proc_i):
+        """The demo moment: a pack that is validly SIGNED but NOT in the parser transparency log is pushed to ONE process
+        (its packs file + SIGHUP). The runtime refuses it — the running packs stay — and the refusal is a `pack_refused`
+        record in that process's evidence log."""
+        import shutil
+        pr = self.procs[max(1, min(int(proc_i), len(self.procs))) - 1]
+        src = Path(next(iter(self.active.values()))["pack"]) if self.active else Path(self.a.golden)
+        n = len(list((self.dir / "rogue").glob("pack-*"))) + 1 if (self.dir / "rogue").exists() else 1
+        dst = self.dir / "rogue" / f"pack-{n}"
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns("pack.json.tlog-proof"))
+        doc = json.loads((dst / "pack.json").read_text())
+        doc["pack_version"] = f"{doc['pack_version'].split('.')[0]}.{900 + n}"   # a valid version never logged: signed, contract-valid, NOT in the log
+        (dst / "pack.json").write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        r = subprocess.run([self.a.python, "-c", f"import sys; sys.path.insert(0, 'learning'); from pathlib import Path; from ulpf_learn.signing import sign_pack; sign_pack(Path({str(dst)!r}), log=False)"],
+                           cwd=str(ROOT), capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError("could not sign the unlogged pack: " + r.stderr[-300:])
+        refused = pr.err_text().count("reload REFUSED")
+        before = len(self.tlog_refusals)
+        dirs = [v["pack"] for v in self.active.values()] + [str(dst)]
+        tmp = pr.packs.with_suffix(".tmp"); tmp.write_text("".join(d + "\n" for d in dirs)); os.replace(tmp, pr.packs)
+        pr.runtime.send_signal(signal.SIGHUP)
+        for _ in range(100):
+            if pr.err_text().count("reload REFUSED") > refused:
+                break
+            time.sleep(0.1)
+        dirs = [v["pack"] for v in self.active.values()]
+        tmp = pr.packs.with_suffix(".tmp"); tmp.write_text("".join(d + "\n" for d in dirs)); os.replace(tmp, pr.packs)   # the push is over; the file lists the logged packs again
+        t = pr.err_text()
+        ok = t.count("reload REFUSED") > refused
+        return {"process": pr.i, "pack": f"{doc['pack_id']} v{doc['pack_version']}", "refused": ok,
+                "reason": t.rsplit("reload REFUSED", 1)[1].strip()[:400] if ok else "the runtime did not answer", "recorded_before": before}
+
+    def certificate(self, event_id):
+        sys.path.insert(0, str(ROOT / "demo" / "apps"))
+        import certificate
+        import trace
+        t = self.traces.get(event_id) or self.prove(event_id)
+        pr = self.procs[(t.get("process") or 1) - 1]
+        rec, where = trace.find_record(str(pr.ev), self.a.archive, event_id)
+        rec = rec or {}
+        host = (rec.get("peer") or "").rsplit(":", 1)[0]
+        device = self.inventory.get(host, {})
+        try:
+            doc = json.loads((self.dir / "trace" / f"expected-{event_id}.json").read_text())
+        except (OSError, ValueError):
+            doc = {}
+        raw_where = next((x.get("evidence_source") for x in t.get("steps", []) if x.get("evidence_source")), where)
+        note = (f"shipped byte-exact to the evidence archive ({self.a.archive}); the local copy was deleted after shipping, the bytes above were read from the archive and re-hashed"
+                if raw_where == "archive" else f"is held in the local evidence buffer and shipped byte-exact to the evidence archive ({self.a.archive}) after it is committed") if self.a.archive else "is held in the local evidence directory (no archive configured)"
+        return certificate.render(event_id, t, rec, device, doc, note, pr.i)
 
     def loop(self):
         last_probe = 0
@@ -569,7 +710,8 @@ class System:
         fam = json.loads((session / "session.json").read_text())["plan"].get("family_id") or f"positional-{arity}"
         out = work / f"pack-{version}"
         self.step(job, "promoting: acceptance policy, signed pack" + (" (what rests on a proposal alone is withheld, carried unmapped)" if job["kind"] == "heal" else ""), "promoting")
-        self.learn("promote", "--session", str(session), "--out", str(out), "--pack-id", f"{job['source_id']}-{fam}", "--withhold-unevidenced", "--pack-version", version)
+        self.learn("promote", "--session", str(session), "--out", str(out), "--pack-id", f"{job['source_id']}-{fam}", "--withhold-unevidenced", "--pack-version", version,
+                   "--produced-by", "auto-healed" if job["kind"] == "heal" else "onboarded")   # logged in the parser transparency log BEFORE it is activated
         r = subprocess.run([self.a.rt, "verify-pack", "--pack", str(out)], capture_output=True, text=True, cwd=str(ROOT))
         if r.returncode != 0:
             raise RuntimeError("verify-pack: " + (r.stdout + r.stderr)[-300:])
@@ -622,8 +764,9 @@ class System:
                 if e.get("record"):
                     continue
                 h = self.host_of(e)
-                a = apps.setdefault(h, {"host": h, "events": 0, "usable": 0, "quarantined": 0})
+                a = apps.setdefault(h, {"host": h, "events": 0, "usable": 0, "quarantined": 0, "processes": set(), "peers": set()})
                 a["events"] += 1; a["usable"] += e.get("ok") is True; a["quarantined"] += e.get("ok") is False
+                a["processes"].add(e["rec"].get("_proc") or 1); a["peers"].add(e["rec"].get("peer"))
                 a["channel"], a["peer"], a["last_ms"] = e["rec"].get("ingest_channel"), e["rec"].get("peer"), e["rec"].get("ingest_time") or 0
             for h, a in apps.items():
                 inv = self.inventory.get(h, {})
@@ -632,25 +775,35 @@ class System:
                 a["idle_s"] = round((now_ms - a["last_ms"]) / 1000, 1)
                 a["connected"] = a["idle_s"] < 3
                 a["alert"] = any(j.get("host") == h and j["state"] not in ("done", "failed") for j in self.jobs)
+                a["processes"], a["connections"] = sorted(a["processes"]), len(a.pop("peers"))
             recent = [e for e in (self.events[i] for i in self.order[-200:]) if not e.get("record") and e.get("ok") is not None and self.learnable(e)][-40:]   # the applications being onboarded
-            curs = {}
-            for f in (self.dir / "spool").glob("cursor-*.json"):
-                try:
-                    c = json.loads(f.read_text()); curs[c["sink"]] = c
-                except (OSError, ValueError, KeyError):
-                    pass
+            curs = {}   # (process, sink) -> cursor
+            for pr in self.procs:
+                for f in pr.spool.glob("cursor-*.json"):
+                    try:
+                        c = json.loads(f.read_text()); curs[(pr.i, c["sink"])] = c
+                    except (OSError, ValueError, KeyError):
+                        pass
             usable = sum(a["usable"] for a in apps.values())
             egress = []
             for d in self.destinations:
-                sink = ("bulk+" + d["url"][len("bulk+"):]) if d["url"].startswith("bulk+") else d["url"]
-                cur = curs.get(sink, {})
+                cs = [curs.get((pr.i, sink_name(dest_for(d, pr)["url"])), {}) for pr in self.procs]
+                cur = {k: sum(c.get(k, 0) for c in cs) for k in ("delivered_events", "skipped_events", "rejected_events")}
+                cur["last_event_id"] = max((c.get("last_event_id") or "" for c in cs), default=None)
+                sink = sink_name(dest_for(d, self.procs[0])["url"])
                 up, why, _ = self.health.get(d["name"], (False, "not probed yet", 0))
                 st = self.egress.get(sink, {})
                 egress.append({"name": d["name"], "kind": d.get("kind"), "url": d["url"], "ui": d.get("ui"), "up": up, "why": why, "delivery": st.get("state") or ("delivering" if cur.get("delivered_events") else "waiting"),
                                "delivered": cur.get("delivered_events", 0), "ahead_by": max(0, usable - cur.get("delivered_events", 0)), "skipped": cur.get("skipped_events", 0),
                                "rejected": cur.get("rejected_events", 0), "last_event_id": cur.get("last_event_id")})
             jobs = [{k: v for k, v in j.items() if k not in ("go", "promote")} for j in self.jobs]
-            return {"policy": self.policy, "runtime": {"up": self.runtime is not None and self.runtime.poll() is None, "ingress": [{"label": "Syslog over TCP", "addr": self.a.in_tcp}, {"label": "HTTP POST", "addr": self.a.in_http}],
+            procs = []
+            for pr in self.procs:
+                procs.append({"process": pr.i, "pid": pr.runtime.pid if pr.runtime else None, "up": pr.runtime is not None and pr.runtime.poll() is None, "store_id": pr.store_id(),
+                              "evidence": str(pr.ev), "lake_port": pr.lake_port, "events": sum(1 for i in self.order if (self.events[i]["rec"].get("_proc") or 1) == pr.i and not self.events[i].get("record")),
+                              "applications": sorted(h for h, a in apps.items() if pr.i in a["processes"])})
+            return {"policy": self.policy, "processes": procs,
+                    "runtime": {"up": all(x["up"] for x in procs), "processes": len(procs), "ingress": [{"label": "Syslog over TCP", "addr": self.a.in_tcp}, {"label": "HTTP POST", "addr": self.a.in_http}],
                                                        "packs": [{"pack_id": v["pack_id"], "pack_version": v["pack_version"], "family": v["family"]} for v in self.active.values()], "reloads": self.reloads,
                                                        "provider": self.a.provider, "pack_records": self.pack_records[-6:], "vendor_packs": getattr(self, "vendors_loaded", 0),
                                                        "relay_sent": self.relay_sent, "relay_available": bool(self.a.vendor_capture and Path(self.a.vendor_capture).exists())},
@@ -682,7 +835,7 @@ class System:
         rec, raw = e["rec"], self.raw(e["rec"])
         ev = None
         if e.get("out"):
-            with open(self.run / "out.jsonl", "rb") as f:
+            with open(self.proc_of(rec).run / "out.jsonl", "rb") as f:
                 f.seek(e["out"][0]); ev = json.loads(f.read(e["out"][1]))
         lin = (ev or {}).get("_lineage", {})
         p = (e.get("sig") or "").split("|")
@@ -719,6 +872,21 @@ def handler(sysm):
                     return self._send(200, json.dumps({"error": f"{type(ex).__name__}: {ex}", "sources": [], "latest": []}).encode())
             if p == "/api/findings":
                 return self._send(200, json.dumps(sysm.findings()).encode())
+            if p == "/api/tlog":
+                return self._send(200, json.dumps(sysm.tlog_view(), default=str).encode())
+            if p == "/certificate":
+                try:
+                    return self._send(200, sysm.certificate(q.get("id", "")).encode(), "text/html; charset=utf-8")
+                except Exception as ex:
+                    return self._send(500, f"certificate: {type(ex).__name__}: {ex}".encode(), "text/plain")
+            if p == "/api/bundle":
+                t = sysm.traces.get(q.get("id", "")) or {}
+                b = next((x.get("bundle") for x in t.get("steps", []) if x.get("bundle")), None)
+                if not b or not Path(b).exists():
+                    return self._send(404, b"no derivation bundle yet: run Prove it", "text/plain")
+                self.send_response(200); self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Disposition", f"attachment; filename=\"{Path(b).name}\""); self.end_headers()
+                return self.wfile.write(Path(b).read_bytes())
             if p == "/api/trace":
                 return self._send(200, json.dumps(sysm.traces.get(q.get("id", ""))).encode())
             f = {"/": "system.html", "/lake": "lake.html", "/theme.css": "theme.css"}.get(p)
@@ -744,6 +912,9 @@ def handler(sysm):
                     sysm.rollback(d.get("alert"))
                 elif self.path == "/api/siem":
                     sysm.siem_control(d.get("action"))
+                elif self.path == "/api/push-unlogged":
+                    res = sysm.push_unlogged(d.get("process", 1))
+                    return self._send(200, json.dumps(res).encode())
                 elif self.path == "/api/prove" and str(d.get("event_id", "")).startswith("ev_"):
                     threading.Thread(target=sysm.prove, args=(d["event_id"],), daemon=True).start()
                 else:
@@ -771,7 +942,9 @@ def main() -> int:
     ap.add_argument("--in-tcp", default="127.0.0.1:6515"); ap.add_argument("--in-http", default="127.0.0.1:8516"); ap.add_argument("--destinations", default=str(ROOT / "demo" / "apps" / "destinations.json"))
     ap.add_argument("--vendor-packs", help="source packs of the four-vendor relay (demo/reset.sh builds them: $STATE/p6/source-packs)")
     ap.add_argument("--vendor-capture", help="the recorded four-vendor mixed capture ($STATE/p6/mixed.log)"); ap.add_argument("--relay-rate", type=float, default=8)
-    ap.add_argument("--spool-cap", default="256MiB"); ap.add_argument("--lake", required=True); ap.add_argument("--lake-status", default="http://127.0.0.1:8792/status")
+    ap.add_argument("--spool-cap", default="256MiB"); ap.add_argument("--lake", required=True)
+    ap.add_argument("--lake-port", type=int, default=8792, help="process i's lake writer listens on this port + i - 1 ({lake_port} in destinations.json)")
+    ap.add_argument("--processes", type=int, default=1, help="scale-out: N runtime processes on the same ingress addresses (SO_REUSEPORT)")
     ap.add_argument("--python", default="python"); ap.add_argument("--provider", choices=["model", "fixture"], default="fixture")
     ap.add_argument("--model-id", default=""); ap.add_argument("--server", default="http://127.0.0.1:8081"); ap.add_argument("--backend", default="unknown")
     ap.add_argument("--archive", help="the evidence archive (start-demo.sh: $APP/evidence-archive); without it the runtime runs with --dev-no-evidence-archive")
@@ -792,12 +965,15 @@ def main() -> int:
     except KeyboardInterrupt:
         pass
     finally:
-        if s.runtime and s.runtime.poll() is None:
-            s.runtime.terminate()
-            try:
-                s.runtime.wait(8)
-            except subprocess.TimeoutExpired:
-                s.runtime.kill()
+        for pr in s.procs:
+            if pr.runtime and pr.runtime.poll() is None:
+                pr.runtime.terminate()
+        for pr in s.procs:
+            if pr.runtime:
+                try:
+                    pr.runtime.wait(8)
+                except subprocess.TimeoutExpired:
+                    pr.runtime.kill()
     return 0
 
 

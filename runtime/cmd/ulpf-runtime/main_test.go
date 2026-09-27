@@ -7,8 +7,99 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
+	"time"
 )
+
+// Parser Transparency Log, both loading paths of the runtime: an UNLOGGED pack (validly signed, no inclusion proof)
+// stops the runtime at startup, and pushed to a running runtime by hot reload (SIGHUP — the path onboarding and
+// auto-heal use) it is refused, the running packs stay, and the refusal is a `pack_refused` record in the evidence log.
+func TestUnloggedPackIsRefusedAtStartupAndOnReload(t *testing.T) {
+	root, _ := filepath.Abs(filepath.Join("..", "..", ".."))
+	bin := filepath.Join(t.TempDir(), "ulpf-runtime")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	golden := filepath.Join(root, "contracts", "golden", "squid-native")
+	unlogged := t.TempDir()
+	filepath.Walk(golden, func(p string, info os.FileInfo, err error) error {
+		rel, _ := filepath.Rel(golden, p)
+		if info.IsDir() {
+			return os.MkdirAll(filepath.Join(unlogged, rel), 0o755)
+		}
+		if rel == "pack.json.tlog-proof" {
+			return nil // signed, but never logged
+		}
+		b, _ := os.ReadFile(p)
+		return os.WriteFile(filepath.Join(unlogged, rel), b, 0o644)
+	})
+	env := append(os.Environ(), "ULPF_ROOT="+root)
+	// startup
+	cmd := exec.Command(bin, "run", "--dev-no-evidence-archive", "--pack", unlogged, "--input", filepath.Join(golden, "samples", "access.log"), "--evidence", filepath.Join(t.TempDir(), "ev"), "--out", os.DevNull)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "not in the parser transparency log") {
+		t.Fatalf("startup with an unlogged pack must fail: %v\n%s", err, out)
+	}
+	// hot reload
+	ev, packs := filepath.Join(t.TempDir(), "ev"), filepath.Join(t.TempDir(), "packs.txt")
+	os.WriteFile(packs, nil, 0o644)
+	stderr := &syncBuf{b: &bytes.Buffer{}}
+	cmd = exec.Command(bin, "run", "--dev-no-evidence-archive", "--pack", golden, "--packs-file", packs, "--listen", "tcp:127.0.0.1:0", "--evidence", ev, "--out", os.DevNull)
+	cmd.Env, cmd.Stderr = env, stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Process.Kill()
+	wait := func(s string) bool {
+		for i := 0; i < 100; i++ {
+			if strings.Contains(stderr.String(), s) {
+				return true
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		return false
+	}
+	if !wait("listening for syslog over TCP") {
+		t.Fatalf("runtime did not start: %s", stderr.String())
+	}
+	os.WriteFile(packs, []byte(unlogged+"\n"), 0o644)
+	cmd.Process.Signal(syscall.SIGHUP)
+	if !wait("reload REFUSED") || !strings.Contains(stderr.String(), "not in the parser transparency log") {
+		t.Fatalf("the reload must be refused by the log: %s", stderr.String())
+	}
+	cmd.Process.Signal(syscall.SIGTERM)
+	cmd.Wait()
+	idx, _ := filepath.Glob(filepath.Join(ev, "seg_*.idx.jsonl"))
+	found := false
+	for _, f := range idx {
+		b, _ := os.ReadFile(f)
+		raw, _ := os.ReadFile(strings.TrimSuffix(f, ".idx.jsonl") + ".raw")
+		found = found || (strings.Contains(string(b), "gap_record") && strings.Contains(string(raw), `"kind":"pack_refused"`))
+	}
+	if !found {
+		t.Fatal("the refusal must be a pack_refused record in the evidence log")
+	}
+}
+
+type syncBuf struct {
+	mu sync.Mutex
+	b  *bytes.Buffer
+}
+
+func (s *syncBuf) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuf) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
 
 // ULPF refuses to start without an evidence archive, and starts with the development override — saying so loudly.
 func TestRunRefusesToStartWithoutAnEvidenceArchive(t *testing.T) {

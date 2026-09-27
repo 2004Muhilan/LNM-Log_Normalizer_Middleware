@@ -3,6 +3,19 @@
 The problem statement says the framework must be suitable for billions of events per day. One billion a day is
 **11,574 events per second** on average. This is where ULPF is, on one machine, measured.
 
+**The answer in one paragraph** (details in the sections below).
+- **One process, end to end** — ingest, the evidence log, the archive, OpenSearch and the Parquet lake, all on one
+  8-core desktop — does **2.7–3.1k events/s**, both destinations acknowledging.
+- **Four processes on the same ports, with 8 senders,** reach **5,269/s**: 0.46 billion a day, extrapolated. Every row is
+  in Parquet at 3,233/s.
+- **Every run in the scaling matrix was exactly-once and kept each sender on one process.**
+- **The limit is the machine's CPU,** shared by everything: about 1.5 ms of CPU per event in all. One billion a day on
+  average is therefore about **17 cores of this kind (extrapolated)**, which means more than one machine. Scaling across
+  machines was not measured.
+- **Parse alone** does 10.4k/s per process.
+- **The lake writer** was profiled and fixed: 1,660 → 4,448 events/s.
+- Nothing here was measured on the laptop.
+
 **Machine:**
 - AMD Ryzen 7 2700X, 8 cores / 16 threads, 25 GB visible to WSL2 (kernel 6.6.87.2), Windows 11.
 - Evidence, spool and lake on the WSL2 ext4 virtual disk.
@@ -84,6 +97,169 @@ Before group commit (the previous measurement, same machine, commit `a56cc87`): 
 - **The runtime's own CPU end to end is 75.7 CPU-s for 200,000 events**, against ~50 for the evidence path alone at the same
   count. The difference is the forwarders polling and re-reading the spool: a directory listing and a file open per poll per
   destination. This is an optimisation target, not a ceiling at these rates.
+
+## Scale-out across processes, end to end with the evidence archive on (2026-09-27)
+
+**Harness:** `scripts/bench/scale.py`; raw results in `docs/metrics/scale.json`. The first run is kept in
+`~/ulpf-bench/scale-run1.json`; it is not used, because its timing favoured several processes (below).
+
+**Setup.** P runtime processes share one TCP port with SO_REUSEPORT. Each has:
+- its own evidence store, **with the archive on**: a committer per store every 2 s, shipping to one shared archive, and
+  deletion after a 10 s grace;
+- its own spool;
+- a bulk forwarder into the one OpenSearch;
+- its own lake writer (1,000-event batches, production rotation), all writing into one lake root.
+
+**Senders.** G independent generators: separate processes, each sending from its own address (127.0.0.10+g) over one TCP
+connection. Together they send 120,000 events per run: the 89 parseable lines of the four-vendor capture (the 9
+quarantined lines left out, so every event is expected in both destinations), repeated.
+
+**Three times per run, all measured from the first byte sent:**
+- **both acknowledged**: every event is in the SIEM, and durably staged by the lake writer (its acknowledgement point);
+- **SIEM**: when the SIEM alone had every event;
+- **in Parquet**: when every row was also written to a Parquet file.
+
+The first run of the matrix measured only *both acknowledged*. With one process, the lake's conversion to Parquet happened
+during the run, because the staged bytes passed the rotation size. With several processes, each writer staged less and
+converted after the clock stopped. That favoured the multi-process numbers, so the matrix was run again, timing each point.
+
+**Checked in every run:**
+- **exactly-once**: events generated = SIEM documents = lake rows = distinct lake event ids = evidence records;
+- **affinity**: every sender's events were all handled by one process, read from every store's evidence, local and archived.
+
+**Both held in all 36 runs.** Machine: the Ryzen 7 2700X (8 cores / 16 threads), with everything on it: OpenSearch (one
+node, 512 MB heap), the runtimes, committers and lake writers, and the Python generators.
+
+| events/s, median of 3 (the three runs) | 1 generator | 2 generators | 4 generators | 8 generators |
+|---|---|---|---|---|
+| **1 process** — both acknowledged | 2,740 (2,429 · 2,740 · 2,741) | 2,912 (2,695 · 2,933 · 2,912) | 2,801 (2,744 · 2,879 · 2,801) | 3,104 (3,184 · 2,633 · 3,104) |
+| 1 process — in Parquet | 2,138 | 2,245 | 2,167 | 2,381 |
+| **2 processes** — both acknowledged | 2,788 (2,770 · 2,946 · 2,788) | 4,755 (5,089 · 2,817 · 4,755) | 3,117 (2,767 · 3,117 · 4,592) | 3,174 (3,174 · 4,276 · 3,069) |
+| 2 processes — in Parquet | 2,215 | 2,907 | 2,448 | 2,421 |
+| **4 processes** — both acknowledged | 2,665 (2,665 · 2,652 · 2,707) | 4,101 (4,679 · 4,024 · 4,101) | 4,181 (4,432 · 4,115 · 4,181) | **5,269** (3,476 · 5,823 · 5,269) |
+| 4 processes — in Parquet | 2,077 | 2,681 | 2,721 | **3,233** |
+
+**What it says.**
+- **One process with the evidence log, the archive and both destinations on does 2.7–3.1k events/s end to end.**
+  - Extrapolated: 0.24–0.27 billion a day acknowledged, 0.18–0.21 billion until Parquet.
+  - The parse path alone (above) is 3.6× that. The difference is the rest of the path on the same machine: evidence, the
+    spool, the forwarders, the archive's committer, OpenSearch and the lake.
+- **More processes help only as far as the kernel spreads the senders.** It hashes each connection, so a few senders
+  spread unevenly:
+  - two senders on two processes landed on the same process in one run of three;
+  - four senders on two processes landed all on one process in one run;
+  - **one sender always stays on one process.**
+
+  The best cell, 4 processes and 8 senders, reached **5,269 events/s both acknowledged (0.46 billion a day extrapolated)
+  and 3,233/s in Parquet (0.28 billion)**.
+- **The limit is the machine.** At 4 processes × 8 senders, one run of 120,000 events cost:
+  - 69 CPU-s in the runtimes (1,740 events per runtime CPU-second, including forwarding and archiving);
+  - 43 CPU-s in OpenSearch;
+  - the lake writers' conversion (1,969 events per CPU-second, measured alone);
+  - 3 CPU-s in the committers.
+
+  About 1.5 ms of CPU per event in all. **One billion a day on average is therefore about 17 cores of this machine's kind**
+  (an extrapolation, before any peak factor), plus a second OpenSearch node. The design is one stream per process and N
+  processes per machine, so that is several machines of this size. Scaling across machines was **not measured**.
+- **Disk:** the largest run peaked at 629 MB of run files: evidence, archive, spool, lake and index.
+
+### Process death
+
+Setup: 2 processes, 4 generators each sending 500 events/s (2,000/s in total, below capacity), 120,000 events. The process
+holding the most connections was killed with SIGKILL at 40 % of the stream.
+- **The senders moved.**
+  - All four were on process 1, which was killed at 24.5 s.
+  - Each saw its connection reset, reconnected once (a new source port), and the kernel placed it on process 2.
+  - **Their per-source state on process 2 starts fresh**: sequence-gap counters, silence tracking and the peer binding.
+    The console's drift detection is keyed by the sender's address and does not move, but the runtime's per-peer
+    continuity does.
+- **What the dead process had accepted.**
+  - It had committed 49,056 events to its evidence store; 556 of them were not yet delivered.
+  - Restarted on its own evidence and spool, it resumed both cursors and delivered them.
+  - It also **recovered 256 frames** (one batch) that it had committed to its evidence log and never interpreted: the
+    crash fell between the commit and the interpretation. They were interpreted before any new intake, with their original
+    ids, and recorded as `interpretation_recovered` (new in this change: `TestRestartInterpretsWhatWasCommittedButNotInterpreted`).
+- **Nothing accepted was lost or duplicated:** the 119,456 events accepted (committed to some evidence store) = SIEM
+  documents = lake rows = distinct lake ids.
+- **Lost in flight: 544 events** (0.45 %). The senders had handed them to their kernel, but no process ever committed them.
+  They sat in socket buffers when the process died, or were staged but not yet committed (at most 10 ms). Plain TCP syslog
+  has no application acknowledgement, so a sender cannot know.
+  - **This grows with overload.** In the first run the senders offered 6,000/s against about 2,800/s, and 52,288 events
+    were queued in socket buffers when the process died, all lost.
+  - HTTP receive answers 202 only after the commit, so its sender keeps what was not accepted.
+  - Strict deployments send over HTTP, or over a relay that keeps its own queue.
+
+**Two limits, stated plainly:**
+1. **One very busy sender cannot be split across processes.** One connection, one process: the kernel hashes the flow,
+   and any other spread would break per-sender ordering and per-source state. A sender that outgrows one process needs
+   several connections, or a relay that fans out.
+2. **A sender that moves to another process starts there with fresh per-source state**, whether it moved because its
+   process died or because it reconnected. The kernel hashes the connection, not the sender's address, so a new
+   connection may land elsewhere.
+
+**Disk during the scaling work.**
+- The budget was 6 GB per run, with a 40 GB free-space floor on `/` and `/mnt/c`, checked every half second by the guard,
+  which never tripped.
+- Every run was bounded at 120,000 events and cleaned up afterwards: its directory, its archive and its OpenSearch indices.
+- The largest run peaked at 629 MB. The matrix ran twice (72 runs, plus two death runs), writing about 40 GB in all, never
+  more than 0.63 GB at a time.
+- Free space on `/` was 969.9 GB before and after.
+- **The WSL2 virtual disk grew 0.16 GB** over the whole batch — the matrix twice, the lake runs and three gate runs
+  (75.884 → 76.04 GB). Docker Desktop's disk did not grow (84.65 GB).
+
+**Directory pull** has no kernel to spread it. `--pull-shard i/N` makes process i take only the files whose source key
+(the name before the first `_`) hashes to i. Every file of one source goes to one process, and no two processes read or
+rename the same file (`TestPullShardsPartitionBySource`).
+
+## The lake writer — profiled, then fixed (2026-09-27)
+
+After group commit, the lake writer (1,670 events/s alone) set the end-to-end pace. It was **profiled before anything was
+changed**: `scripts/bench/lake_profile.py`, in-process on 152,914 rows of the four-vendor capture's normalized output.
+
+| Where the time goes | Seconds | Share |
+|---|---|---|
+| **Ingest:** 100-event batches, each with an fsync of the staging file and of the state (1,529 batches, ~12 ms each) | 17.9 | 39 % |
+| **Grouping:** Python `json.loads` per row, grouped by (class, event day) | 4.9 | 10 % |
+| **Conversion to Parquet** (9 files) | 23.7 | 51 % |
+
+The conversion is dominated by the **wide write**:
+- The same COPY writing only the lineage columns takes 3.5 s; the ~3,600-element schema costs the rest.
+- **Every file pays a fixed ~0.45 s** (the fastest single COPY) to set up and write that schema.
+- The benchmark run wrote 162 files, rotating every 30 s per class per event day, so the fixed cost alone was roughly
+  73 s of its 92 s.
+
+Both suspects were real, and they multiply: many small files × a fixed cost per file set by the width.
+
+**Writer settings tried on the largest class** (142,604 rows, one file):
+
+| Setting | Rows/s |
+|---|---|
+| zstd, as built | 10,424 |
+| snappy | 9,136 |
+| uncompressed | 9,716 |
+| row groups of 1 M | 9,371 |
+| **`preserve_insertion_order=false`** | **16,805** |
+
+Row order inside a lake file carries no meaning here: exactly-once rests on the spool high-water marks and the file names.
+
+**Fixed:**
+- **Production rotates on size**: 128 MiB staged, or 5 minutes at most. The demo keeps its 10-second rotation on the
+  command line.
+- **DuckDB no longer preserves insertion order** inside a file.
+- **ULPF sends the lake 1,000-event batches** (`?batch=1000` on the destination URL; an fsync pair per batch, the same
+  acknowledgement rule).
+- **One lake writer per ULPF process**, all into one lake root (`--writer-id`).
+- **The full fixed schema is kept**, as decided.
+
+**Before and after, the same 152,914 rows, three runs each** (`scripts/bench/lake_bench.py`, `docs/metrics/lake-bench.json`):
+
+| | Events/s (median; runs) | Files | Lake writer CPU-s | Events per CPU-second | Parquet / JSONL |
+|---|---|---|---|---|---|
+| before (100-event batches, 8 MiB / 30 s rotation, order preserved) | **1,660** (1,598 · 1,869 · 1,660) | 162 | 261 | 586 | 24.0 % |
+| after | **4,448** (4,664 · 4,434 · 4,448) — **2.7×** | 18 | 78 | 1,969 | **4.8 %** |
+
+Acknowledged ingest after the fix (every batch staged and fsynced) runs at 8,224/s; the conversion is the rest. Fewer,
+larger files also compress far better: Parquet is 4.8 % of the JSONL.
 
 ## Efficiency of the integrations (requirement g)
 

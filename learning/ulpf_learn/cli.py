@@ -74,6 +74,7 @@ def main(argv=None) -> int:
     r.add_argument("--field"); r.add_argument("--attribute"); r.add_argument("--initiator-ip"); r.add_argument("--sample-line")
     pr = sub.add_parser("promote"); pr.add_argument("--session", required=True); pr.add_argument("--out", required=True); pr.add_argument("--pack-id", required=True)
     pr.add_argument("--withhold-unevidenced", action="store_true", help="map only what rests on sufficient evidence; a column resting on a proposal alone is carried unmapped, its certificate retained")
+    pr.add_argument("--produced-by", default="onboarded", help="recorded in the parser transparency log entry: onboarded | auto-healed | …")
     pr.add_argument("--pack-version", default="1.0", help="P8: > 1.0 promotes a CORRECTION of an already promoted family (then `ulpf-runtime renormalize`)")
     mg = sub.add_parser("merge", help="P6: merge promoted single-family packs of one source into a signed source pack (anchors from the vendor table)")
     mg.add_argument("packs", nargs="+"); mg.add_argument("--out", required=True); mg.add_argument("--pack-id", required=True); mg.add_argument("--vendor"); mg.add_argument("--pack-version")
@@ -122,6 +123,8 @@ def main(argv=None) -> int:
         s.respond(a.discriminator, text, field=a.field, attribute=a.attribute, initiator_ip=a.initiator_ip, sample_line=a.sample_line)
         show_status(s)
     elif a.cmd == "promote":
+        import os
+        os.environ["ULPF_PACK_PRODUCED_BY"] = a.produced_by   # the transparency-log entry says how the pack was produced
         p = s.promote(Path(a.out), a.pack_id, a.pack_version, withhold_unevidenced=a.withhold_unevidenced)
         print("promoted:", p)
         print("metrics:", json.dumps(s.metrics()))

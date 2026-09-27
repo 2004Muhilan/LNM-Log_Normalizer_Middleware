@@ -25,6 +25,29 @@ type Pull struct {
 	Once          bool // one pass over the directory, then return (tests, canned demos)
 	Multiline     *Multiline
 	Files         int
+	// Scale-out partitioning for directory pull (sockets have SO_REUSEPORT; a directory does not): N processes share
+	// one drop directory and process Shard of Shards takes only the files whose SOURCE KEY hashes to it — the part of
+	// the name before the first "_" (convention: <source>_<anything>, e.g. fw01_2026-09-27T10.log), or the whole name.
+	// Every file of one source goes to one process, so per-source state stays in one place, and no two processes ever
+	// read or rename the same file. Shards 0 or 1 = take every file.
+	Shard, Shards int
+}
+
+// Mine reports whether this process's shard takes the file (by its source key).
+func (p *Pull) Mine(base string) bool {
+	if p.Shards <= 1 {
+		return true
+	}
+	key := base
+	if i := strings.Index(base, "_"); i > 0 {
+		key = base[:i]
+	}
+	h := uint32(2166136261) // FNV-1a
+	for i := 0; i < len(key); i++ {
+		h ^= uint32(key[i])
+		h *= 16777619
+	}
+	return int(h%uint32(p.Shards)) == p.Shard
 }
 
 // Serve polls Dir until ctx is done (or once).
@@ -42,7 +65,7 @@ func (p *Pull) Serve(ctx context.Context, emit func(Frame) error) error {
 		sort.Strings(names)
 		for _, name := range names {
 			base := filepath.Base(name)
-			if strings.HasPrefix(base, ".") || strings.HasSuffix(base, done) {
+			if strings.HasPrefix(base, ".") || strings.HasSuffix(base, done) || !p.Mine(base) {
 				continue
 			}
 			if st, err := os.Stat(name); err != nil || st.IsDir() {

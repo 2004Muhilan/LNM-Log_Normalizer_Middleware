@@ -32,6 +32,8 @@ type TCP struct {
 	Multiline     *Multiline
 	// OnClose is called when a connection ends with a partial frame pending (peer, reason).
 	OnClose func(peer, reason string)
+	// ReusePort: scale-out — several processes on one address (SO_REUSEPORT); a connection stays with one process
+	ReusePort bool
 
 	Accepted       atomic.Int64
 	Refused        atomic.Int64
@@ -42,7 +44,7 @@ type TCP struct {
 	PeakActive     atomic.Int64
 }
 
-func (t *TCP) Listen() (net.Listener, error) { return net.Listen("tcp", t.Addr) }
+func (t *TCP) Listen() (net.Listener, error) { return listenTCP(t.Addr, t.ReusePort) }
 
 // idleReader applies the idle timeout before every read.
 type idleReader struct {

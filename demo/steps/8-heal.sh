@@ -61,7 +61,7 @@ print(f"state {s['state']}; certificates {len(s['certificates'])}; propagated sl
 sys.exit(0 if ok else 1)
 EOF
 learn respond --session "$S" --discriminator vendor_schema_field_order --input "Cisco Secure Firewall ASA Series Syslog Messages: 302015 Built {inbound|outbound} UDP connection" | tee "$D/respond.txt" || step_fail "respond"
-learn promote --session "$S" --out "$STATE/packs/$FAM" --pack-id "$FAM" | tee "$D/promote.txt" || step_fail "promote"
+learn promote --session "$S" --out "$STATE/packs/$FAM" --pack-id "$FAM" --produced-by auto-healed | tee "$D/promote.txt" || step_fail "promote"
 learn merge "$STATE"/p6/packs/asa-{302013,302014,106023,305011} "$STATE/packs/$FAM" --out "$STATE/source-packs/cisco-asa-healed" --pack-id cisco-asa-fw-01 --vendor cisco-asa --pack-version 1.1 | tee "$D/merge.txt" || step_fail "merge"
 "$RT" verify-pack --pack "$STATE/source-packs/cisco-asa-healed" | tee -a "$D/merge.txt" || step_fail "verify healed pack"
 

@@ -13,15 +13,10 @@ type UDP struct {
 	Addr          string
 	MaxEventBytes int
 	MaxFrames     int
+	ReusePort     bool // scale-out: several processes on one address (SO_REUSEPORT); the kernel keeps a sender on one
 }
 
-func (u UDP) Listen() (*net.UDPConn, error) {
-	addr, err := net.ResolveUDPAddr("udp", u.Addr)
-	if err != nil {
-		return nil, err
-	}
-	return net.ListenUDP("udp", addr)
-}
+func (u UDP) Listen() (*net.UDPConn, error) { return listenUDP(u.Addr, u.ReusePort) }
 
 // Serve reads datagrams from conn and calls emit for each until ctx is done or MaxFrames is reached.
 func (u UDP) Serve(ctx context.Context, conn *net.UDPConn, emit func(Frame) error) error {

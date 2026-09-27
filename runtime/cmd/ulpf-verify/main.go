@@ -6,6 +6,10 @@
 //	ulpf-verify bundle   --bundle <dir>   --trust <dir>     verify one exported event against its checkpoint
 //	ulpf-verify locate   --evidence <dir> --segment <id>    name the first record whose bytes changed
 //	ulpf-verify gaps     --evidence <dir> --trust <dir>     P7: list every gap record (silence, sequence gap, connection lost) with its commitment status
+//	ulpf-verify derivation --bundle <file> --trust <dir> [--json]   Proof of Derivation: the raw bytes, the logged pack re-run
+//	                     on them, the SIEM's event — offline; says which part fails (raw bytes | pack | SIEM document).
+//	                     It re-runs the pack with the engine compiled into this binary, and loads it against the contract
+//	                     schemas and the pinned OCSF index (--contracts, --pinned), whose hashes the bundle records.
 package main
 
 import (
@@ -13,9 +17,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"ulpf/runtime/internal/checkpoint"
+	"ulpf/runtime/internal/derivation"
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/keys"
 )
@@ -25,6 +31,52 @@ func main() {
 		usage()
 	}
 	switch os.Args[1] {
+	case "derivation":
+		fs := flag.NewFlagSet("derivation", flag.ExitOnError)
+		bundle := fs.String("bundle", "", "derivation bundle (ulpf-runtime derive)")
+		trust := fs.String("trust", "keys/trust", "trust store")
+		root := os.Getenv("ULPF_ROOT")
+		if root == "" {
+			root = "."
+		}
+		contracts := fs.String("contracts", filepath.Join(root, "contracts"), "contract schemas")
+		pinned := fs.String("pinned", filepath.Join(root, "ocsf", "pinned", "index.json"), "pinned OCSF index")
+		minW := fs.Int("min-witnesses", 0, "witness cosignatures the pack's log checkpoint must carry")
+		asJSON := fs.Bool("json", false, "the report as JSON")
+		fs.Parse(os.Args[2:])
+		data, err := os.ReadFile(*bundle)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		var b derivation.Bundle
+		if err := json.Unmarshal(data, &b); err != nil {
+			fmt.Fprintln(os.Stderr, "not a derivation bundle:", err)
+			os.Exit(2)
+		}
+		r := derivation.Verify(&b, derivation.VerifyOptions{TrustDir: *trust, ContractsDir: *contracts, PinnedIndex: *pinned, MinWitnesses: *minW})
+		if *asJSON {
+			json.NewEncoder(os.Stdout).Encode(r)
+		} else {
+			for _, s := range r.Steps {
+				mark := "ok  "
+				if !s.OK {
+					mark = "FAIL"
+				}
+				fmt.Printf("%s [%s] %s: %s\n", mark, s.Part, s.Name, s.Detail)
+			}
+			for _, d := range r.Differing {
+				fmt.Printf("     %s: derived %v, the SIEM holds %v\n", d.Field, d.Derived, d.SIEM)
+			}
+			if r.OK {
+				fmt.Printf("DERIVATION: OK — event %s: the logged pack, re-run on the committed raw bytes, reproduces the SIEM's event (excluded: _lineage.processing_time)\n", b.EventID)
+			} else {
+				fmt.Printf("DERIVATION: FAIL — %s\n", map[string]string{"raw bytes": "the RAW BYTES were altered", "pack": "the PACK is not the logged pack", "SIEM document": "the SIEM DOCUMENT differs from the derivation"}[r.Culprit])
+			}
+		}
+		if !r.OK {
+			os.Exit(1)
+		}
 	case "evidence":
 		fs := flag.NewFlagSet("evidence", flag.ExitOnError)
 		ev := fs.String("evidence", "", "evidence directory")

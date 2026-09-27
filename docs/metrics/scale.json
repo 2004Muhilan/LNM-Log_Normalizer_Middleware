@@ -1,0 +1,2173 @@
+{
+ "machine": {
+  "cpu": "AMD Ryzen 7 2700X Eight-Core Processor",
+  "logical_cpus": 16,
+  "memory_gb_visible_to_wsl": 25.2,
+  "opensearch": "2.19.2, one node, 512 MB heap",
+  "commit": "2e7cf16",
+  "at": "2026-09-27T17:40:38"
+ },
+ "input": {
+  "lines_in_capture": 98,
+  "parseable_lines_used": 89,
+  "events_per_run": 120000
+ },
+ "config": {
+  "archive": "on (committer per store every 2 s, grace 10 s)",
+  "group_commit": "256 frames / 10 ms",
+  "lake": "one writer per process, 1,000-event batches, rotation 128 MiB / 300 s, final flush timed",
+  "siem": "one bulk forwarder per process, 100 documents per request"
+ },
+ "disk_free_gb_before": {
+  "/": 969.883877376,
+  "/mnt/c": 348.278902784
+ },
+ "matrix": {
+  "P1_G1": {
+   "runs": [
+    {
+     "processes": 1,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 49.4,
+     "eps": 2429,
+     "send_s": 29.41,
+     "siem_acknowledged_s": 48.69,
+     "lake_acknowledged_s": 49.4,
+     "in_parquet_s": 60.86,
+     "eps_into_siem": 2464,
+     "eps_until_parquet": 1972,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 53.0,
+      "lw": 43.9,
+      "cm": 2.8
+     },
+     "opensearch_cpu_s": 75.3,
+     "peak_run_bytes": 463780985,
+     "archived_segments": 18,
+     "deleted_locally": 16,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 43.79,
+     "eps": 2740,
+     "send_s": 28.01,
+     "siem_acknowledged_s": 42.38,
+     "lake_acknowledged_s": 43.79,
+     "in_parquet_s": 55.5,
+     "eps_into_siem": 2831,
+     "eps_until_parquet": 2162,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 50.5,
+      "lw": 41.1,
+      "cm": 2.5
+     },
+     "opensearch_cpu_s": 41.4,
+     "peak_run_bytes": 467464833,
+     "archived_segments": 17,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 43.78,
+     "eps": 2741,
+     "send_s": 28.3,
+     "siem_acknowledged_s": 40.17,
+     "lake_acknowledged_s": 43.78,
+     "in_parquet_s": 56.13,
+     "eps_into_siem": 2987,
+     "eps_until_parquet": 2138,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 49.6,
+      "lw": 40.9,
+      "cm": 2.5
+     },
+     "opensearch_cpu_s": 35.2,
+     "peak_run_bytes": 493210226,
+     "archived_segments": 17,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 2740,
+   "median_wall_s": 43.79,
+   "median_eps_into_siem": 2831,
+   "median_eps_until_parquet": 2138,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P1_G2": {
+   "runs": [
+    {
+     "processes": 1,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 44.52,
+     "eps": 2695,
+     "send_s": 25.32,
+     "siem_acknowledged_s": 42.81,
+     "lake_acknowledged_s": 44.52,
+     "in_parquet_s": 57.05,
+     "eps_into_siem": 2803,
+     "eps_until_parquet": 2104,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 49.9,
+      "lw": 41.2,
+      "cm": 2.5
+     },
+     "opensearch_cpu_s": 31.9,
+     "peak_run_bytes": 468665798,
+     "archived_segments": 17,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 40.91,
+     "eps": 2933,
+     "send_s": 19.36,
+     "siem_acknowledged_s": 38.18,
+     "lake_acknowledged_s": 40.91,
+     "in_parquet_s": 53.45,
+     "eps_into_siem": 3143,
+     "eps_until_parquet": 2245,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 52.5,
+      "lw": 43.2,
+      "cm": 2.4
+     },
+     "opensearch_cpu_s": 38.8,
+     "peak_run_bytes": 469654955,
+     "archived_segments": 16,
+     "deleted_locally": 13,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 41.21,
+     "eps": 2912,
+     "send_s": 22.72,
+     "siem_acknowledged_s": 41.21,
+     "lake_acknowledged_s": 41.21,
+     "in_parquet_s": 52.83,
+     "eps_into_siem": 2912,
+     "eps_until_parquet": 2271,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 48.3,
+      "lw": 39.8,
+      "cm": 2.6
+     },
+     "opensearch_cpu_s": 31.8,
+     "peak_run_bytes": 462611664,
+     "archived_segments": 18,
+     "deleted_locally": 13,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 2912,
+   "median_wall_s": 41.21,
+   "median_eps_into_siem": 2912,
+   "median_eps_until_parquet": 2245,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P1_G4": {
+   "runs": [
+    {
+     "processes": 1,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 43.73,
+     "eps": 2744,
+     "send_s": 13.16,
+     "siem_acknowledged_s": 41.22,
+     "lake_acknowledged_s": 43.73,
+     "in_parquet_s": 55.38,
+     "eps_into_siem": 2911,
+     "eps_until_parquet": 2167,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 50.2,
+      "lw": 41.7,
+      "cm": 2.4
+     },
+     "opensearch_cpu_s": 30.5,
+     "peak_run_bytes": 469937551,
+     "archived_segments": 17,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 41.68,
+     "eps": 2879,
+     "send_s": 10.82,
+     "siem_acknowledged_s": 36.55,
+     "lake_acknowledged_s": 41.68,
+     "in_parquet_s": 52.92,
+     "eps_into_siem": 3283,
+     "eps_until_parquet": 2268,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 49.0,
+      "lw": 41.6,
+      "cm": 2.5
+     },
+     "opensearch_cpu_s": 31.3,
+     "peak_run_bytes": 478822143,
+     "archived_segments": 16,
+     "deleted_locally": 13,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 42.84,
+     "eps": 2801,
+     "send_s": 12.37,
+     "siem_acknowledged_s": 41.64,
+     "lake_acknowledged_s": 42.84,
+     "in_parquet_s": 55.41,
+     "eps_into_siem": 2882,
+     "eps_until_parquet": 2166,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 49.0,
+      "lw": 39.2,
+      "cm": 2.5
+     },
+     "opensearch_cpu_s": 30.0,
+     "peak_run_bytes": 456752088,
+     "archived_segments": 18,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 2801,
+   "median_wall_s": 42.84,
+   "median_eps_into_siem": 2911,
+   "median_eps_until_parquet": 2167,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P1_G8": {
+   "runs": [
+    {
+     "processes": 1,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 37.68,
+     "eps": 3184,
+     "send_s": 0.81,
+     "siem_acknowledged_s": 33.17,
+     "lake_acknowledged_s": 37.68,
+     "in_parquet_s": 49.0,
+     "eps_into_siem": 3618,
+     "eps_until_parquet": 2449,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13",
+       "127.0.0.14",
+       "127.0.0.15",
+       "127.0.0.16",
+       "127.0.0.17"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 51.0,
+      "lw": 41.5,
+      "cm": 2.2
+     },
+     "opensearch_cpu_s": 31.3,
+     "peak_run_bytes": 473649020,
+     "archived_segments": 14,
+     "deleted_locally": 12,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 45.57,
+     "eps": 2633,
+     "send_s": 1.42,
+     "siem_acknowledged_s": 42.86,
+     "lake_acknowledged_s": 45.57,
+     "in_parquet_s": 57.2,
+     "eps_into_siem": 2800,
+     "eps_until_parquet": 2098,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13",
+       "127.0.0.14",
+       "127.0.0.15",
+       "127.0.0.16",
+       "127.0.0.17"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 48.5,
+      "lw": 41.0,
+      "cm": 2.6
+     },
+     "opensearch_cpu_s": 30.8,
+     "peak_run_bytes": 464565009,
+     "archived_segments": 17,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 1,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 38.67,
+     "eps": 3104,
+     "send_s": 1.38,
+     "siem_acknowledged_s": 34.26,
+     "lake_acknowledged_s": 38.67,
+     "in_parquet_s": 50.39,
+     "eps_into_siem": 3502,
+     "eps_until_parquet": 2381,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13",
+       "127.0.0.14",
+       "127.0.0.15",
+       "127.0.0.16",
+       "127.0.0.17"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 50.1,
+      "lw": 42.2,
+      "cm": 2.4
+     },
+     "opensearch_cpu_s": 31.9,
+     "peak_run_bytes": 478663908,
+     "archived_segments": 15,
+     "deleted_locally": 12,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 3104,
+   "median_wall_s": 38.67,
+   "median_eps_into_siem": 3502,
+   "median_eps_until_parquet": 2381,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P2_G1": {
+   "runs": [
+    {
+     "processes": 2,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 43.33,
+     "eps": 2770,
+     "send_s": 27.94,
+     "siem_acknowledged_s": 39.61,
+     "lake_acknowledged_s": 43.33,
+     "in_parquet_s": 55.8,
+     "eps_into_siem": 3030,
+     "eps_until_parquet": 2150,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000,
+      "2": 0
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10"
+      ],
+      "2": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 52.3,
+      "lw": 38.7,
+      "cm": 2.4
+     },
+     "opensearch_cpu_s": 30.0,
+     "peak_run_bytes": 484869969,
+     "archived_segments": 17,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 40.73,
+     "eps": 2946,
+     "send_s": 26.44,
+     "siem_acknowledged_s": 37.52,
+     "lake_acknowledged_s": 40.73,
+     "in_parquet_s": 53.11,
+     "eps_into_siem": 3199,
+     "eps_until_parquet": 2260,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 0,
+      "2": 120000
+     },
+     "senders_per_process": {
+      "1": [],
+      "2": [
+       "127.0.0.10"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 52.1,
+      "lw": 39.6,
+      "cm": 2.6
+     },
+     "opensearch_cpu_s": 30.9,
+     "peak_run_bytes": 474086702,
+     "archived_segments": 16,
+     "deleted_locally": 13,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 43.05,
+     "eps": 2788,
+     "send_s": 30.98,
+     "siem_acknowledged_s": 42.95,
+     "lake_acknowledged_s": 43.05,
+     "in_parquet_s": 54.17,
+     "eps_into_siem": 2794,
+     "eps_until_parquet": 2215,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000,
+      "2": 0
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10"
+      ],
+      "2": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 52.2,
+      "lw": 41.8,
+      "cm": 2.6
+     },
+     "opensearch_cpu_s": 30.9,
+     "peak_run_bytes": 444719187,
+     "archived_segments": 18,
+     "deleted_locally": 14,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 2788,
+   "median_wall_s": 43.05,
+   "median_eps_into_siem": 3030,
+   "median_eps_until_parquet": 2215,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P2_G2": {
+   "runs": [
+    {
+     "processes": 2,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 23.58,
+     "eps": 5089,
+     "send_s": 13.6,
+     "siem_acknowledged_s": 23.58,
+     "lake_acknowledged_s": 18.85,
+     "in_parquet_s": 39.38,
+     "eps_into_siem": 5089,
+     "eps_until_parquet": 3047,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 60000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.11"
+      ],
+      "2": [
+       "127.0.0.10"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 53.9,
+      "lw": 3.8,
+      "cm": 2.8
+     },
+     "opensearch_cpu_s": 33.0,
+     "peak_run_bytes": 595564305,
+     "archived_segments": 19,
+     "deleted_locally": 12,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 42.6,
+     "eps": 2817,
+     "send_s": 28.01,
+     "siem_acknowledged_s": 41.5,
+     "lake_acknowledged_s": 42.6,
+     "in_parquet_s": 54.9,
+     "eps_into_siem": 2892,
+     "eps_until_parquet": 2186,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 120000,
+      "2": 0
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11"
+      ],
+      "2": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 52.4,
+      "lw": 42.1,
+      "cm": 2.4
+     },
+     "opensearch_cpu_s": 30.2,
+     "peak_run_bytes": 467319412,
+     "archived_segments": 18,
+     "deleted_locally": 14,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 25.24,
+     "eps": 4755,
+     "send_s": 12.75,
+     "siem_acknowledged_s": 25.24,
+     "lake_acknowledged_s": 19.7,
+     "in_parquet_s": 41.27,
+     "eps_into_siem": 4755,
+     "eps_until_parquet": 2907,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 60000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10"
+      ],
+      "2": [
+       "127.0.0.11"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 54.5,
+      "lw": 3.7,
+      "cm": 3.0
+     },
+     "opensearch_cpu_s": 32.3,
+     "peak_run_bytes": 599428219,
+     "archived_segments": 20,
+     "deleted_locally": 12,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 4755,
+   "median_wall_s": 25.24,
+   "median_eps_into_siem": 4755,
+   "median_eps_until_parquet": 2907,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P2_G4": {
+   "runs": [
+    {
+     "processes": 2,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 43.37,
+     "eps": 2767,
+     "send_s": 12.23,
+     "siem_acknowledged_s": 41.6,
+     "lake_acknowledged_s": 43.37,
+     "in_parquet_s": 55.41,
+     "eps_into_siem": 2884,
+     "eps_until_parquet": 2166,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 0,
+      "2": 120000
+     },
+     "senders_per_process": {
+      "1": [],
+      "2": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 52.5,
+      "lw": 42.3,
+      "cm": 2.6
+     },
+     "opensearch_cpu_s": 32.1,
+     "peak_run_bytes": 469388258,
+     "archived_segments": 18,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 38.5,
+     "eps": 3117,
+     "send_s": 12.95,
+     "siem_acknowledged_s": 33.67,
+     "lake_acknowledged_s": 38.5,
+     "in_parquet_s": 49.02,
+     "eps_into_siem": 3564,
+     "eps_until_parquet": 2448,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 90000,
+      "2": 30000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.13"
+      ],
+      "2": [
+       "127.0.0.12"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 53.7,
+      "lw": 40.4,
+      "cm": 2.8
+     },
+     "opensearch_cpu_s": 33.0,
+     "peak_run_bytes": 547245524,
+     "archived_segments": 20,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 26.13,
+     "eps": 4592,
+     "send_s": 6.78,
+     "siem_acknowledged_s": 26.13,
+     "lake_acknowledged_s": 21.91,
+     "in_parquet_s": 42.53,
+     "eps_into_siem": 4592,
+     "eps_until_parquet": 2822,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 60000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.12"
+      ],
+      "2": [
+       "127.0.0.11",
+       "127.0.0.13"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 53.3,
+      "lw": 3.5,
+      "cm": 2.9
+     },
+     "opensearch_cpu_s": 32.3,
+     "peak_run_bytes": 612400139,
+     "archived_segments": 22,
+     "deleted_locally": 12,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 3117,
+   "median_wall_s": 38.5,
+   "median_eps_into_siem": 3564,
+   "median_eps_until_parquet": 2448,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P2_G8": {
+   "runs": [
+    {
+     "processes": 2,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 37.8,
+     "eps": 3174,
+     "send_s": 0.4,
+     "siem_acknowledged_s": 30.26,
+     "lake_acknowledged_s": 37.8,
+     "in_parquet_s": 50.28,
+     "eps_into_siem": 3966,
+     "eps_until_parquet": 2387,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 75000,
+      "2": 45000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.13",
+       "127.0.0.14",
+       "127.0.0.17"
+      ],
+      "2": [
+       "127.0.0.12",
+       "127.0.0.15",
+       "127.0.0.16"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 54.9,
+      "lw": 39.6,
+      "cm": 2.9
+     },
+     "opensearch_cpu_s": 33.8,
+     "peak_run_bytes": 543969143,
+     "archived_segments": 22,
+     "deleted_locally": 18,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 28.06,
+     "eps": 4276,
+     "send_s": 0.41,
+     "siem_acknowledged_s": 28.06,
+     "lake_acknowledged_s": 22.0,
+     "in_parquet_s": 43.11,
+     "eps_into_siem": 4276,
+     "eps_until_parquet": 2784,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 60000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.11",
+       "127.0.0.13",
+       "127.0.0.16",
+       "127.0.0.17"
+      ],
+      "2": [
+       "127.0.0.10",
+       "127.0.0.12",
+       "127.0.0.14",
+       "127.0.0.15"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 53.6,
+      "lw": 3.6,
+      "cm": 2.9
+     },
+     "opensearch_cpu_s": 31.8,
+     "peak_run_bytes": 598057430,
+     "archived_segments": 22,
+     "deleted_locally": 14,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 2,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 39.1,
+     "eps": 3069,
+     "send_s": 0.6,
+     "siem_acknowledged_s": 33.26,
+     "lake_acknowledged_s": 39.1,
+     "in_parquet_s": 49.57,
+     "eps_into_siem": 3608,
+     "eps_until_parquet": 2421,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 90000,
+      "2": 30000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.13",
+       "127.0.0.14",
+       "127.0.0.15",
+       "127.0.0.17"
+      ],
+      "2": [
+       "127.0.0.10",
+       "127.0.0.16"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 54.6,
+      "lw": 41.2,
+      "cm": 2.9
+     },
+     "opensearch_cpu_s": 33.1,
+     "peak_run_bytes": 542126874,
+     "archived_segments": 20,
+     "deleted_locally": 16,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 3174,
+   "median_wall_s": 37.8,
+   "median_eps_into_siem": 3966,
+   "median_eps_until_parquet": 2421,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P4_G1": {
+   "runs": [
+    {
+     "processes": 4,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 45.02,
+     "eps": 2665,
+     "send_s": 30.62,
+     "siem_acknowledged_s": 43.71,
+     "lake_acknowledged_s": 45.02,
+     "in_parquet_s": 57.78,
+     "eps_into_siem": 2745,
+     "eps_until_parquet": 2077,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 0,
+      "2": 120000,
+      "3": 0,
+      "4": 0
+     },
+     "senders_per_process": {
+      "1": [],
+      "2": [
+       "127.0.0.10"
+      ],
+      "3": [],
+      "4": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 55.6,
+      "lw": 41.3,
+      "cm": 2.5
+     },
+     "opensearch_cpu_s": 29.7,
+     "peak_run_bytes": 475509763,
+     "archived_segments": 18,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 45.25,
+     "eps": 2652,
+     "send_s": 30.93,
+     "siem_acknowledged_s": 44.14,
+     "lake_acknowledged_s": 45.25,
+     "in_parquet_s": 58.22,
+     "eps_into_siem": 2719,
+     "eps_until_parquet": 2061,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 0,
+      "2": 0,
+      "3": 120000,
+      "4": 0
+     },
+     "senders_per_process": {
+      "1": [],
+      "2": [],
+      "3": [
+       "127.0.0.10"
+      ],
+      "4": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 55.5,
+      "lw": 42.0,
+      "cm": 2.6
+     },
+     "opensearch_cpu_s": 29.6,
+     "peak_run_bytes": 458995374,
+     "archived_segments": 18,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 1,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 44.33,
+     "eps": 2707,
+     "send_s": 28.3,
+     "siem_acknowledged_s": 43.62,
+     "lake_acknowledged_s": 44.33,
+     "in_parquet_s": 55.98,
+     "eps_into_siem": 2751,
+     "eps_until_parquet": 2144,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 120000
+     },
+     "senders_per_process": {
+      "1": [],
+      "2": [],
+      "3": [],
+      "4": [
+       "127.0.0.10"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 55.2,
+      "lw": 40.7,
+      "cm": 2.6
+     },
+     "opensearch_cpu_s": 29.5,
+     "peak_run_bytes": 445596486,
+     "archived_segments": 18,
+     "deleted_locally": 14,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 2665,
+   "median_wall_s": 45.02,
+   "median_eps_into_siem": 2745,
+   "median_eps_until_parquet": 2077,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P4_G2": {
+   "runs": [
+    {
+     "processes": 4,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 25.65,
+     "eps": 4679,
+     "send_s": 14.25,
+     "siem_acknowledged_s": 25.65,
+     "lake_acknowledged_s": 20.51,
+     "in_parquet_s": 41.83,
+     "eps_into_siem": 4679,
+     "eps_until_parquet": 2869,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 0,
+      "3": 60000,
+      "4": 0
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.10"
+      ],
+      "2": [],
+      "3": [
+       "127.0.0.11"
+      ],
+      "4": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 57.1,
+      "lw": 3.7,
+      "cm": 3.0
+     },
+     "opensearch_cpu_s": 32.8,
+     "peak_run_bytes": 591564354,
+     "archived_segments": 20,
+     "deleted_locally": 14,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 29.82,
+     "eps": 4024,
+     "send_s": 17.62,
+     "siem_acknowledged_s": 29.82,
+     "lake_acknowledged_s": 23.68,
+     "in_parquet_s": 44.94,
+     "eps_into_siem": 4024,
+     "eps_until_parquet": 2670,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 0,
+      "3": 60000,
+      "4": 0
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.11"
+      ],
+      "2": [],
+      "3": [
+       "127.0.0.10"
+      ],
+      "4": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 55.8,
+      "lw": 3.6,
+      "cm": 2.9
+     },
+     "opensearch_cpu_s": 31.6,
+     "peak_run_bytes": 595999739,
+     "archived_segments": 22,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 2,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 29.26,
+     "eps": 4101,
+     "send_s": 15.0,
+     "siem_acknowledged_s": 29.26,
+     "lake_acknowledged_s": 22.88,
+     "in_parquet_s": 44.75,
+     "eps_into_siem": 4101,
+     "eps_until_parquet": 2681,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 0,
+      "2": 60000,
+      "3": 60000,
+      "4": 0
+     },
+     "senders_per_process": {
+      "1": [],
+      "2": [
+       "127.0.0.10"
+      ],
+      "3": [
+       "127.0.0.11"
+      ],
+      "4": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 57.2,
+      "lw": 3.7,
+      "cm": 3.0
+     },
+     "opensearch_cpu_s": 32.4,
+     "peak_run_bytes": 591499659,
+     "archived_segments": 22,
+     "deleted_locally": 16,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 4101,
+   "median_wall_s": 29.26,
+   "median_eps_into_siem": 4101,
+   "median_eps_until_parquet": 2681,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P4_G4": {
+   "runs": [
+    {
+     "processes": 4,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 27.08,
+     "eps": 4432,
+     "send_s": 7.15,
+     "siem_acknowledged_s": 27.08,
+     "lake_acknowledged_s": 21.64,
+     "in_parquet_s": 42.08,
+     "eps_into_siem": 4432,
+     "eps_until_parquet": 2852,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 30000,
+      "3": 0,
+      "4": 30000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.11",
+       "127.0.0.13"
+      ],
+      "2": [
+       "127.0.0.12"
+      ],
+      "3": [],
+      "4": [
+       "127.0.0.10"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 60.7,
+      "lw": 4.0,
+      "cm": 3.1
+     },
+     "opensearch_cpu_s": 35.5,
+     "peak_run_bytes": 600469195,
+     "archived_segments": 22,
+     "deleted_locally": 17,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 29.16,
+     "eps": 4115,
+     "send_s": 4.22,
+     "siem_acknowledged_s": 29.16,
+     "lake_acknowledged_s": 23.01,
+     "in_parquet_s": 46.19,
+     "eps_into_siem": 4115,
+     "eps_until_parquet": 2598,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 30000,
+      "2": 30000,
+      "3": 0,
+      "4": 60000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.11"
+      ],
+      "2": [
+       "127.0.0.12"
+      ],
+      "3": [],
+      "4": [
+       "127.0.0.10",
+       "127.0.0.13"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 58.1,
+      "lw": 3.9,
+      "cm": 3.3
+     },
+     "opensearch_cpu_s": 34.9,
+     "peak_run_bytes": 605582909,
+     "archived_segments": 24,
+     "deleted_locally": 18,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 4,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 28.7,
+     "eps": 4181,
+     "send_s": 7.26,
+     "siem_acknowledged_s": 28.7,
+     "lake_acknowledged_s": 23.16,
+     "in_parquet_s": 44.1,
+     "eps_into_siem": 4181,
+     "eps_until_parquet": 2721,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 60000,
+      "2": 30000,
+      "3": 30000,
+      "4": 0
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.12",
+       "127.0.0.13"
+      ],
+      "2": [
+       "127.0.0.11"
+      ],
+      "3": [
+       "127.0.0.10"
+      ],
+      "4": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 59.2,
+      "lw": 3.9,
+      "cm": 3.3
+     },
+     "opensearch_cpu_s": 34.7,
+     "peak_run_bytes": 598565118,
+     "archived_segments": 23,
+     "deleted_locally": 17,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 4181,
+   "median_wall_s": 28.7,
+   "median_eps_into_siem": 4181,
+   "median_eps_until_parquet": 2721,
+   "exactly_once_all": true,
+   "affinity_all": true
+  },
+  "P4_G8": {
+   "runs": [
+    {
+     "processes": 4,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 34.52,
+     "eps": 3476,
+     "send_s": 0.56,
+     "siem_acknowledged_s": 23.89,
+     "lake_acknowledged_s": 34.52,
+     "in_parquet_s": 43.83,
+     "eps_into_siem": 5022,
+     "eps_until_parquet": 2738,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 15000,
+      "2": 30000,
+      "3": 75000,
+      "4": 0
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.13"
+      ],
+      "2": [
+       "127.0.0.15",
+       "127.0.0.16"
+      ],
+      "3": [
+       "127.0.0.10",
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.14",
+       "127.0.0.17"
+      ],
+      "4": []
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 62.6,
+      "lw": 41.4,
+      "cm": 2.8
+     },
+     "opensearch_cpu_s": 37.5,
+     "peak_run_bytes": 576109608,
+     "archived_segments": 20,
+     "deleted_locally": 15,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 20.61,
+     "eps": 5823,
+     "send_s": 0.47,
+     "siem_acknowledged_s": 20.61,
+     "lake_acknowledged_s": 16.98,
+     "in_parquet_s": 34.87,
+     "eps_into_siem": 5823,
+     "eps_until_parquet": 3442,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 30000,
+      "2": 15000,
+      "3": 30000,
+      "4": 45000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.16",
+       "127.0.0.17"
+      ],
+      "2": [
+       "127.0.0.15"
+      ],
+      "3": [
+       "127.0.0.10",
+       "127.0.0.13"
+      ],
+      "4": [
+       "127.0.0.11",
+       "127.0.0.12",
+       "127.0.0.14"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 69.0,
+      "lw": 5.4,
+      "cm": 3.4
+     },
+     "opensearch_cpu_s": 43.3,
+     "peak_run_bytes": 629324118,
+     "archived_segments": 23,
+     "deleted_locally": 13,
+     "exactly_once": true,
+     "affinity_ok": true
+    },
+    {
+     "processes": 4,
+     "generators": 8,
+     "events": 120000,
+     "sent": 120000,
+     "wall_s": 22.77,
+     "eps": 5269,
+     "send_s": 0.27,
+     "siem_acknowledged_s": 22.77,
+     "lake_acknowledged_s": 17.63,
+     "in_parquet_s": 37.12,
+     "eps_into_siem": 5269,
+     "eps_until_parquet": 3233,
+     "acknowledged": {
+      "siem": 120000,
+      "lake": 120000
+     },
+     "siem_docs": 120000,
+     "target": 120000,
+     "timed_out": false,
+     "lake_rows": 120000,
+     "lake_distinct": 120000,
+     "evidence_events": 120000,
+     "per_process_events": {
+      "1": 30000,
+      "2": 15000,
+      "3": 45000,
+      "4": 30000
+     },
+     "senders_per_process": {
+      "1": [
+       "127.0.0.11",
+       "127.0.0.17"
+      ],
+      "2": [
+       "127.0.0.14"
+      ],
+      "3": [
+       "127.0.0.12",
+       "127.0.0.15",
+       "127.0.0.16"
+      ],
+      "4": [
+       "127.0.0.10",
+       "127.0.0.13"
+      ]
+     },
+     "senders_on_more_than_one_process": {},
+     "connections_on_more_than_one_process": {},
+     "cpu_s": {
+      "rt": 62.6,
+      "lw": 4.3,
+      "cm": 3.3
+     },
+     "opensearch_cpu_s": 39.0,
+     "peak_run_bytes": 617200225,
+     "archived_segments": 23,
+     "deleted_locally": 17,
+     "exactly_once": true,
+     "affinity_ok": true
+    }
+   ],
+   "median_eps": 5269,
+   "median_wall_s": 22.77,
+   "median_eps_into_siem": 5269,
+   "median_eps_until_parquet": 3233,
+   "exactly_once_all": true,
+   "affinity_all": true
+  }
+ },
+ "death": {
+  "processes": 2,
+  "generators": 4,
+  "events": 120000,
+  "sent": 120000,
+  "wall_s": 73.23,
+  "eps": 1639,
+  "send_s": 59.85,
+  "siem_acknowledged_s": 63.41,
+  "lake_acknowledged_s": 73.23,
+  "in_parquet_s": 85.86,
+  "eps_into_siem": 1884,
+  "eps_until_parquet": 1391,
+  "acknowledged": {
+   "siem": 119456,
+   "lake": 119456
+  },
+  "siem_docs": 119456,
+  "target": 119456,
+  "timed_out": false,
+  "lake_rows": 119456,
+  "lake_distinct": 119456,
+  "evidence_events": 119456,
+  "per_process_events": {
+   "1": 49056,
+   "2": 70400
+  },
+  "senders_per_process": {
+   "1": [
+    "127.0.0.10",
+    "127.0.0.11",
+    "127.0.0.12",
+    "127.0.0.13"
+   ],
+   "2": [
+    "127.0.0.10",
+    "127.0.0.11",
+    "127.0.0.12",
+    "127.0.0.13"
+   ]
+  },
+  "senders_on_more_than_one_process": {
+   "127.0.0.13": [
+    1,
+    2
+   ],
+   "127.0.0.11": [
+    1,
+    2
+   ],
+   "127.0.0.10": [
+    1,
+    2
+   ],
+   "127.0.0.12": [
+    1,
+    2
+   ]
+  },
+  "connections_on_more_than_one_process": {},
+  "cpu_s": {
+   "rt": 33.3,
+   "lw": 40.9,
+   "cm": 2.7
+  },
+  "opensearch_cpu_s": 30.2,
+  "peak_run_bytes": 551241894,
+  "archived_segments": 31,
+  "deleted_locally": 27,
+  "death": {
+   "process": 1,
+   "at_s": 24.45,
+   "delivered_by_all_at_kill": {
+    "siem": 48500,
+    "lake": 48400
+   },
+   "its_senders_before": [
+    "127.0.0.10",
+    "127.0.0.11",
+    "127.0.0.12",
+    "127.0.0.13"
+   ],
+   "accepted_by_dead_process": 49056,
+   "undelivered_in_its_spool_before_restart": 556,
+   "generators": [
+    {
+     "src": "127.0.0.10",
+     "sent": 30000,
+     "reconnects": 1,
+     "source_ports": [
+      36343,
+      54235
+     ],
+     "t0": 1790532724.7370777,
+     "t1": 1790532784.5373557
+    },
+    {
+     "src": "127.0.0.11",
+     "sent": 30000,
+     "reconnects": 1,
+     "source_ports": [
+      35779,
+      38119
+     ],
+     "t0": 1790532724.7371924,
+     "t1": 1790532784.537436
+    },
+    {
+     "src": "127.0.0.12",
+     "sent": 30000,
+     "reconnects": 1,
+     "source_ports": [
+      46039,
+      36331
+     ],
+     "t0": 1790532724.7383795,
+     "t1": 1790532784.538619
+    },
+    {
+     "src": "127.0.0.13",
+     "sent": 30000,
+     "reconnects": 1,
+     "source_ports": [
+      42117,
+      42383
+     ],
+     "t0": 1790532724.7361813,
+     "t1": 1790532784.5364628
+    }
+   ],
+   "evidence_events_total": 119456,
+   "sent_total": 120000,
+   "lost_in_flight": 544,
+   "moved_senders": {
+    "127.0.0.10": {
+     "reconnects": 1,
+     "source_ports": [
+      36343,
+      54235
+     ],
+     "processes": [
+      1,
+      2
+     ]
+    },
+    "127.0.0.11": {
+     "reconnects": 1,
+     "source_ports": [
+      35779,
+      38119
+     ],
+     "processes": [
+      1,
+      2
+     ]
+    },
+    "127.0.0.12": {
+     "reconnects": 1,
+     "source_ports": [
+      46039,
+      36331
+     ],
+     "processes": [
+      1,
+      2
+     ]
+    },
+    "127.0.0.13": {
+     "reconnects": 1,
+     "source_ports": [
+      42117,
+      42383
+     ],
+     "processes": [
+      1,
+      2
+     ]
+    }
+   },
+   "recovered_after_crash": 256
+  },
+  "exactly_once": true
+ },
+ "disk_free_gb_after": {
+  "/": 969.883377664,
+  "/mnt/c": 359.806836736
+ }
+}

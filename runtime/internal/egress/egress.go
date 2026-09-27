@@ -656,3 +656,32 @@ func (f *Forwarder) loop() {
 		backoff = 100 * time.Millisecond
 	}
 }
+
+// SplitBatch takes the optional `batch=N` query parameter off a destination URL (laptop branch, 2026-09-27): the
+// number of events per batch for that destination (default 100). The lake writer pays an fsync pair per batch, so it is
+// sent 1,000 (`http://…/ingest?batch=1000`); the acknowledgement rule is unchanged — a batch is acknowledged whole.
+func SplitBatch(raw string) (string, int) {
+	i := strings.Index(raw, "?")
+	if i < 0 {
+		return raw, 0
+	}
+	base, q := raw[:i], raw[i+1:]
+	var keep []string
+	n := 0
+	for _, kv := range strings.Split(q, "&") {
+		if strings.HasPrefix(kv, "batch=") {
+			fmt.Sscanf(strings.TrimPrefix(kv, "batch="), "%d", &n)
+			continue
+		}
+		if kv != "" {
+			keep = append(keep, kv)
+		}
+	}
+	if len(keep) > 0 {
+		base += "?" + strings.Join(keep, "&")
+	}
+	if n < 1 || n > 100000 {
+		n = 0
+	}
+	return base, n
+}

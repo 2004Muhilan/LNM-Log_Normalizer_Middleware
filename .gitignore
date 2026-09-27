@@ -24,7 +24,12 @@ models/cache/
 # its .sig is not
 keys/dev/
 keys/trust/*-dev.pub.json
+keys/trust/*-dev.vkey
 contracts/golden/squid-native/pack.json.sig
+# the Parser Transparency Log is local to a clone (its key is the clone's dev key), like the signatures; so are the
+# inclusion proofs written beside every pack
+tlog/
+**/pack.json.tlog-proof
 
 # the live demo's state and the replay capture/zip carry Elastic-licensed fixture lines (corpus/README.md):
 # they are produced locally (demo/reset.sh, demo/replay/capture.sh, demo/replay/build.sh) and never committed

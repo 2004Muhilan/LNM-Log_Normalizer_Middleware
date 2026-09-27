@@ -488,3 +488,82 @@ Gate after these changes: `bash scripts/gate.sh` PASS in 748 s:
 - lanes G20 739 s and G33 623 s — same facts both runs.
 
 The WSL2 and Docker virtual disks did not grow (75.884 GB and 84.65 GB before and after).
+
+## 13. Scale-out, the lake writer, the Parser Transparency Log, Proof of Derivation (2026-09-27)
+
+Built in the order 1 → 2 → 3 → 4. The instruction said 1 → 2 → 4 → 3, but also that Proof of Derivation depends on the
+transparency log, so the log came first. Details:
+- `docs/throughput.md`: scaling matrix, process death, the lake profile and fix;
+- `docs/transparency-and-derivation.md`: the log, the derivation, the certificate;
+- the plan's §11, rows 67–71.
+
+**1. Scale-out.**
+- **Listeners:** `--reuse-port` for TCP, UDP and HTTP. The kernel's default flow hash keeps each connection, or each UDP
+  sender's port, on one process; there is no eBPF or random distribution.
+- **Directory pull:** `--pull-shard i/N`, by the file's source key.
+- **Demo:** `ULPF_PROCESSES=N` (default 2) starts N runtimes, N committers and N lake writers into one lake root, plus one
+  packs file per process. The System page lists the processes and which applications reached each.
+- **Crash recovery**, found by the process-death measurement: with a resumed spool, a restart interprets every evidence
+  record committed after the spool's last event. Nothing accepted is lost.
+- **Measured:**
+  - the P × G matrix, with exactly-once and affinity held in all 36 runs;
+  - one process does 2.7–3.1k events/s end to end with the archive on; 4 processes × 8 senders reach 5,269/s (3,233/s
+    until Parquet);
+  - the limit is the shared machine's CPU, about 17 cores of this kind for one billion a day, extrapolated;
+  - process death: the senders moved and start fresh on the other process, nothing accepted was lost, and 544 events were
+    lost in flight (TCP syslog has no application acknowledgement).
+- **Limits stated:** one busy sender cannot be split; a moved sender starts with fresh per-source state.
+
+**2. The lake writer.** Profiled first: a fixed ~0.45 s per file (the full schema) times many small files, the wide write,
+and an fsync pair per 100-event batch. Fixed with:
+- size rotation in production;
+- `preserve_insertion_order=false`;
+- `?batch=1000`;
+- one writer per process.
+
+Result: 1,660 → 4,448 events/s on the same 152,914 rows. The full schema is kept.
+
+**3. The Parser Transparency Log** (`runtime/internal/tlog`, `ulpf-tlog`, `ulpf-witness`).
+- **Formats:** C2SP signed-note checkpoints, an RFC 6962 tree, and a `c2sp.org/tlog-proof` beside each pack, verifiable
+  offline.
+- **The runtime refuses** any pack without a valid inclusion proof. The check is inside `pack.Load`, with no bypass; tests
+  cover startup, hot reload and the static no-constructor rule.
+- **Signing is logging**, so auto-healed packs are logged before activation.
+- **The witness** cosigns consistent checkpoints only: a fork is refused 422 (tested). In the demo it runs on the same
+  machine and stands in for an independent site.
+- **Demo moment:** *Push an UNLOGGED pack to process N* — refused, recorded as `pack_refused` in that process's evidence
+  log, and shown on the page.
+- **The parser history view** shows every pack and how it was produced.
+
+**4. Proof of Derivation** (`runtime/internal/derivation`, `ulpf-runtime derive`, `ulpf-verify derivation`).
+- **The check:** the exact logged pack, re-run on the committed bytes, reproduces the SIEM's document field for field.
+- **Excluded from the comparison:** `_lineage.processing_time` only.
+- **The bundle:** one file, verified offline.
+- **Tampering** of a raw byte, the pack or a SIEM field is each caught and named.
+- **Contract:** normalized-event **1.6.0** adds `_lineage.parser_sha256`, because id and version alone can name more than
+  one logged pack.
+- **The BSA §63(4) certificate:** a printable draft. Part A is pre-filled; its declaration and Part B are blank, marked NOT
+  COMPLETE, with a note that it is not legal advice.
+
+**Found and fixed while building:**
+- the verifier-key parser split on `+`, which standard base64 can contain (caught by the tests);
+- the kill before interpretation (the crash recovery above);
+- the first matrix's timing bias toward several processes (above);
+- a matrix broken by rebuilding the binaries mid-run. Benchmarks now run a frozen copy (`ULPF_BENCH_BIN`).
+
+**Deviations and open items:**
+- **Witness cosignatures are verified and reported, but not required by default** (`--tlog-min-witnesses 0`). Packs logged
+  while no witness ran (bootstrap, the gate's other lanes) carry none.
+- A pack refused at **startup** is on stderr only: the evidence store is not open yet.
+- **The bundle verifier loads the pack against the local contract schemas and pinned OCSF index.** Their hashes are
+  recorded in the bundle and checked.
+- `store_id` is an input the derivation takes from the evidence directory, not covered by a signature.
+- Scaling across machines, and a second OpenSearch node, were not measured. Nothing was verified on the laptop.
+
+**Gate after these changes, both configurations, on the desktop:**
+- `bash scripts/gate.sh` PASS in 781 s: lanes A (Go suite 128 tests, 0 skipped; Python 100), D, G20 and G33.
+- `bash scripts/gate.sh --laptop` PASS in 797 s: lanes A, D and G20. This is the laptop's configuration run on the
+  desktop, not the laptop.
+- Lane D runs the demo with a **real evidence archive** (not the development override), two processes, the witness, the
+  unlogged-pack refusal, Proof of Derivation and the certificate.
+- The WSL2 virtual disk grew 0.16 GB over the whole batch (75.884 → 76.04 GB); Docker's did not grow (84.65 GB).

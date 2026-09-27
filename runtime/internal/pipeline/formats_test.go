@@ -78,7 +78,9 @@ func TestJSONXMLAndLEEFRouteParseAndValidate(t *testing.T) {
 	if n := validateEvents(t, out.String()); n != 4 {
 		t.Fatalf("validated %d events", n)
 	}
-	// every event names its evidence store since the evidence archive: 1.5.0 (which includes 1.4.0's LEEF envelope)
+	// every event names its evidence store since the evidence archive: 1.5.0 (which includes 1.4.0's LEEF envelope). These
+	// packs are built in the test, not loaded from a pack.json file, so they carry no file hash and no parser_sha256 (1.6.0
+	// is declared only by events of a pack loaded through pack.Load)
 	want := map[string][3]any{"json-sensor": {float64(1734567890123), "10.0.0.1", "1.5.0"}, "xml-sensor": {float64(1734567890124), "10.0.0.3", "1.5.0"}, "leef-gw": {float64(1734567890125), "10.0.0.5", "1.5.0"}}
 	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
 		var ev map[string]any

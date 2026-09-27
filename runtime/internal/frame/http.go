@@ -30,6 +30,8 @@ type HTTP struct {
 	// Admit, when set, is asked before a request's frames are emitted (evidence archive): an error — the local
 	// evidence buffer at its cap — answers 503 with Retry-After and accepts nothing; the sender keeps the request.
 	Admit func() error
+	// ReusePort: scale-out — several processes on one address (SO_REUSEPORT); a connection stays with one process
+	ReusePort bool
 
 	Requests  atomic.Int64
 	Rejected  atomic.Int64 // 503 (too many in flight) or 405
@@ -37,7 +39,7 @@ type HTTP struct {
 	Frames    atomic.Int64
 }
 
-func (h *HTTP) Listen() (net.Listener, error) { return net.Listen("tcp", h.Addr) }
+func (h *HTTP) Listen() (net.Listener, error) { return listenTCP(h.Addr, h.ReusePort) }
 
 // Serve runs the receiver until ctx is done or MaxFrames is reached.
 func (h *HTTP) Serve(ctx context.Context, ln net.Listener, emit func(Frame) error) error {

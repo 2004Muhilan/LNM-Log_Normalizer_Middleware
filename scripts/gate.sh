@@ -44,7 +44,7 @@ export ULPF_GATE_SHARED=1
 laneA() {
   local st=0 t
   t=$(date +%s); (cd runtime && go test -count=1 ./... -v) > "$G/go-test.log" 2>&1 || st=1
-  local fails skips; fails=$(grep -aE "^(--- FAIL|FAIL\s)" "$G/go-test.log" | head -5); skips=$(grep -aE "^\s*--- SKIP" "$G/go-test.log" | grep -v TestKillHelper)
+  local fails skips; fails=$(grep -aE "^(--- FAIL|FAIL\s)" "$G/go-test.log" | head -5); skips=$(grep -aE "^\s*--- SKIP" "$G/go-test.log" | grep -vE "TestKillHelper|TestRecoverHelper")
   [ -z "$skips" ] || { st=1; echo "silent skips: $skips"; }
   echo "go suite: $([ -z "$fails" ] && [ $st = 0 ] && echo "PASS ($(grep -ac '^--- PASS' "$G/go-test.log") tests, 0 skipped)" || echo "FAIL $fails") $(since $t)s"
   t=$(date +%s); (cd learning && python -m pytest -q -rs) > "$G/pytest.log" 2>&1 || st=1

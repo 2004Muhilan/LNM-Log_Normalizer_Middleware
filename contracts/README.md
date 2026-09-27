@@ -176,6 +176,14 @@ The golden candidate spec and its span map deliberately stay at 1.0.0 to prove t
   asserted by the operator for a source that carries no severity), with the same provenance rules.
 - **pinned tables** carry `category_uid` (hashes changed; cross-check still agrees on all four classes).
 
+## normalized-event 1.6.0 (laptop branch, 2026-09-27) — `parser_sha256`, additive
+
+- **`_lineage.parser_sha256`**: the sha256 of the exact `pack.json` bytes that produced the event — the key of its entry
+  in the Parser Transparency Log (`runtime/internal/tlog`). `parser_id` + `parser_version` can name more than one logged
+  pack (a re-run of onboarding logs new bytes under the same id and version); Proof of Derivation needs the exact one:
+  it fetches that pack from the log, verifies its inclusion proof and re-runs it on the raw bytes. Every event the
+  runtime emits declares 1.6.0 and carries it; optional in the schema, every earlier document remains valid.
+
 ## normalized-event 1.5.0 (laptop branch, 2026-09-27) — `store_id`, additive (approved by the sponsor)
 
 - **`_lineage.store_id`** (`st_` + 26 Crockford base32 characters): the evidence store holding the event's raw

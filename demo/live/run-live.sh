@@ -276,7 +276,7 @@ phase_done "healed itself: 8 of 10 columns on the operator's earlier evidence, p
 
 phase F "The two columns the policy would not decide: the operator answers, pack 1.2"
 resolve_by_assertion "$LIVE/autoheal/session" "pos_3=connection_info.protocol_num|firmware 2.0 writes the IANA protocol number" "pos_10=src_endpoint.zone|the new column is the initiator's zone"
-learn promote --session "$LIVE/autoheal/session" --out "$LIVE/packs/flowtap-v2" --pack-id "$SRC-10" --pack-version 1.1 --withhold-unevidenced > "$LIVE/promote-v2.txt" 2>&1 || { tail -3 "$LIVE/promote-v2.txt"; fail "promote the answered family"; }
+learn promote --session "$LIVE/autoheal/session" --out "$LIVE/packs/flowtap-v2" --pack-id "$SRC-10" --pack-version 1.1 --withhold-unevidenced --produced-by auto-healed > "$LIVE/promote-v2.txt" 2>&1 || { tail -3 "$LIVE/promote-v2.txt"; fail "promote the answered family"; }
 learn merge "$LIVE/packs/flowtap-v1" "$LIVE/packs/flowtap-v2" --out "$LIVE/packs/flowtap-source-1.2" --pack-id "$SRC" --pack-version 1.2 || fail "merge"
 "$RT" verify-pack --pack "$LIVE/packs/flowtap-source-1.2" || fail "verify merged pack"
 reload_packs "$LIVE/packs/flowtap-source-1.2"
