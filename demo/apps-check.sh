@@ -74,6 +74,27 @@ if [ "${ULPF_SIEM:-opensearch}" != "fake" ]; then
   echo "$T" | jq_ "'\n'.join(('  ✓ ' if s['ok'] else '  ✗ ') + s['step'] + ': ' + s['detail'][:150] for s in d['steps'])"
   [ "$(echo "$T" | jq_ "d['ok']")" = "True" ] || fail "the round trip SIEM finding -> evidence did not complete"
 fi
+if [ "${ULPF_SIEM:-opensearch}" != "fake" ] && [ "$(st "d['runtime']['relay_available']")" = "True" ]; then
+  # unified visibility (requirement f): every source in one SIEM, one query across devices
+  agg() { curl -s "$OS/ulpf-ocsf-*/_search" -H 'Content-Type: application/json' -d "{\"size\":0,\"query\":$1,\"aggs\":{\"v\":{\"terms\":{\"field\":\"metadata.product.vendor_name\",\"size\":10}}}}" | jq_ "' | '.join(sorted(b['key'] for b in d['aggregations']['v']['buckets']))"; }
+  for _ in $(seq 1 60); do V=$(agg '{"match_all":{}}'); echo "$V" | grep -q Squid && echo "$V" | grep -q Fortinet && echo "$V" | grep -q "Palo Alto" && echo "$V" | grep -q Cisco && break; sleep 1; done
+  echo "unified visibility: vendors in the SIEM: $V"
+  for want in Cisco "Palo Alto Networks" Fortinet Squid flowtap; do echo "$V" | grep -q "$want" || fail "the SIEM does not show $want"; done
+  X=$(agg '{"bool":{"filter":[{"term":{"action_id":2}},{"term":{"src_endpoint.ip":"10.0.0.0/8"}}]}}')
+  echo "cross-vendor query 'denied connections from 10.0.0.0/8, every device': $X"
+  [ "$(echo "$X" | tr '|' '\n' | grep -c .)" -ge 2 ] || fail "the cross-vendor query must return more than one device"
+  if curl -s -m 2 http://127.0.0.1:5601/api/status > /dev/null; then
+    for sid in ulpf-denied-one-source ulpf-denied-internal; do
+      [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:5601/api/saved_objects/search/$sid")" = 200 ] || fail "saved search $sid missing in Dashboards"
+    done
+    echo "saved searches in Dashboards: ulpf-denied-one-source, ulpf-denied-internal"
+    # the dashboard's time axis is _lineage.ingest_time; Dashboards drops subfields of underscore objects from its field list,
+    # and a panel on a field missing from the pattern fails ("Could not locate that index-pattern-field") — seen once, guarded here
+    curl -s http://127.0.0.1:5601/api/saved_objects/index-pattern/ulpf-ocsf | jq_ "'ok' if any(f['name'] == '_lineage.ingest_time' and f['type'] == 'date' for f in json.loads(d['attributes']['fields'])) else ''" | grep -q ok \
+      || fail "the index pattern lacks _lineage.ingest_time: the denies panel cannot render"
+  fi
+  curl -s -X POST $S/api/policy -d '{"vendor_relay":false}'   # the accounting below needs a stream that has stopped
+fi
 gset '{"running":false}'; sleep 8
 USABLE=$(st "d['counts']['usable']")
 curl -s -m 5 $OS/ulpf-ocsf-*/_refresh > /dev/null

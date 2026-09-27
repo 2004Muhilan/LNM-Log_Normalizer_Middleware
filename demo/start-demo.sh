@@ -45,7 +45,9 @@ else
   bash demo/siem/siem.sh start || { echo "the SIEM did not start (memory? try ULPF_SIEM_DASHBOARDS=0, or ULPF_SIEM=fake)"; exit 1; }
 fi
 setsid -f python adapters/lake/lakewriter.py --lake "$APP/lake" --listen 127.0.0.1:8792 --rotate-seconds "${ULPF_LAKE_ROTATE_SECONDS:-10}" > "$APP/lakewriter.log" 2>&1
-setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN" --python "$(command -v python)" --lake "$APP/lake" "${PROV[@]}" > "$APP/system.log" 2>&1
+VENDOR=(); if [ -f "$STATE/p6/mixed.log" ] && [ -f "$STATE/p6/source-packs/cisco-asa/pack.json" ]; then VENDOR=(--vendor-packs "$STATE/p6/source-packs" --vendor-capture "$STATE/p6/mixed.log")
+else echo "no four-vendor relay: run demo/reset.sh first (it builds the vendor packs and the mixed capture from the corpus)"; fi
+setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN" --python "$(command -v python)" --lake "$APP/lake" "${VENDOR[@]}" "${PROV[@]}" > "$APP/system.log" 2>&1
 setsid -f python3 demo/apps/generator.py --rate "${ULPF_LIVE_RATE:-6}" > "$APP/generator.log" 2>&1
 sleep 2
 pgrep -f "demo/apps/[g]enerator.py" > "$APP/generator.pid"; pgrep -f "demo/apps/[s]ystem.py" > "$APP/system.pid"; pgrep -f "adapters/lake/[l]akewriter.py --lake $APP/" > "$APP/lakewriter.pid"

@@ -7,7 +7,7 @@
  <div class=panel><h2>Applications sending logs (ingress)</h2><table><thead><tr><th>application</th><th>connector</th><th>events</th><th></th></tr></thead><tbody id=apps></tbody></table>
   <p class=lab id=ingress></p></div>
  <div class=panel style="flex:0 0 330px"><h2>ULPF runtime</h2><div id=rt></div>
-  <div class=lab style="margin-top:10px">policy</div><div class=btns style="margin-top:4px"><button id=p1></button><button id=p2></button></div></div>
+  <div class=lab style="margin-top:10px">policy</div><div class=btns style="margin-top:4px"><button id=p1></button><button id=p2></button><button id=p3></button></div></div>
 </div>
 <div class=panel><h2>Destinations (egress) — each with its own cursor over one bounded spool</h2><div class=row id=dests></div>
  <div class=btns id=siembtns style="margin-top:4px"></div></div>
@@ -49,11 +49,12 @@ async function tick(){try{S=await (await fetch('/api/state')).json()}catch(e){re
    <td>${esc(a.connector||'')}<div class="lab mono">${esc(a.channel||'')}</div></td><td class=m>${a.events}<div class=lab><span class=ok>${a.usable} parsed</span> · <span class=amber>${a.quarantined} quarantined</span></div></td><td class=lab>${a.connected?'sending':'silent '+a.idle_s+' s'}</td></tr>`).join('')||'<tr><td colspan=4 class=dim>no application has sent anything yet</td></tr>';
  $('ingress').html='listening: '+S.runtime.ingress.map(i=>`${i.label} <span class=mono>${i.addr}</span>`).join(' · ')+' — click an application to see its logs';
  $('rt').html=`<div><span class="dot ${S.runtime.up?'ok':'bad'}"></span>${S.runtime.up?'running':'DOWN'} · hot reloads ${S.runtime.reloads} · restarts 0</div>
-   <div class=lab style="margin-top:6px">parse success, last 40 events</div><div class=big style="font-size:2rem">${S.parse_success==null?'—':Math.round(S.parse_success*100)+'%'}</div>
+   <div class=lab style="margin-top:6px">parse success, last 40 events of the applications being onboarded</div><div class=big style="font-size:2rem">${S.parse_success==null?'—':Math.round(S.parse_success*100)+'%'}</div>
    <div class=lab>${S.counts.frames} received · ${S.counts.usable} parsed · ${S.counts.quarantined} quarantined (bytes kept)</div>
    <div class=lab style="margin-top:8px">onboarded formats</div>${S.runtime.packs.map(p=>`<div class=mono style="font-size:.85rem">${esc(p.family)} <span class=dim>v${p.pack_version}</span></div>`).join('')||'<div class=dim>none yet</div>'}
    <div class=lab style="margin-top:6px">field labels: ${S.runtime.provider=='model'?'local model':'fixture (fallback, not the model)'}</div>`;
  $('p1').textContent='Auto-onboard: '+(S.policy.auto_onboard?'ON':'OFF');$('p1').className=S.policy.auto_onboard?'on':'';$('p1').onclick=()=>post('/api/policy',{auto_onboard:!S.policy.auto_onboard});
+ $('p3').style.display=S.runtime.relay_available?'':'none';$('p3').textContent='Four-vendor relay: '+(S.policy.vendor_relay?'ON':'OFF');$('p3').className=S.policy.vendor_relay?'on':'';$('p3').onclick=()=>post('/api/policy',{vendor_relay:!S.policy.vendor_relay});
  $('p2').textContent='Answers: '+(S.policy.prepared_answers?'prepared sheet':'ask me');$('p2').className=S.policy.prepared_answers?'on':'';$('p2').onclick=()=>post('/api/policy',{prepared_answers:!S.policy.prepared_answers});
  $('dests').html=S.egress.map(e=>`<div class=panel style="margin:0;border-color:${e.up?'var(--green)':'var(--red)'}"><h2 style="margin-bottom:6px">${esc(e.name)} ${e.ui?`<a class=pill style="padding:1px 8px;font-size:.75rem" href="${esc(e.ui)}" ${e.ui.startsWith('http')?'target=_blank':''}>open ↗</a>`:''}</h2>
    <div class=big style="font-size:2rem" class="${e.up?'ok':'bad'}"><span class="${e.up?'ok':'bad'}">${e.up?'UP':'DOWN'}</span></div>

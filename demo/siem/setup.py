@@ -8,7 +8,9 @@
      for our network activity class, two rules (a known-bad address; a deny spike, an aggregation rule) and a detector
      over `ulpf-ocsf-4001` running every minute. Verified against OpenSearch 2.19.2 on 2026-09-27: findings name the
      matching documents by _id, which is ULPF's event_id.
-  3. Dashboards (with --osd): index patterns, four visualizations and one dashboard, "ULPF — normalized events".
+  3. Dashboards (with --osd): index patterns, five panels and one dashboard, "ULPF — normalized events", every panel split
+     BY VENDOR (unified visibility, requirement f), and two saved cross-vendor searches (below). The time axis is ULPF's
+     RECEIVE time (_lineage.ingest_time): the recorded four-vendor capture keeps its original 2018-2020 event times.
 
     python3 demo/siem/setup.py --os http://127.0.0.1:9200 [--osd http://127.0.0.1:5601]
 """
@@ -70,8 +72,9 @@ TEMPLATE = {"index_patterns": ["ulpf-ocsf-*"], "priority": 100, "template": {
         "properties": {
             "time": {"type": "date", "format": "epoch_millis"}, "class_uid": {"type": "integer"}, "action_id": {"type": "integer"},
             "src_endpoint": {"properties": {"ip": {"type": "ip"}, "port": {"type": "integer"}}}, "dst_endpoint": {"properties": {"ip": {"type": "ip"}, "port": {"type": "integer"}}},
-            "unmapped": {"type": "flat_object"},
+            "unmapped": {"type": "flat_object"}, "metadata": {"properties": {"product": {"properties": {"vendor_name": {"type": "keyword"}, "name": {"type": "keyword"}}}}},
             "_lineage": {"properties": {"event_id": {"type": "keyword"}, "raw_hash": {"type": "keyword"}, "segment_id": {"type": "keyword"}, "offset": {"type": "long"},
+                                         "source_id": {"type": "keyword"}, "parser_id": {"type": "keyword"}, "family_id": {"type": "keyword"},
                                          "event_time": {"type": "date", "format": "epoch_millis"}, "ingest_time": {"type": "date", "format": "epoch_millis"},
                                          "processing_time": {"type": "date", "format": "epoch_millis"}}}}}}}
 METRICS = {"index_patterns": ["ulpf-metrics"], "priority": 100, "template": {"settings": {"number_of_shards": 1, "number_of_replicas": 0},
@@ -142,26 +145,41 @@ def dashboards(osd_url):
         time.sleep(1)
     count = {"id": "1", "enabled": True, "type": "count", "schema": "metric", "params": {}}
     objs = [
-        {"type": "index-pattern", "id": "ulpf-ocsf", "attributes": {"title": "ulpf-ocsf-*", "timeFieldName": "time"}},
+        {"type": "index-pattern", "id": "ulpf-ocsf", "attributes": {"title": "ulpf-ocsf-*", "timeFieldName": "_lineage.ingest_time"}},
         {"type": "index-pattern", "id": "ulpf-metrics", "attributes": {"title": "ulpf-metrics", "timeFieldName": "time"}},
-        vis("ulpf-by-class", "Events by OCSF class", "pie", [count, {"id": "2", "enabled": True, "type": "terms", "schema": "segment", "params": {"field": "class_uid", "size": 10, "order": "desc", "orderBy": "1"}}],
+        vis("ulpf-by-class", "Events by vendor (inner) and OCSF class (outer) — every source, one schema", "pie", [count,
+            {"id": "2", "enabled": True, "type": "terms", "schema": "segment", "params": {"field": "metadata.product.vendor_name", "size": 10, "order": "desc", "orderBy": "1"}},
+            {"id": "3", "enabled": True, "type": "terms", "schema": "segment", "params": {"field": "class_uid", "size": 10, "order": "desc", "orderBy": "1"}}],
             {"type": "pie", "addTooltip": True, "addLegend": True, "legendPosition": "right", "isDonut": True, "labels": {"show": True, "values": True, "last_level": True, "truncate": 100}}),
-        vis("ulpf-denies", "Denied connections over time (action_id 2)", "histogram",
-            [count, {"id": "2", "enabled": True, "type": "date_histogram", "schema": "segment", "params": {"field": "time", "interval": "auto", "min_doc_count": 1, "extended_bounds": {}}}],
+        vis("ulpf-denies", "Denied connections by vendor, as received (action_id 2)", "histogram",
+            [count, {"id": "2", "enabled": True, "type": "date_histogram", "schema": "segment", "params": {"field": "_lineage.ingest_time", "interval": "auto", "min_doc_count": 1, "extended_bounds": {}}},
+             {"id": "3", "enabled": True, "type": "terms", "schema": "group", "params": {"field": "metadata.product.vendor_name", "size": 10, "order": "desc", "orderBy": "1"}}],
             {"type": "histogram", "addTooltip": True, "addLegend": False, "categoryAxes": [{"id": "CategoryAxis-1", "type": "category", "position": "bottom", "show": True, "labels": {"show": True, "truncate": 100}, "title": {}}],
              "valueAxes": [{"id": "ValueAxis-1", "name": "LeftAxis-1", "type": "value", "position": "left", "show": True, "labels": {"show": True}, "title": {"text": "denied"}}],
-             "seriesParams": [{"show": True, "type": "histogram", "mode": "stacked", "data": {"label": "denied", "id": "1"}, "valueAxis": "ValueAxis-1"}]}, query="action_id:2"),
-        vis("ulpf-top-src", "Top source addresses", "table",
-            [count, {"id": "2", "enabled": True, "type": "terms", "schema": "bucket", "params": {"field": "src_endpoint.ip", "size": 10, "order": "desc", "orderBy": "1"}}],
+             "seriesParams": [{"show": True, "type": "histogram", "mode": "stacked", "data": {"label": "denied", "id": "1"}, "valueAxis": "ValueAxis-1"}], "addLegend": True, "legendPosition": "right"}, query="action_id:2"),
+        vis("ulpf-top-src", "Top source addresses, and which device logged them", "table",
+            [count, {"id": "2", "enabled": True, "type": "terms", "schema": "bucket", "params": {"field": "src_endpoint.ip", "size": 10, "order": "desc", "orderBy": "1"}},
+             {"id": "3", "enabled": True, "type": "terms", "schema": "bucket", "params": {"field": "metadata.product.vendor_name", "size": 5, "order": "desc", "orderBy": "1"}}],
             {"perPage": 10, "showPartialRows": False, "showMetricsAtAllLevels": False, "showTotal": False}),
         vis("ulpf-quarantine", "Quarantined by ULPF (bytes kept, not parsed)", "metric",
             [{"id": "1", "enabled": True, "type": "max", "schema": "metric", "params": {"field": "quarantined"}}],
             {"addTooltip": True, "addLegend": False, "type": "metric", "metric": {"colorSchema": "Green to Red", "style": {"fontSize": 48}}}, index="ulpf-metrics"),
     ]
+    # requirement (f) made visible: ONE query, ONE set of field names, every device — possible only because every source
+    # arrives as the same OCSF class with the same attribute names
+    for sid, title, q in (("ulpf-denied-one-source", "Denied connections from one source address — any device (edit the address)", 'action_id:2 and src_endpoint.ip:"10.10.10.2"'),
+                          ("ulpf-denied-internal", "Denied connections from the internal network (10.0.0.0/8) — every device", 'action_id:2 and src_endpoint.ip:"10.0.0.0/8"')):
+        objs.append({"type": "search", "id": sid, "attributes": {"title": title, "description": "The same query over every vendor: the field names are OCSF's, not the device's.",
+                     "columns": ["metadata.product.vendor_name", "src_endpoint.ip", "dst_endpoint.ip", "dst_endpoint.port", "action_id", "_lineage.event_id"],
+                     "sort": [["_lineage.ingest_time", "desc"]], "version": 1,
+                     "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps({"query": {"query": q, "language": "kuery"}, "filter": [], "indexRefName": "kibanaSavedObjectMeta.searchSourceJSON.index"})}},
+                     "references": [{"name": "kibanaSavedObjectMeta.searchSourceJSON.index", "type": "index-pattern", "id": "ulpf-ocsf"}]})
     panels, refs = [], []
-    for i, (vid, x, y) in enumerate((("ulpf-by-class", 0, 0), ("ulpf-quarantine", 24, 0), ("ulpf-denies", 0, 15), ("ulpf-top-src", 24, 15))):
-        panels.append({"panelIndex": str(i + 1), "gridData": {"x": x, "y": y, "w": 24, "h": 15, "i": str(i + 1)}, "version": "2.19.2", "panelRefName": f"panel_{i}", "embeddableConfig": {}})
-        refs.append({"name": f"panel_{i}", "type": "visualization", "id": vid})
+    layout = (("ulpf-by-class", "visualization", 0, 0, 24), ("ulpf-quarantine", "visualization", 24, 0, 24), ("ulpf-denies", "visualization", 0, 15, 24),
+              ("ulpf-top-src", "visualization", 24, 15, 24), ("ulpf-denied-internal", "search", 0, 30, 48))
+    for i, (vid, typ, x, y, w) in enumerate(layout):
+        panels.append({"panelIndex": str(i + 1), "gridData": {"x": x, "y": y, "w": w, "h": 15, "i": str(i + 1)}, "version": "2.19.2", "panelRefName": f"panel_{i}", "embeddableConfig": {}})
+        refs.append({"name": f"panel_{i}", "type": typ, "id": vid})
     objs.append({"type": "dashboard", "id": "ulpf-overview", "attributes": {
         "title": "ULPF — normalized events", "description": "OCSF events delivered by ULPF's bulk encoding; quarantine counts from the ULPF console",
         "panelsJSON": json.dumps(panels), "optionsJSON": json.dumps({"useMargins": True, "hidePanelTitles": False}), "version": 1,
@@ -169,6 +187,21 @@ def dashboards(osd_url):
         "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps({"query": {"query": "", "language": "kuery"}, "filter": []})}}, "references": refs})
     must(call(osd_url, "POST", "/api/saved_objects/_bulk_create?overwrite=true", objs, headers={"osd-xsrf": "true"}), "dashboards saved objects")
     call(osd_url, "POST", "/api/opensearch-dashboards/settings", {"changes": {"defaultIndex": "ulpf-ocsf"}}, headers={"osd-xsrf": "true"})
+    # the index pattern needs its field list, or a date histogram on a field that is not the time field cannot be built
+    # ("Could not locate that index-pattern-field"): take it from OpenSearch's own mapping of the template's fields
+    for pid, pat in (("ulpf-ocsf", "ulpf-ocsf-*"), ("ulpf-metrics", "ulpf-metrics")):
+        st, f = call(osd_url, "GET", f"/api/index_patterns/_fields_for_wildcard?pattern={pat}&meta_fields=_source&meta_fields=_id&meta_fields=_index", headers={"osd-xsrf": "true"})
+        if st == 200 and f.get("fields"):
+            fields = f["fields"]
+            if pid == "ulpf-ocsf":   # Dashboards omits every subfield of an underscore-prefixed object (_lineage): add the ones used, typed as the template maps them
+                have = {x["name"] for x in fields}
+                for name, typ, es in (("_lineage.ingest_time", "date", "date"), ("_lineage.event_time", "date", "date"), ("_lineage.processing_time", "date", "date"),
+                                      ("_lineage.event_id", "string", "keyword"), ("_lineage.raw_hash", "string", "keyword"), ("_lineage.segment_id", "string", "keyword"),
+                                      ("_lineage.offset", "number", "long"), ("_lineage.source_id", "string", "keyword"), ("_lineage.parser_id", "string", "keyword"),
+                                      ("_lineage.family_id", "string", "keyword")):
+                    if name not in have:
+                        fields.append({"name": name, "type": typ, "esTypes": [es], "searchable": True, "aggregatable": True, "readFromDocValues": True})
+            must(call(osd_url, "PUT", f"/api/saved_objects/index-pattern/{pid}", {"attributes": {"fields": json.dumps(fields)}}, headers={"osd-xsrf": "true"}), "index pattern fields " + pid)
     print(f"dashboards: {osd_url}/app/dashboards#/view/ulpf-overview")
 
 

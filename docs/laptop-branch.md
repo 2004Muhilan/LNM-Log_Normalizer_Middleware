@@ -312,3 +312,29 @@ because the demo check's stop killed the other lanes' lake writers).
 The critical path is G20: its runs are 25–40 % slower than alone (CPU and GPU contention). **The laptop variant
 (`--laptop`) is not measured**: one small GPU, 10 GB — expect it to be dominated by the 20-layer lane at laptop speed.
 
+## 10. Unified visibility (f) and the throughput figures (g) (2026-09-27)
+
+**Every source in one SIEM.** The System console replays the four-vendor mixed capture (Cisco ASA, Palo Alto PAN-OS,
+FortiGate, Squid behind a syslog relay — built by `demo/reset.sh` from the corpus, never committed) from `127.0.0.2`,
+with the three vendor packs loaded next to the golden pack; it is a second application in the list ("vendor relay"),
+declared not learnable in `inventory.json`, so its unknown lines are quarantined and counted, never onboarded or healed.
+Button: *Four-vendor relay ON/OFF*. The dashboard now splits every panel by vendor; its time axis is ULPF's receive time
+(`_lineage.ingest_time`), because the recorded capture keeps its 2018–2020 event times. **Cross-vendor saved searches:**
+*Denied connections from one source address — any device* (`action_id:2 and src_endpoint.ip:"…"`) and *Denied connections
+from the internal network (10.0.0.0/8) — every device* (on the dashboard). One query, OCSF's field names, every device.
+Stated: the capture has no source address seen by two vendors (the fixtures come from different Elastic test sets), so the
+single-address search shows one device at a time; the subnet search shows Fortinet, Squid and the generator together.
+PAN-OS has no denied connection in the capture. Checked by `demo/apps-check.sh`: all five sources in the SIEM, the subnet
+query returns three devices, both saved searches exist, and the index pattern carries the time field (found by looking at
+the dashboard: Dashboards drops subfields of `_lineage` from its field list, so the denies panel failed until setup added
+them).
+
+**Throughput and integration efficiency: `docs/throughput.md`** (harness `scripts/bench/throughput.py`, measuring tool
+`runtime/cmd/ulpf-bench`, raw results `docs/metrics/throughput.json`). In one line: parsing and normalization do ~10,600
+events/s per process and scale across processes (3.35 billion a day extrapolated on 4 cores, measured); **with the evidence
+log as built — two fsyncs per event — one stream does 215 events/s on this disk (18.6 million a day)**, and end to end is
+bounded by the same (143/s). Raised, not built: group commit for the evidence log (it changes invariant 3's wording).
+
+Gate after these changes: `bash scripts/gate.sh` PASS in 796 s (lanes A 436 s, D 364 s, G20 787 s, G33 605 s); lane D
+re-run after the dashboard field fix: PASS (310 s).
+

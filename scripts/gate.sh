@@ -60,7 +60,11 @@ laneA() {
 
 laneD() {
   local st=0 t
-  t=$(date +%s); bash demo/siem/siem.sh start > "$G/siem.log" 2>&1 || { echo "SIEM did not start"; return 1; }
+  t=$(date +%s)
+  # the four-vendor relay (unified visibility) needs the vendor packs and the mixed capture in the demo's state directory
+  D0="${ULPF_DEMO_STATE:-$HOME/ulpf-demo}"
+  [ -f "$D0/p6/mixed.log" ] && [ -f "$D0/p6/source-packs/cisco-asa/pack.json" ] || ULPF_P6_WORK="$D0/p6" bash scripts/p6-build-packs.sh > "$G/p6-demo.log" 2>&1 || { echo "vendor packs for the relay did not build"; return 1; }
+  bash demo/siem/siem.sh start > "$G/siem.log" 2>&1 || { echo "SIEM did not start"; return 1; }
   python3 demo/siem/contract-check.py --limits > "$G/contract.log" 2>&1 || st=1; echo "contract check: $(tail -1 "$G/contract.log" | cut -c1-80) $(since $t)s"
   t=$(date +%s); ULPF_DEMO_PROVIDER=fixture APPS_SHAPES="positional csv kv json xml leef" bash demo/apps-check.sh > "$G/apps-check.log" 2>&1 || st=1
   echo "apps-check (fixture, six formats, real SIEM): $(tail -1 "$G/apps-check.log") $(since $t)s"

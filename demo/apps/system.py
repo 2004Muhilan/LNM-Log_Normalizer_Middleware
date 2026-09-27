@@ -76,7 +76,9 @@ class System:
     def __init__(self, a):
         self.dir = Path(a.state); self.ev = self.dir / "ev"; self.run = self.dir / "run-1"
         self.a = a
-        self.policy = {"auto_onboard": True, "prepared_answers": True, "operator": "op-014", "heal_policy": POLICY_VERSION}
+        self.policy = {"auto_onboard": True, "prepared_answers": True, "operator": "op-014", "heal_policy": POLICY_VERSION,
+                       "vendor_relay": bool(a.vendor_capture and Path(a.vendor_capture).exists())}
+        self.relay_sent = 0
         self.inventory = json.loads((ROOT / "demo" / "apps" / "inventory.json").read_text())
         self.events, self.order = {}, []          # event_id -> record; arrival order
         self.tails = {}
@@ -99,7 +101,9 @@ class System:
         self.run.mkdir(parents=True, exist_ok=True)
         (self.dir / "packs.txt").write_text("")
         a = self.a
-        cmd = [a.rt, "run", "--pack", a.golden, "--packs-file", str(self.dir / "packs.txt"), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
+        vendor = [x for v in ("cisco-asa", "panos", "fortigate") if a.vendor_packs and (Path(a.vendor_packs) / v / "pack.json").exists() for x in ("--pack", str(Path(a.vendor_packs) / v))]
+        self.vendors_loaded = len(vendor) // 2
+        cmd = [a.rt, "run", "--pack", a.golden, *vendor, "--packs-file", str(self.dir / "packs.txt"), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
                "--idle-timeout", "3600s", "--evidence", str(self.ev), "--out", str(self.run / "out.jsonl"), "--quarantine", str(self.run / "q.jsonl"),
                "--spool", str(self.dir / "spool"), "--spool-cap", a.spool_cap, "--forward-stall-after", "2s", "--forward-drain", "5s"]
         for d in self.destinations:   # N destinations, any kind: the list decides, not the code
@@ -185,8 +189,8 @@ class System:
             recent = [self.events[i] for i in self.order[-60:]]
         groups = {}
         for e in recent:
-            if e.get("ok") is not False or e.get("record"):
-                continue
+            if e.get("ok") is not False or e.get("record") or not self.learnable(e):
+                continue   # the vendor relay is not learnable: its unknown lines stay quarantined
             kind = "unknown_signature" if e["stage"] == "routing" else "parse_drop" if e["stage"] in ("parse", "tiling", "normalize") else None
             if kind is None:
                 continue
@@ -202,6 +206,35 @@ class System:
                        "state": "starting", "steps": [], "fields": [], "answers": {}, "started": time.time(), "go": threading.Event(), "promote": threading.Event()}
                 self.jobs.append(job)
                 threading.Thread(target=self.run_job, args=(job,), daemon=True).start()
+
+    def relay(self):
+        """The four-vendor relay (unified visibility): the recorded mixed capture — ASA, PAN-OS, FortiGate and Squid behind a syslog
+        relay, as scripts/p6-build-packs.sh builds it from the corpus — replayed in a loop from 127.0.0.2, so it is a second
+        application in the list, next to the generator, with the packs that were onboarded for it. Declared in inventory.json as
+        not learnable: its unknown lines are quarantined and counted, never onboarded or healed by this console."""
+        import socket
+        lines = [l for l in Path(self.a.vendor_capture).read_bytes().splitlines() if l.strip()]
+        host, port = self.a.in_tcp.rsplit(":", 1)
+        sock, i = None, 0
+        while True:
+            if not self.policy["vendor_relay"]:
+                if sock:
+                    sock.close(); sock = None
+                time.sleep(0.5); continue
+            try:
+                if sock is None:
+                    sock = socket.socket(); sock.bind(("127.0.0.2", 0)); sock.connect((host, int(port)))
+                l = lines[i % len(lines)]; i += 1
+                sock.sendall(str(len(l)).encode() + b" " + l)
+                self.relay_sent += 1
+            except OSError:
+                if sock:
+                    sock.close()
+                sock = None; time.sleep(1)
+            time.sleep(1.0 / self.a.relay_rate)
+
+    def learnable(self, e):
+        return self.inventory.get(self.host_of(e), {}).get("learn", True)
 
     def probe(self):
         """UP / DOWN per destination, from its own health URL (one probe per second, not per page refresh)."""
@@ -534,7 +567,7 @@ class System:
                 a["idle_s"] = round((now_ms - a["last_ms"]) / 1000, 1)
                 a["connected"] = a["idle_s"] < 3
                 a["alert"] = any(j.get("host") == h and j["state"] not in ("done", "failed") for j in self.jobs)
-            recent = [self.events[i] for i in self.order[-40:] if not self.events[i].get("record") and self.events[i].get("ok") is not None]
+            recent = [e for e in (self.events[i] for i in self.order[-200:]) if not e.get("record") and e.get("ok") is not None and self.learnable(e)][-40:]   # the applications being onboarded
             curs = {}
             for f in (self.dir / "spool").glob("cursor-*.json"):
                 try:
@@ -554,7 +587,8 @@ class System:
             jobs = [{k: v for k, v in j.items() if k not in ("go", "promote")} for j in self.jobs]
             return {"policy": self.policy, "runtime": {"up": self.runtime is not None and self.runtime.poll() is None, "ingress": [{"label": "Syslog over TCP", "addr": self.a.in_tcp}, {"label": "HTTP POST", "addr": self.a.in_http}],
                                                        "packs": [{"pack_id": v["pack_id"], "pack_version": v["pack_version"], "family": v["family"]} for v in self.active.values()], "reloads": self.reloads,
-                                                       "provider": self.a.provider, "pack_records": self.pack_records[-6:]},
+                                                       "provider": self.a.provider, "pack_records": self.pack_records[-6:], "vendor_packs": getattr(self, "vendors_loaded", 0),
+                                                       "relay_sent": self.relay_sent, "relay_available": bool(self.a.vendor_capture and Path(self.a.vendor_capture).exists())},
                     "apps": list(apps.values()), "egress": egress, "siem_action": self.siem_action, "jobs": jobs, "alerts": self.alerts, "attributes": ATTRIBUTES,
                     "counts": {"frames": sum(a["events"] for a in apps.values()), "usable": sum(a["usable"] for a in apps.values()), "quarantined": sum(a["quarantined"] for a in apps.values())},
                     "parse_success": round(sum(1 for e in recent if e["ok"]) / len(recent), 3) if recent else None}
@@ -631,7 +665,7 @@ def handler(sysm):
                 d = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 4096)) or b"{}")
                 job = next((j for j in sysm.jobs if j["id"] == d.get("job")), None)
                 if self.path == "/api/policy":
-                    for k in ("auto_onboard", "prepared_answers"):
+                    for k in ("auto_onboard", "prepared_answers", "vendor_relay"):
                         if isinstance(d.get(k), bool):
                             sysm.policy[k] = d[k]
                 elif self.path == "/api/approve" and job:
@@ -662,6 +696,8 @@ def main() -> int:
     ap.add_argument("--state", required=True); ap.add_argument("--listen", default="127.0.0.1:8765")
     ap.add_argument("--rt", default=str(ROOT / "runtime" / "bin" / "ulpf-runtime")); ap.add_argument("--golden", default=str(ROOT / "contracts" / "golden" / "squid-native"))
     ap.add_argument("--in-tcp", default="127.0.0.1:6515"); ap.add_argument("--in-http", default="127.0.0.1:8516"); ap.add_argument("--destinations", default=str(ROOT / "demo" / "apps" / "destinations.json"))
+    ap.add_argument("--vendor-packs", help="source packs of the four-vendor relay (demo/reset.sh builds them: $STATE/p6/source-packs)")
+    ap.add_argument("--vendor-capture", help="the recorded four-vendor mixed capture ($STATE/p6/mixed.log)"); ap.add_argument("--relay-rate", type=float, default=8)
     ap.add_argument("--spool-cap", default="256MiB"); ap.add_argument("--lake", required=True); ap.add_argument("--lake-status", default="http://127.0.0.1:8792/status")
     ap.add_argument("--python", default="python"); ap.add_argument("--provider", choices=["model", "fixture"], default="fixture")
     ap.add_argument("--model-id", default=""); ap.add_argument("--server", default="http://127.0.0.1:8081"); ap.add_argument("--backend", default="unknown")
@@ -669,6 +705,8 @@ def main() -> int:
     s = System(a)
     s.start_runtime()
     threading.Thread(target=s.loop, daemon=True).start()
+    if a.vendor_capture and Path(a.vendor_capture).exists():
+        threading.Thread(target=s.relay, daemon=True).start()
     host, port = a.listen.rsplit(":", 1)
     srv = http.server.ThreadingHTTPServer((host, int(port)), handler(s))
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
