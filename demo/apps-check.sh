@@ -99,6 +99,35 @@ if [ "${ULPF_SIEM:-opensearch}" != "fake" ] && [ "$(st "d['runtime']['relay_avai
   fi
   curl -s -X POST $S/api/policy -d '{"vendor_relay":false}'   # the accounting below needs a stream that has stopped
 fi
+# the evidence archive: ULPF holds only a short local buffer. Shipped segments leave the local directory after the grace
+# period; an event whose local copy is gone is proven from the ARCHIVED copy, through the same lookup path "Prove it" uses
+until_true 150 "d['archive'].get('deleted_segments', 0) >= 3" "shipped segments deleted from the local buffer (grace ${ULPF_EVIDENCE_GRACE:-60s})"
+AR=$STATE/app/evidence-archive; EVD=$STATE/app/ev
+echo "evidence archive: $(st "(lambda a: f\"{a['shipped_segments']} segments shipped ({a['archived_bytes']} bytes), {a['pending_segments']} pending, {a['deleted_segments']} deleted locally; local buffer {a['local_bytes']} bytes in {a['local_segments']} segments; committer running: {a['committer']}\")(d['archive'])")"
+[ "$(st "d['archive']['committer']")" = "True" ] || fail "the committer is not running"
+OLD=$(head -1 "$(ls "$EVD"/catalog/seg_*.ids | head -1)")
+SEG=$(basename "$(grep -l "^$OLD$" "$EVD"/catalog/seg_*.ids | head -1)" .ids)
+[ -f "$EVD/$SEG.raw" ] && fail "$SEG is in the catalogue of deleted segments but still local"
+rm -rf "$STATE/app/archive-proof"
+"$RT" export --evidence "$EVD" --commit "$STATE/app/commit" --evidence-archive "$AR" --event-id "$OLD" --out "$STATE/app/archive-proof" 2> "$STATE/app/archive-proof.err" || { cat "$STATE/app/archive-proof.err"; fail "export of $OLD (deleted locally) from the archive"; }
+grep -q "EVIDENCE ARCHIVE" "$STATE/app/archive-proof.err" || fail "the export of $OLD did not read the archive"
+"$VF" bundle --bundle "$STATE/app/archive-proof" --trust keys/trust | grep -q "VERIFY: OK" || fail "the bundle of $OLD, read from the archive, does not verify"
+echo "archive proof: $OLD ($SEG, deleted locally) exported from the archive, its Merkle proof verified with the public key"
+if [ "${ULPF_SIEM:-opensearch}" != "fake" ]; then
+  # "Prove it" on the System page, for the oldest SIEM document whose segment was deleted locally
+  curl -s -m 5 $OS/ulpf-ocsf-*/_refresh > /dev/null
+  PID=""
+  for id in $(curl -s "$OS/ulpf-ocsf-*/_search" -H 'Content-Type: application/json' -d '{"size":200,"sort":[{"_lineage.ingest_time":"asc"}],"_source":["_lineage.event_id"]}' | jq_ "' '.join(h['_id'] for h in d['hits']['hits'])"); do
+    grep -qx "$id" "$EVD"/catalog/seg_*.ids 2>/dev/null && { PID=$id; break; }
+  done
+  [ -n "$PID" ] || fail "no SIEM document whose segment was deleted locally"
+  curl -s -X POST $S/api/prove -d "{\"event_id\":\"$PID\"}" > /dev/null
+  for _ in $(seq 1 60); do T=$(curl -s "$S/api/trace?id=$PID"); [ "$T" != "null" ] && [ -n "$T" ] && break; sleep 1; done
+  echo "$T" | jq_ "'\n'.join(('  ✓ ' if s['ok'] else '  ✗ ') + s['step'] + ': ' + s['detail'][:150] for s in d['steps'])"
+  [ "$(echo "$T" | jq_ "next((s.get('evidence_source') for s in d['steps'] if s.get('evidence_source')), '')")" = "archive" ] || fail "Prove it on $PID did not read the archive"
+  [ "$(echo "$T" | jq_ "all(s['ok'] for s in d['steps'] if s['step'] != 'the same event in the lake')")" = "True" ] || fail "Prove it on $PID (read from the archive) did not complete"
+  echo "Prove it from the archive: $PID"
+fi
 gset '{"running":false}'; sleep 8
 USABLE=$(st "d['counts']['usable']")
 curl -s -m 5 $OS/ulpf-ocsf-*/_refresh > /dev/null
@@ -110,5 +139,20 @@ echo "accounting: ULPF parsed $USABLE events; SIEM holds $DOCS documents; lake (
 [ "$DOCS" = "$USABLE" ] || fail "the SIEM holds $DOCS documents for $USABLE parsed events (lost, or stored twice)"
 [ "$LAKE" = "($USABLE, $USABLE)" ] || fail "the lake holds $LAKE for $USABLE parsed events"
 [ "$REJ" = "0" ] || fail "$REJ event(s) rejected by a destination"
+# local evidence disk, before and after shipping: without the archive every segment would still be local
+python3 - "$STATE/app" <<'PY'
+import glob, json, os, sys
+app = sys.argv[1]; ev = f"{app}/ev"
+sid = json.load(open(f"{ev}/store.json"))["store_id"]
+size = lambda ps: sum(os.path.getsize(p) for p in ps if os.path.exists(p))
+local = size([p for p in glob.glob(f"{ev}/seg_*") if p.endswith((".raw", ".idx.jsonl", ".seal.json"))])
+arch = {os.path.basename(p): os.path.getsize(p) for p in glob.glob(f"{app}/evidence-archive/{sid}/segments/seg_*") if not p.endswith(".part")}
+local_names = {os.path.basename(p) for p in glob.glob(f"{ev}/seg_*")}
+written = local + sum(v for k, v in arch.items() if k not in local_names)
+kept = size(glob.glob(f"{ev}/catalog/*")) + size([f"{ev}/deleted.jsonl", f"{ev}/store.json"])
+print(f"local evidence disk: {written} bytes written in {len({n.split('.')[0] for n in local_names | set(arch)})} segments — without shipping all of it would be local; "
+      f"after shipping {local} bytes are local ({local / max(written, 1):.0%}) in {len({n.split('.')[0] for n in local_names})} segments, "
+      f"plus {kept} bytes of catalogue and deletion log")
+PY
 [ "${KEEP:-0}" = "1" ] || bash demo/start-demo.sh stop > /dev/null
 echo "apps-check: PASS ($ULPF_DEMO_PROVIDER, SIEM ${ULPF_SIEM:-opensearch})"

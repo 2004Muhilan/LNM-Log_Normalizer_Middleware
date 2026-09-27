@@ -33,6 +33,12 @@ type GapEntry struct {
 
 // Gaps lists every gap record in the evidence directory with its commitment status.
 func Gaps(dir, cdir string, trust keys.TrustStore) ([]GapEntry, error) {
+	return GapsFrom(evidence.NewLocator(dir, ""), cdir, trust)
+}
+
+// GapsFrom lists the gap records of every segment, local or archived.
+func GapsFrom(l *evidence.Locator, cdir string, trust keys.TrustStore) ([]GapEntry, error) {
+	dir := l.Dir
 	if cdir == "" {
 		cdir = filepath.Join(dir, "commit")
 	}
@@ -60,12 +66,12 @@ func Gaps(dir, cdir string, trust keys.TrustStore) ([]GapEntry, error) {
 		}
 	}
 	var out []GapEntry
-	for _, seg := range evidence.Segments(dir) {
-		recs, err := evidence.ReadIndex(dir, seg)
+	for _, seg := range l.Segments() {
+		recs, err := l.ReadIndex(seg)
 		if err != nil {
 			return out, err
 		}
-		raw, err := os.ReadFile(filepath.Join(dir, seg+".raw"))
+		raw, _, err := l.ReadFile(seg, evidence.SuffixRaw)
 		if err != nil {
 			return out, err
 		}
@@ -93,7 +99,7 @@ func Gaps(dir, cdir string, trust keys.TrustStore) ([]GapEntry, error) {
 				e.Committed, e.CheckpointID, e.AuthorityID, e.CommitMode, e.SignatureOK = true, ck.id, ck.authority, ck.mode, ck.sigOK
 				if !rootChecked {
 					rootChecked = true
-					if leaves, _, err := SegmentLeaves(dir, seg); err == nil {
+					if leaves, _, err := SegmentLeavesFrom(l, seg); err == nil {
 						rootOK = merkleRootString(leaves) == ck.root
 					}
 				}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/keys"
@@ -30,6 +31,10 @@ type Bundle struct {
 	CheckpointID   string          `json:"checkpoint_id"`
 	CheckpointFile string          `json:"checkpoint_file"` // checkpoint.json (+ .sig) next to bundle.json
 	DailyFile      string          `json:"daily_file,omitempty"`
+	// evidence archive: where the raw bytes were read — "local" (the buffer) or "archive" (deleted locally after
+	// shipping; the archived copy passed its seal check before it was used)
+	EvidenceSource string `json:"evidence_source,omitempty"`
+	StoreID        string `json:"store_id,omitempty"`
 }
 
 type ProofStep struct {
@@ -39,29 +44,31 @@ type ProofStep struct {
 
 // Export writes the bundle for eventID into outDir.
 func Export(dir, cdir, eventID, outDir string) (Bundle, error) {
+	return ExportFrom(evidence.NewLocator(dir, ""), cdir, eventID, outDir)
+}
+
+// ExportFrom is Export through the one lookup path: the local buffer, else the archive. The segment is leased while
+// it is read, so the store does not delete it mid-proof.
+func ExportFrom(l *evidence.Locator, cdir, eventID, outDir string) (Bundle, error) {
+	dir := l.Dir
 	if cdir == "" {
 		cdir = filepath.Join(dir, "commit")
 	}
 	var b Bundle
-	var rec *evidence.Record
-	var idx int
-	var segID string
-	for _, seg := range evidence.Segments(dir) {
-		recs, err := evidence.ReadIndex(dir, seg)
-		if err != nil {
-			return b, err
-		}
-		for i, r := range recs {
-			if r.EventID == eventID {
-				rr := r
-				rec, idx, segID = &rr, i, seg
-			}
+	segID, found, idx, err := l.FindEvent(eventID)
+	if err != nil {
+		return b, err
+	}
+	release := evidence.TakeLease(dir, segID, 2*time.Minute)
+	defer release()
+	rec := &found
+	source := l.Where(segID)
+	if source == "archive" {
+		if err := l.CheckSeal(segID); err != nil {
+			return b, fmt.Errorf("event %s: %w", eventID, err)
 		}
 	}
-	if rec == nil {
-		return b, fmt.Errorf("event %s not found in %s", eventID, dir)
-	}
-	leaves, _, err := SegmentLeaves(dir, segID)
+	leaves, _, err := SegmentLeavesFrom(l, segID)
 	if err != nil {
 		return b, err
 	}
@@ -92,7 +99,10 @@ func Export(dir, cdir, eventID, outDir string) (Bundle, error) {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return b, err
 	}
-	raw, _ := os.ReadFile(filepath.Join(dir, segID+".raw"))
+	raw, _, err := l.ReadFile(segID, evidence.SuffixRaw)
+	if err != nil {
+		return b, err
+	}
 	if err := os.WriteFile(filepath.Join(outDir, "event.raw"), raw[rec.Offset:rec.Offset+int64(rec.Length)], 0o644); err != nil {
 		return b, err
 	}
@@ -106,7 +116,7 @@ func Export(dir, cdir, eventID, outDir string) (Bundle, error) {
 		}
 	}
 	b = Bundle{BundleVersion: "1.0.0", EventID: eventID, Record: *rec, RawFile: "event.raw", Leaf: leaves[idx].String(), LeafIndex: idx,
-		SegmentRoot: root, CheckpointID: strings.TrimSuffix(filepath.Base(ckFile), ".json"), CheckpointFile: "checkpoint.json"}
+		SegmentRoot: root, CheckpointID: strings.TrimSuffix(filepath.Base(ckFile), ".json"), CheckpointFile: "checkpoint.json", EvidenceSource: source, StoreID: l.StoreID}
 	for _, s := range proof {
 		b.Proof = append(b.Proof, ProofStep{Sibling: s.Sibling.String(), Left: s.Left})
 	}

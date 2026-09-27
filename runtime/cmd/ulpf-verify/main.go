@@ -16,6 +16,7 @@ import (
 	"sort"
 
 	"ulpf/runtime/internal/checkpoint"
+	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/keys"
 )
 
@@ -27,15 +28,17 @@ func main() {
 	case "evidence":
 		fs := flag.NewFlagSet("evidence", flag.ExitOnError)
 		ev := fs.String("evidence", "", "evidence directory")
+		evArchive := fs.String("evidence-archive", "", "the evidence archive: a segment deleted locally is verified from its archived copy")
 		cdir := fs.String("commit", "", "commit directory (default <evidence>/commit)")
 		trust := fs.String("trust", "", "trust store directory")
 		strict := fs.Bool("strict", false, "fail unless every checkpoint attests to kernel-locked evidence (commit_mode kernel_immutable)")
 		fs.Parse(os.Args[2:])
-		findings, n, err := checkpoint.VerifyAll(*ev, *cdir, keys.TrustStore{Dir: *trust})
+		loc := evidence.NewLocator(*ev, *evArchive)
+		findings, n, err := checkpoint.VerifyAllFrom(loc, *cdir, keys.TrustStore{Dir: *trust})
 		die(err)
 		for _, f := range findings {
 			fmt.Printf("FINDING %s: %s\n", f.Where, f.Detail)
-			if loc, _ := checkpoint.LocateTamper(*ev, f.Where); loc != "" {
+			if loc, _ := checkpoint.LocateTamperFrom(loc, f.Where); loc != "" {
 				fmt.Printf("        tampered %s\n", loc)
 			}
 		}
@@ -84,11 +87,12 @@ func main() {
 		// UNCOMMITTED, never hidden.
 		fs := flag.NewFlagSet("gaps", flag.ExitOnError)
 		ev := fs.String("evidence", "", "evidence directory")
+		gapArchive := fs.String("evidence-archive", "", "the evidence archive: a segment deleted locally is verified from its archived copy")
 		cdir := fs.String("commit", "", "commit directory (default <evidence>/commit)")
 		trust := fs.String("trust", "", "trust store directory")
 		asJSON := fs.Bool("json", false, "one JSON object per line")
 		fs.Parse(os.Args[2:])
-		entries, err := checkpoint.Gaps(*ev, *cdir, keys.TrustStore{Dir: *trust})
+		entries, err := checkpoint.GapsFrom(evidence.NewLocator(*ev, *gapArchive), *cdir, keys.TrustStore{Dir: *trust})
 		die(err)
 		bad := 0
 		for _, e := range entries {
@@ -143,9 +147,10 @@ func main() {
 	case "locate":
 		fs := flag.NewFlagSet("locate", flag.ExitOnError)
 		ev := fs.String("evidence", "", "evidence directory")
+		locArchive := fs.String("evidence-archive", "", "the evidence archive: a segment deleted locally is verified from its archived copy")
 		seg := fs.String("segment", "", "segment id")
 		fs.Parse(os.Args[2:])
-		loc, err := checkpoint.LocateTamper(*ev, *seg)
+		loc, err := checkpoint.LocateTamperFrom(evidence.NewLocator(*ev, *locArchive), *seg)
 		die(err)
 		if loc == "" {
 			fmt.Println("intact")

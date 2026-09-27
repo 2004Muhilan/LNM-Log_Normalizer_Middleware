@@ -53,15 +53,25 @@ SHEET_V2 = {2: ("connection_info.protocol_num", "firmware 2.0 writes the IANA pr
 
 
 class Tail:
-    def __init__(self, path):
-        self.path, self.off = path, 0
+    """Follows a file by offset. With `fallback` (the evidence archive): an index file deleted locally after shipping,
+    before the console had read all of it, is finished from its archived copy — byte-identical, so the offset holds."""
+    def __init__(self, path, fallback=None):
+        self.path, self.off, self.fallback, self.done = path, 0, fallback, False
 
     def lines(self):
         try:
             with open(self.path, "rb") as f:
                 f.seek(self.off); data = f.read()
         except OSError:
-            return
+            alt = self.fallback(self.path) if self.fallback and not self.done else None
+            if not alt:
+                return
+            try:
+                with open(alt, "rb") as f:
+                    f.seek(self.off); data = f.read()
+            except OSError:
+                return
+            self.done = True   # a shipped segment is sealed: its archived index is complete
         pos = 0
         while True:
             e = data.find(b"\n", pos)
@@ -106,6 +116,10 @@ class System:
         cmd = [a.rt, "run", "--pack", a.golden, *vendor, "--packs-file", str(self.dir / "packs.txt"), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
                "--idle-timeout", "3600s", "--evidence", str(self.ev), "--out", str(self.run / "out.jsonl"), "--quarantine", str(self.run / "q.jsonl"),
                "--spool", str(self.dir / "spool"), "--spool-cap", a.spool_cap, "--forward-stall-after", "2s", "--forward-drain", "5s"]
+        # the evidence archive: the local evidence directory is a short buffer; the committer (started beside this console)
+        # ships, the runtime deletes a shipped segment when every condition holds
+        cmd += (["--evidence-archive", a.archive, "--commit-dir", a.commit_dir, "--evidence-grace", a.evidence_grace, "--evidence-buffer-cap", a.evidence_buffer_cap]
+                if a.archive else ["--dev-no-evidence-archive"])
         for d in self.destinations:   # N destinations, any kind: the list decides, not the code
             cmd += ["--forward", d["url"]]
         self.runtime = subprocess.Popen(cmd, stdout=open(self.run / "egress-stdout.ndjson", "wb"), stderr=open(self.run / "runtime.err", "wb"), cwd=str(ROOT))
@@ -134,15 +148,59 @@ class System:
 
     # ------------------------------------------------------------------ monitor
     def raw(self, rec):
+        """The raw bytes of an evidence record: the local buffer, else the archived copy (one lookup path, trace.py)."""
+        sys.path.insert(0, str(ROOT / "demo" / "apps"))
+        import trace
         try:
-            with open(self.ev / (rec["segment_id"] + ".raw"), "rb") as f:
-                f.seek(rec["offset"]); return f.read(rec["length"])
+            return trace.read_raw(str(self.ev), self.a.archive, rec)[0]
         except OSError:
             return None
 
+    def archived_index(self, path):
+        """The archived copy of a local index file that is gone (None when there is no archive or no copy)."""
+        if not self.a.archive:
+            return None
+        sys.path.insert(0, str(ROOT / "demo" / "apps"))
+        import trace
+        seg = os.path.basename(path)[:-len(".idx.jsonl")]
+        p, where = trace.seg_file(str(self.ev), self.a.archive, seg, ".idx.jsonl")
+        return p if where == "archive" else None
+
+    def archive_status(self):
+        """What the System page shows about the evidence archive: ULPF holds only a short local buffer."""
+        a = self.a
+        if not a.archive:
+            return {"configured": False}
+        def size(ps):
+            n = 0
+            for p in ps:
+                try:
+                    n += os.path.getsize(p)
+                except OSError:
+                    pass
+            return n
+        try:
+            sid = json.loads((self.ev / "store.json").read_text())["store_id"]
+        except (OSError, ValueError, KeyError):
+            sid = None
+        local = sorted(p[:-4] for p in glob.glob(str(self.ev / "seg_*.raw")))
+        local_bytes = size([p + s for p in local for s in (".raw", ".idx.jsonl", ".seal.json")])
+        base = Path(a.archive) / sid if sid else None
+        shipped = {Path(p).stem for p in glob.glob(str(base / "receipts" / "seg_*.json"))} if base else set()
+        pending = [Path(p).name for p in local if Path(p).name not in shipped]
+        deleted = len(glob.glob(str(self.ev / "catalog" / "seg_*.ids")))
+        archived = size([p for p in glob.glob(str(base / "segments" / "seg_*")) if not p.endswith(".part")]) if base else 0
+        cap = parse_bytes(a.evidence_buffer_cap)
+        return {"configured": True, "archive": a.archive, "store_id": sid, "grace": a.evidence_grace, "cap": cap,
+                "local_segments": len(local), "local_bytes": local_bytes, "shipped_segments": len(shipped), "pending_segments": len(pending),
+                "deleted_segments": deleted, "archived_bytes": archived, "checkpoints": len(glob.glob(os.path.join(a.commit_dir, "checkpoints", "ckpt_*.json"))),
+                "buffer_event": getattr(self, "buffer_event", None),
+                "committer": bool(subprocess.run(["pgrep", "-f", f"ulpf-committer commit --evidence {self.ev}"], capture_output=True).stdout.strip())}
+
     def tick(self):
-        for p in sorted(glob.glob(str(self.ev / "seg_*.idx.jsonl"))):
-            for _, l in self.tails.setdefault(p, Tail(p)).lines():
+        # the local index files, and any partly read one deleted since (finished from the archive)
+        for p in sorted(set(glob.glob(str(self.ev / "seg_*.idx.jsonl"))) | {k for k, t in self.tails.items() if k.endswith(".idx.jsonl") and not t.done and not os.path.exists(k)}):
+            for _, l in self.tails.setdefault(p, Tail(p, self.archived_index)).lines():
                 try:
                     r = json.loads(l)
                 except ValueError:
@@ -155,29 +213,36 @@ class System:
                     except ValueError:
                         g = {}
                     e["kind"] = g.get("kind")
+                    if (g.get("kind") or "").startswith("evidence_buffer_"):
+                        self.buffer_event = {"kind": g["kind"], "at": g.get("detected_at"), "detail": g.get("detail")}
                     if g.get("kind") in ("egress_stalled", "egress_resumed"):
                         self.egress[g.get("peer")] = {"state": "stalled" if g["kind"] == "egress_stalled" else "delivering", "since": g.get("detected_at"), "detail": g.get("detail")}
                     if g.get("kind") in ("pack_activated", "pack_deactivated"):
                         self.pack_records.append({"kind": g["kind"], "pack": g.get("peer"), "at": g.get("detected_at"), "detail": g.get("detail")})
                 with LOCK:
                     self.events[r["event_id"]] = e; self.order.append(r["event_id"])
+        # an outcome line can be read before its evidence record: the index files were listed first, and a batch committed
+        # and interpreted since then (group commit) writes its index lines and its outcomes between the two reads. Such a
+        # line is kept and matched on a later tick, never dropped (dropping it left the event without an outcome: miscounted)
         out = str(self.run / "out.jsonl")
-        for off, l in self.tails.setdefault(out, Tail(out)).lines():
-            try:
-                lin = json.loads(l)["_lineage"]
-            except (ValueError, KeyError):
-                continue
-            e = self.events.get(lin["event_id"])
-            if e is not None:
-                e.update(ok=True, pack=lin.get("parser_id"), family=lin.get("family_id"), sig=lin.get("routing_signature", ""), out=(off, len(l)))
+        waiting, self.unmatched = getattr(self, "unmatched", []), []
+        fresh = [("out", off, l) for off, l in self.tails.setdefault(out, Tail(out)).lines()]
         q = str(self.run / "q.jsonl")
-        for _, l in self.tails.setdefault(q, Tail(q)).lines():
+        fresh += [("q", 0, l) for _, l in self.tails.setdefault(q, Tail(q)).lines()]
+        for kind, off, l in waiting[-20000:] + fresh:
             try:
                 r = json.loads(l)
-            except ValueError:
+                eid = r["_lineage"]["event_id"] if kind == "out" else r.get("event_id")
+            except (ValueError, KeyError, TypeError):
                 continue
-            e = self.events.get(r.get("event_id"))
-            if e is not None:
+            e = self.events.get(eid)
+            if e is None:
+                self.unmatched.append((kind, off, l))
+                continue
+            if kind == "out":
+                lin = r["_lineage"]
+                e.update(ok=True, pack=lin.get("parser_id"), family=lin.get("family_id"), sig=lin.get("routing_signature", ""), out=(off, len(l)))
+            else:
                 e.update(ok=False, stage=r.get("stage"), reason=r.get("reason"), sig=r.get("routing_signature", ""))
 
     def host_of(self, e):
@@ -321,7 +386,7 @@ class System:
         import trace
         siem = next((d for d in self.destinations if d.get("kind") == "siem"), {})
         work = self.dir / "trace"; work.mkdir(exist_ok=True)
-        t = trace.trace(event_id, str(self.ev), self.a.lake, siem.get("findings", "http://127.0.0.1:9200"), str(work))
+        t = trace.trace(event_id, str(self.ev), self.a.lake, siem.get("findings", "http://127.0.0.1:9200"), str(work), self.a.archive, self.a.commit_dir if self.a.archive else None)
         self.traces[event_id] = t
         return t
 
@@ -589,6 +654,7 @@ class System:
                                                        "packs": [{"pack_id": v["pack_id"], "pack_version": v["pack_version"], "family": v["family"]} for v in self.active.values()], "reloads": self.reloads,
                                                        "provider": self.a.provider, "pack_records": self.pack_records[-6:], "vendor_packs": getattr(self, "vendors_loaded", 0),
                                                        "relay_sent": self.relay_sent, "relay_available": bool(self.a.vendor_capture and Path(self.a.vendor_capture).exists())},
+                    "archive": self.archive_status(),
                     "apps": list(apps.values()), "egress": egress, "siem_action": self.siem_action, "jobs": jobs, "alerts": self.alerts, "attributes": ATTRIBUTES,
                     "counts": {"frames": sum(a["events"] for a in apps.values()), "usable": sum(a["usable"] for a in apps.values()), "quarantined": sum(a["quarantined"] for a in apps.values())},
                     "parse_success": round(sum(1 for e in recent if e["ok"]) / len(recent), 3) if recent else None}
@@ -691,6 +757,13 @@ def handler(sysm):
     return H
 
 
+def parse_bytes(v):
+    for suf, mul in (("KiB", 1 << 10), ("MiB", 1 << 20), ("GiB", 1 << 30), ("KB", 10**3), ("MB", 10**6), ("GB", 10**9)):
+        if v.endswith(suf):
+            return int(float(v[:-len(suf)]) * mul)
+    return int(v)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="ULPF demo: the system console")
     ap.add_argument("--state", required=True); ap.add_argument("--listen", default="127.0.0.1:8765")
@@ -701,6 +774,9 @@ def main() -> int:
     ap.add_argument("--spool-cap", default="256MiB"); ap.add_argument("--lake", required=True); ap.add_argument("--lake-status", default="http://127.0.0.1:8792/status")
     ap.add_argument("--python", default="python"); ap.add_argument("--provider", choices=["model", "fixture"], default="fixture")
     ap.add_argument("--model-id", default=""); ap.add_argument("--server", default="http://127.0.0.1:8081"); ap.add_argument("--backend", default="unknown")
+    ap.add_argument("--archive", help="the evidence archive (start-demo.sh: $APP/evidence-archive); without it the runtime runs with --dev-no-evidence-archive")
+    ap.add_argument("--commit-dir", help="the always-running committer's commit tree (start-demo.sh: $APP/commit)")
+    ap.add_argument("--evidence-grace", default="60s"); ap.add_argument("--evidence-buffer-cap", default="64MiB")
     a = ap.parse_args()
     s = System(a)
     s.start_runtime()

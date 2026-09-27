@@ -82,7 +82,7 @@ func TestRelayChainIsUnwrappedAndRecorded(t *testing.T) {
 		t.Fatal("six events must validate")
 	}
 	lin := lineageOf(t, strings.Split(out.String(), "\n")[0])
-	if lin["schema_version"] != "1.3.0" {
+	if lin["schema_version"] != "1.5.0" || lin["store_id"] == nil { // 1.5.0: the evidence store is named (evidence archive)
 		t.Fatalf("lineage version: %v", lin["schema_version"])
 	}
 	envl := lin["envelope"].(map[string]any)

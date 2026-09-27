@@ -1,8 +1,54 @@
-# Evidence archive and a bounded local evidence buffer — design (proposal, NOT built)
+# Evidence archive and a bounded local evidence buffer — design (BUILT 2026-09-27)
 
 2026-09-27, laptop branch. The sponsor's decisions 2 and 3: ULPF is middleware and keeps only a short local evidence buffer;
 a separate, required evidence archive holds raw evidence (CERT-In's 2022 Directions: logs of ICT systems for a rolling 180
-days within Indian jurisdiction). This is the design sent for approval before building. Four points need a decision (§6).
+days within Indian jurisdiction). This design was sent for approval; the four points of §6 were all answered yes and it
+is built as described. §0 records where the build differs, and why.
+
+## 0. As built — code, tests, and the differences from the text below
+
+**Code:**
+- `runtime/internal/archive/ship.go` — the committer ships;
+- `runtime/internal/archive/buffer.go` — the store deletes, and reports status;
+- `runtime/internal/evidence/locate.go` — the one lookup path, the catalogue and the leases;
+- `evidence.Store` — `store.json` and numbering that survives deletion;
+- the pipeline's buffer loop and intake gate;
+- `ulpf-runtime run --evidence-archive | --dev-no-evidence-archive`;
+- `ulpf-committer commit --every … --archive`;
+- `--evidence-archive` on `export`, `reconstruct`, `renormalize` and `ulpf-verify evidence|gaps|locate`;
+- normalized-event 1.5.0 (`_lineage.store_id`).
+
+**Tests:**
+- `archive_test.go`:
+  - each deletion condition broken on its own;
+  - an unshipped segment a year old is never deleted;
+  - "Prove it" after local deletion;
+  - archived tampering names the exact event;
+  - a restart mid-shipment neither duplicates nor loses a segment, and the archive is never overwritten.
+- `archive_cap_test.go`: archive down → cap → UDP discarded and counted, TCP blocked, HTTP refused, the full record committed,
+  nothing deleted.
+- `cmd/ulpf-runtime/main_test.go`: `run` refuses to start without an archive, and starts with the override plus a warning.
+
+**Where the build differs from the text below:**
+- **Development mode is stated in the run's output, not in every gap record.**
+  - It appears as a banner at start, a line before the stats, and `"evidence_archive": "DISABLED (…)"` in the stats.
+  - The text below says every gap record in that mode names it. That would have changed the bytes of every gap record in every
+    test and every development run, for no added protection.
+- **Receipts live in the archive** (`<archive>/<store_id>/receipts/seg_N.json`), not locally: the committer writes only
+  to its commit tree and the archive.
+- **The store does not trust the receipt alone.** Before deleting, it re-reads the archived files and checks that they still
+  hash to the seal record.
+- **Daily roots are shipped as they appear, but they are not a deletion condition:** a day's root exists only after the day
+  closes. The deletion condition is the signed *minute* checkpoint that lists the segment.
+- **Leases:** "Prove it" (export) takes one per segment it reads, and each expires after 2 minutes, so a reader that dies
+  does not pin a segment. If a deletion races a lease, the reader falls back to the archive.
+- **The catalogue** stores event ids only (`<evidence>/catalog/seg_N.ids`, ~30 bytes per event), written before the files are
+  removed. `deleted.jsonl` logs each deletion.
+- **The demo:**
+  - The runtime runs with `--evidence-grace 60s --evidence-buffer-cap 64MiB`; the committer runs every 5 s with
+    `ULPF_COMMIT_SEALED=1`, as before.
+  - Every other test and demo sequence runs with `--dev-no-evidence-archive`: the gate's scripts, `twice.sh`, the live
+    sequence, the throughput harness and the golden vectors.
 
 ## 1. What is shipped, and where
 
@@ -20,7 +66,7 @@ days within Indian jurisdiction). This is the design sent for approval before bu
 - **Configuration slot:** `--evidence-archive DIR|URL`, separate from `--lake` and from every `--forward` (an analytics lake
   may sit where raw logs may not go). The demo points it at `$APP/evidence-archive`, a folder beside `$APP/lake`.
 - **Required:** `ulpf-runtime run` refuses to start without it. `--dev-no-evidence-archive` overrides it and prints a loud
-  warning at start and in the run's stats; every gap record written in that mode says the archive was disabled.
+  warning at start and in the run's stats. *(As built: stated in the run's output and stats, not in every gap record — see §0.)*
 
 ## 2. Segment lifecycle (local)
 
@@ -57,7 +103,9 @@ Nothing deletes an unshipped segment, whatever its age.
   - **HTTP receive:** 503 with `Retry-After`; nothing is accepted that is not written (the sender keeps it).
   - **TCP syslog:** stop reading; the kernel's receive window fills and the sender blocks or drops **on its side**.
   - **UDP syslog:** datagrams cannot be refused: they are read and discarded, and the count and bytes are recorded in the
-    `evidence_buffer_full` / `_resumed` records. Their content is gone and is never parsed or delivered.
+    `evidence_buffer_full` / `_resumed` records. Their content is gone and is never parsed or delivered. **Strict
+    deployments relay UDP through TCP**, for example an rsyslog or syslog-ng relay next to the device forwarding over RFC
+    6587 TCP. TCP can be held back, so nothing is lost at the cap; the sender's relay queues instead.
   - **Directory pull:** files stay in the drop directory.
 - **Sizing formula** (documented beside the flag): `cap ≥ ingest rate × bytes per event × tolerated archive outage`. The
   measured 842 bytes per event at one billion a day (11,574 events/s) is 9.7 MB/s: **35 GB for one hour, 842 GB for a day**.

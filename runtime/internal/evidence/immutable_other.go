@@ -11,3 +11,5 @@ var errNoInodeFlags = errors.New("inode immutability flags are a Linux filesyste
 func SetImmutable(path string) error { return errNoInodeFlags }
 
 func IsImmutable(path string) (bool, error) { return false, errNoInodeFlags }
+
+func ClearImmutable(path string) error { return nil }

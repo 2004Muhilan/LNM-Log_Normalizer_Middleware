@@ -4,8 +4,14 @@ Merkle inclusion proof under a signed checkpoint, verified -> the same event in 
 end to end, with the tools that already exist (ulpf-committer, `ulpf-runtime export`, ulpf-verify); this is where Proof
 of Derivation will plug in later.
 
-    python3 demo/apps/trace.py --event-id ev_... --evidence EV --lake LAKE [--os http://127.0.0.1:9200]
+    python3 demo/apps/trace.py --event-id ev_... --evidence EV --lake LAKE [--os http://127.0.0.1:9200] [--archive A --commit C]
     python3 demo/apps/trace.py --latest-finding --evidence EV --lake LAKE
+
+Evidence archive (2026-09-27): the local evidence directory is a short buffer. With --archive, the raw bytes are read
+from the local copy while it exists and otherwise from the ARCHIVED copy (the event is found through the local
+catalogue of deleted segments); the page says which. With --commit, the always-running committer's checkpoints are
+used (no second committer is started: two would race on the checkpoint chain) — the trace waits for the checkpoint
+that covers the event's segment.
 
 Commit mode, stated: the committer runs with ULPF_COMMIT_SEALED=1 — it commits SEALED segments without the kernel
 immutable flag (the development seam the six-step demo's step 6 also uses; the kernel-flag version is
@@ -19,6 +25,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -43,7 +50,70 @@ def findings(os_url, n=20):
     return sorted(out, key=lambda x: -(x["at"] or 0))[:n]
 
 
-def trace(event_id, ev_dir, lake_dir, os_url, work):
+def archive_path(ev_dir, archive, seg, suffix):
+    """The archived copy of a segment file: <archive>/<store_id>/segments/<seg><suffix>."""
+    try:
+        sid = json.load(open(os.path.join(ev_dir, "store.json")))["store_id"]
+    except (OSError, ValueError, KeyError):
+        return None
+    return os.path.join(archive, sid, "segments", seg + suffix)
+
+
+def seg_file(ev_dir, archive, seg, suffix):
+    """(path, where): the local copy while it exists, else the archived copy — the one lookup path."""
+    p = os.path.join(ev_dir, seg + suffix)
+    if os.path.exists(p):
+        return p, "local"
+    if archive:
+        a = archive_path(ev_dir, archive, seg, suffix)
+        if a and os.path.exists(a):
+            return a, "archive"
+    return None, None
+
+
+def find_record(ev_dir, archive, event_id):
+    """The evidence index record of an event: the local indexes, then the catalogue of shipped-and-deleted segments."""
+    for f in sorted(glob.glob(os.path.join(ev_dir, "seg_*.idx.jsonl"))):
+        try:
+            for l in open(f, encoding="utf-8"):
+                if event_id in l:
+                    r = json.loads(l)
+                    if r["event_id"] == event_id:
+                        return r, "local"
+        except OSError:   # deleted between the listing and the read: it is in the archive now
+            continue
+    needle = event_id + "\n"
+    for c in sorted(glob.glob(os.path.join(ev_dir, "catalog", "seg_*.ids"))):
+        if needle in open(c, encoding="utf-8").read():
+            seg = os.path.basename(c)[:-4]
+            p, where = seg_file(ev_dir, archive, seg, ".idx.jsonl")
+            if p:
+                for l in open(p, encoding="utf-8"):
+                    r = json.loads(l)
+                    if r["event_id"] == event_id:
+                        return r, where
+    return None, None
+
+
+def read_raw(ev_dir, archive, rec):
+    p, where = seg_file(ev_dir, archive, rec["segment_id"], ".raw")
+    if not p:
+        return None, None
+    with open(p, "rb") as fh:
+        fh.seek(rec["offset"]); return fh.read(rec["length"]), where
+
+
+def covered(commit_dir, seg):
+    for f in sorted(glob.glob(os.path.join(commit_dir, "checkpoints", "ckpt_*.json"))):
+        try:
+            if any(s["segment_id"] == seg for s in json.load(open(f)).get("segments", [])):
+                return os.path.basename(f)[:-5]
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def trace(event_id, ev_dir, lake_dir, os_url, work, archive=None, commit_dir=None):
     steps, ok_all = [], True
 
     def step(name, ok, detail, **extra):
@@ -66,28 +136,40 @@ def trace(event_id, ev_dir, lake_dir, os_url, work):
     except OSError as e:
         step("SIEM document", False, f"the SIEM did not answer ({e}); continuing from the evidence log alone")
     # 2. the raw bytes, re-hashed
-    idx = {}
-    for f in sorted(glob.glob(os.path.join(ev_dir, "seg_*.idx.jsonl"))):
-        for l in open(f, encoding="utf-8"):
-            r = json.loads(l)
-            if r["event_id"] == event_id:
-                idx = r
+    idx, where = find_record(ev_dir, archive, event_id)
     if not idx:
-        step("raw bytes in the evidence log", False, f"{event_id} is not in the evidence index")
+        step("raw bytes in the evidence log", False, f"{event_id} is not in the evidence index (local buffer{' or the archive' if archive else ''})")
         return {"event_id": event_id, "ok": False, "steps": steps}
-    with open(os.path.join(ev_dir, idx["segment_id"] + ".raw"), "rb") as fh:
-        fh.seek(idx["offset"]); raw = fh.read(idx["length"])
+    raw, where = read_raw(ev_dir, archive, idx)
+    if raw is None:
+        step("raw bytes in the evidence log", False, f"{idx['segment_id']} is neither in the local buffer nor in the archive")
+        return {"event_id": event_id, "ok": False, "steps": steps}
     h = "sha256:" + hashlib.sha256(raw).hexdigest()
     match = h == idx["raw_hash"] and (lin is None or lin["raw_hash"] == h)
-    step("raw bytes in the evidence log", match, f"{idx['length']} bytes at {idx['segment_id']} + {idx['offset']}, re-hashed now: {h[:23]}… — "
-         + ("equal to the evidence index and to the SIEM document's lineage" if match else "MISMATCH"), raw=raw.decode("utf-8", "replace"), ingest_channel=idx.get("ingest_channel"), peer=idx.get("peer"))
+    src = "the EVIDENCE ARCHIVE (the local copy was deleted after shipping)" if where == "archive" else "the local evidence buffer"
+    step("raw bytes in the evidence log", match, f"{idx['length']} bytes at {idx['segment_id']} + {idx['offset']}, read from {src}, re-hashed now: {h[:23]}… — "
+         + ("equal to the evidence index and to the SIEM document's lineage" if match else "MISMATCH"), raw=raw.decode("utf-8", "replace"), ingest_channel=idx.get("ingest_channel"), peer=idx.get("peer"),
+         evidence_source=where)
     # 3. commit (sealed segments), 4. export the bundle, 5. verify it with the public key only
-    env = {**os.environ, "ULPF_COMMIT_SEALED": "1"}
-    c = subprocess.run([str(BIN / "ulpf-committer"), "commit", "--evidence", ev_dir, "--key", str(ROOT / "keys" / "dev" / "ulpf-committer-dev.json")], capture_output=True, text=True, env=env, cwd=ROOT)
-    step("commit", c.returncode == 0, "signed Merkle checkpoint over the sealed segments (development seam: SEALED, not kernel-IMMUTABLE — said so)" if c.returncode == 0 else (c.stderr or c.stdout)[-300:])
+    if commit_dir:   # the always-running committer: wait for the checkpoint that covers the segment (no second committer)
+        ck = None
+        for _ in range(60):
+            ck = covered(commit_dir, idx["segment_id"])
+            if ck:
+                break
+            time.sleep(0.5)
+        step("commit", bool(ck), f"{idx['segment_id']} is covered by the signed checkpoint {ck} (the always-running committer; development seam: SEALED, not kernel-IMMUTABLE — said so)" if ck
+             else f"no checkpoint covers {idx['segment_id']} after 30 s: is the committer running? ({commit_dir})")
+        if not ck:
+            return {"event_id": event_id, "ok": False, "steps": steps}
+    else:
+        env = {**os.environ, "ULPF_COMMIT_SEALED": "1"}
+        c = subprocess.run([str(BIN / "ulpf-committer"), "commit", "--evidence", ev_dir, "--key", str(ROOT / "keys" / "dev" / "ulpf-committer-dev.json")], capture_output=True, text=True, env=env, cwd=ROOT)
+        step("commit", c.returncode == 0, "signed Merkle checkpoint over the sealed segments (development seam: SEALED, not kernel-IMMUTABLE — said so)" if c.returncode == 0 else (c.stderr or c.stdout)[-300:])
     bundle = Path(work) / f"bundle-{event_id}"
     subprocess.run(["rm", "-rf", str(bundle)])
-    e = subprocess.run([str(BIN / "ulpf-runtime"), "export", "--evidence", ev_dir, "--event-id", event_id, "--out", str(bundle)], capture_output=True, text=True, cwd=ROOT)
+    extra = (["--commit", commit_dir] if commit_dir else []) + (["--evidence-archive", archive] if archive else [])
+    e = subprocess.run([str(BIN / "ulpf-runtime"), "export", "--evidence", ev_dir, *extra, "--event-id", event_id, "--out", str(bundle)], capture_output=True, text=True, cwd=ROOT)
     if e.returncode != 0:
         step("export", False, (e.stderr or e.stdout).strip()[-300:] + " — if the segment is still open it seals within ~2 s: try again")
         return {"event_id": event_id, "ok": False, "steps": steps}
@@ -114,6 +196,8 @@ def main():
     ap.add_argument("--event-id"); ap.add_argument("--latest-finding", action="store_true")
     ap.add_argument("--evidence", required=True); ap.add_argument("--lake", required=True); ap.add_argument("--os", default="http://127.0.0.1:9200")
     ap.add_argument("--work", default="/tmp/ulpf-trace")
+    ap.add_argument("--archive", help="the evidence archive (read when the local copy was deleted after shipping)")
+    ap.add_argument("--commit", help="the always-running committer's commit tree (no committer is started)")
     a = ap.parse_args()
     os.makedirs(a.work, exist_ok=True)
     eid = a.event_id
@@ -123,7 +207,7 @@ def main():
             print("no finding yet (the detector runs every minute)"); return 2
         print(f"finding: {fs[0]['rule']} naming {len(fs[0]['event_ids'])} event(s)")
         eid = fs[0]["event_ids"][0]
-    t = trace(eid, a.evidence, a.lake, a.os, a.work)
+    t = trace(eid, a.evidence, a.lake, a.os, a.work, a.archive, a.commit)
     for s in t["steps"]:
         print(f"{'OK  ' if s['ok'] else 'FAIL'} {s['step']}: {s['detail']}")
     print(f"TRACE {'OK' if t['ok'] else 'INCOMPLETE'}: {eid}")

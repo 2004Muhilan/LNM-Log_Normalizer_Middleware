@@ -180,7 +180,7 @@ def m_evidence(a, n, where, extra=()):
         ev = run / "ev"
         c0, _ = children_rusage()
         t0 = time.time()
-        p = subprocess.Popen([str(RT), "run", *pack_args(a), "--source-id", "bench-mixed-01", "--input", str(inp), "--evidence", str(ev),
+        p = subprocess.Popen([str(RT), "run", "--dev-no-evidence-archive", *pack_args(a), "--source-id", "bench-mixed-01", "--input", str(inp), "--evidence", str(ev),
                               "--out", "/dev/null", "--quarantine", "/dev/null", *extra], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         g = Guard(a, run, lambda: [p.pid])
         _, err = p.communicate()
@@ -314,7 +314,7 @@ def m_e2e(a, n):
                 time.sleep(0.1)
         cpu0 = os_cpu_s(); c0, _ = children_rusage(); lw0 = proc_cpu_s(lw.pid)
         t0 = time.time()
-        p = subprocess.Popen([str(RT), "run", *pack_args(a), "--source-id", "bench-mixed-01", "--input", str(inp), "--evidence", str(run / "ev"),
+        p = subprocess.Popen([str(RT), "run", "--dev-no-evidence-archive", *pack_args(a), "--source-id", "bench-mixed-01", "--input", str(inp), "--evidence", str(run / "ev"),
                               "--spool", str(run / "spool"), "--spool-cap", "4GiB", "--forward", f"bulk+{OS_URL}?index={IDX}{{class_uid}}", "--forward", "http://127.0.0.1:8893/ingest",
                               "--forward-drain", "900s", "--quarantine", "/dev/null"], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         g = Guard(a, run, lambda: [p.pid, lw.pid])
@@ -405,7 +405,7 @@ def main():
     # a normalized JSONL for the bulk sink alone: the parse path's output, from the real binary
     run = Path(tempfile_dir(a, "ext4")); inp = run / "in.log"; n_bulk = 30_000 if a.quick else 150_000
     replicate(a.mixed, int(n_bulk / 0.9) + 100, inp)
-    sh([str(RT), "run", *pack_args(a), "--source-id", "bench-mixed-01", "--input", str(inp), "--evidence", "/dev/shm/ulpf-bench/ev-jsonl", "--out", str(run / "normalized.jsonl"), "--quarantine", "/dev/null"])
+    sh([str(RT), "run", "--dev-no-evidence-archive", *pack_args(a), "--source-id", "bench-mixed-01", "--input", str(inp), "--evidence", "/dev/shm/ulpf-bench/ev-jsonl", "--out", str(run / "normalized.jsonl"), "--quarantine", "/dev/null"])
     shutil.rmtree("/dev/shm/ulpf-bench/ev-jsonl", ignore_errors=True)
     os_prepare()
     try:

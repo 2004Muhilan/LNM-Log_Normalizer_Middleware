@@ -10,7 +10,7 @@ status=0
 W=$(mktemp -d)
 EV="$W/ev"; B="$W/bundle"
 echo "=== 1. a ULPF instance ingests, seals and commits (unprivileged here: segments are SEALED, so the committer is told to treat sealed as committed -- the kernel boundary is the other script's job)"
-runtime/bin/ulpf-runtime run --pack contracts/golden/squid-native --input contracts/golden/squid-native/samples/access.log --evidence "$EV" --out /dev/null --deterministic-ids --fixed-clock-ms 1734567890481 2>/dev/null
+runtime/bin/ulpf-runtime run --dev-no-evidence-archive --pack contracts/golden/squid-native --input contracts/golden/squid-native/samples/access.log --evidence "$EV" --out /dev/null --deterministic-ids --fixed-clock-ms 1734567890481 2>/dev/null
 # In an unprivileged dev shell the flag cannot be set; use the committer's test seam: ULPF_COMMIT_SEALED=1
 ULPF_COMMIT_SEALED=1 runtime/bin/ulpf-committer commit --evidence "$EV" --key keys/dev/ulpf-committer-dev.json | cut -c1-300 | sed 's/^/  /'
 runtime/bin/ulpf-committer daily --evidence "$EV" --key keys/dev/ulpf-committer-dev.json | sed 's/^/  /'

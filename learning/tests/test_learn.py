@@ -129,7 +129,7 @@ def test_trace_stage10_to_13_resolution_promotion_and_differential(session, tmp_
         assert pm == gm, json.dumps({"python": pm, "go": gm}, indent=1)[:4000]
     # differential 2: normalized output — Python prediction vs Go pipeline (OCSF part, unmapped, absence)
     ev_dir = tmp_path / "ev"
-    run = subprocess.run([str(RUNTIME), "run", "--pack", str(pack_dir), "--input", str(samples), "--evidence", str(ev_dir), "--out", "-"], capture_output=True, text=True, check=True, env=env)
+    run = subprocess.run([str(RUNTIME), "run", "--dev-no-evidence-archive", "--pack", str(pack_dir), "--input", str(samples), "--evidence", str(ev_dir), "--out", "-"], capture_output=True, text=True, check=True, env=env)
     go_events = [json.loads(l) for l in run.stdout.splitlines() if l.strip()]
     assert len(go_events) == len(lines)
     for line, ge in zip(lines, go_events):

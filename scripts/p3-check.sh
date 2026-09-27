@@ -24,6 +24,6 @@ S=/tmp/ulpf-p3-session; rm -rf "$S" /tmp/ulpf-p3-pack
 (cd learning && python -m ulpf_learn respond --session "$S" --discriminator device_logformat_configuration --input "logformat squid %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt" | tail -4 | sed 's/^/  /') || status=1
 (cd learning && python -m ulpf_learn promote --session "$S" --out /tmp/ulpf-p3-pack --pack-id squid-native-emitted | sed 's/^/  /') || status=1
 runtime/bin/ulpf-runtime verify-pack --pack /tmp/ulpf-p3-pack | sed 's/^/  /' || status=1
-runtime/bin/ulpf-runtime run --pack /tmp/ulpf-p3-pack --input /tmp/ulpf-p3-pack/samples/access.log --evidence /tmp/ulpf-p3-ev --out /dev/null 2>&1 | tail -1 | sed 's/^/  live lines through the emitted pack: /'
+runtime/bin/ulpf-runtime run --dev-no-evidence-archive --pack /tmp/ulpf-p3-pack --input /tmp/ulpf-p3-pack/samples/access.log --evidence /tmp/ulpf-p3-ev --out /dev/null 2>&1 | tail -1 | sed 's/^/  live lines through the emitted pack: /'
 rm -rf /tmp/ulpf-p3-ev
 exit $status

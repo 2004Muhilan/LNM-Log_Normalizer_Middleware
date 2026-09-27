@@ -13,14 +13,17 @@
 #   ULPF_SIEM_DASHBOARDS=0 ...         OpenSearch without Dashboards (memory fallback: a screen is lost, not the demo)
 #   ULPF_SIEM=fake ...                 no containers at all: the contract-checked bulk stand-in answers on :9200 (no findings)
 # Destinations are a list, demo/apps/destinations.json: ULPF has no SIEM- or lake-specific code, only transports and encodings.
+# The evidence archive is its own slot, not a destination: $APP/evidence-archive, a folder beside the lake. The committer
+# runs always (every ${ULPF_COMMIT_EVERY:-5s}): it commits sealed segments and ships them there; the runtime deletes a
+# shipped segment after the grace period (ULPF_EVIDENCE_GRACE, default 60s) when every deletion condition holds.
 source "$(dirname "$(readlink -f "$0")")/lib.sh"
 cd "$ROOT"
 APP="$STATE/app"
 stop() {
-  for f in generator system lakewriter fakesiem; do [ -f "$APP/$f.pid" ] && kill "$(cat "$APP/$f.pid")" 2>/dev/null; rm -f "$APP/$f.pid"; done
+  for f in generator system lakewriter fakesiem committer; do [ -f "$APP/$f.pid" ] && kill "$(cat "$APP/$f.pid")" 2>/dev/null; rm -f "$APP/$f.pid"; done
   for _ in $(seq 1 30); do pgrep -f "demo/apps/[gs][a-z]*.py|adapters/lake/[l]akewriter.py --lake $APP/" > /dev/null || break; sleep 0.5; done   # the console drains the runtime, the lake writer flushes
   pkill -9 -f "demo/apps/[gs][a-z]*.py" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py --lake $APP/" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" 2>/dev/null
-  pkill -f "[p]acks-file $APP/packs.txt" 2>/dev/null; return 0
+  pkill -f "[p]acks-file $APP/packs.txt" 2>/dev/null; pkill -f "[u]lpf-committer commit --evidence $APP/" 2>/dev/null; return 0
 }
 if [ "${1:-start}" = "stop" ]; then stop; [ "${ULPF_SIEM:-opensearch}" = "fake" ] || bash demo/siem/siem.sh stop > /dev/null; echo "stopped"; exit 0; fi
 [ -d "$APP" ] && stop
@@ -47,16 +50,22 @@ fi
 setsid -f python adapters/lake/lakewriter.py --lake "$APP/lake" --listen 127.0.0.1:8792 --rotate-seconds "${ULPF_LAKE_ROTATE_SECONDS:-10}" > "$APP/lakewriter.log" 2>&1
 VENDOR=(); if [ -f "$STATE/p6/mixed.log" ] && [ -f "$STATE/p6/source-packs/cisco-asa/pack.json" ]; then VENDOR=(--vendor-packs "$STATE/p6/source-packs" --vendor-capture "$STATE/p6/mixed.log")
 else echo "no four-vendor relay: run demo/reset.sh first (it builds the vendor packs and the mixed capture from the corpus)"; fi
-setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN" --python "$(command -v python)" --lake "$APP/lake" "${VENDOR[@]}" "${PROV[@]}" > "$APP/system.log" 2>&1
+mkdir -p "$APP/evidence-archive" "$APP/commit"
+ULPF_COMMIT_SEALED=1 setsid -f "$CM" commit --evidence "$APP/ev" --commit "$APP/commit" --key keys/dev/ulpf-committer-dev.json --every "${ULPF_COMMIT_EVERY:-5s}" \
+  --archive "$APP/evidence-archive" > "$APP/committer.log" 2>&1
+setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN" --python "$(command -v python)" --lake "$APP/lake" "${VENDOR[@]}" "${PROV[@]}" \
+  --archive "$APP/evidence-archive" --commit-dir "$APP/commit" --evidence-grace "${ULPF_EVIDENCE_GRACE:-60s}" --evidence-buffer-cap "${ULPF_EVIDENCE_BUFFER_CAP:-64MiB}" > "$APP/system.log" 2>&1
 setsid -f python3 demo/apps/generator.py --rate "${ULPF_LIVE_RATE:-6}" > "$APP/generator.log" 2>&1
 sleep 2
 pgrep -f "demo/apps/[g]enerator.py" > "$APP/generator.pid"; pgrep -f "demo/apps/[s]ystem.py" > "$APP/system.pid"; pgrep -f "adapters/lake/[l]akewriter.py --lake $APP/" > "$APP/lakewriter.pid"
 pgrep -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" > "$APP/fakesiem.pid" 2>/dev/null
-for f in generator system lakewriter; do [ -s "$APP/$f.pid" ] || { echo "$f did not start:"; tail -5 "$APP/$f.log"; exit 1; }; done
+pgrep -f "[u]lpf-committer commit --evidence $APP/" > "$APP/committer.pid"
+for f in generator system lakewriter committer; do [ -s "$APP/$f.pid" ] || { echo "$f did not start:"; tail -5 "$APP/$f.log"; exit 1; }; done
 cat <<EOF
 1 Generator   http://127.0.0.1:8780/
 2 System      http://127.0.0.1:8765/
 3 Data lake   http://127.0.0.1:8765/lake
 4 SIEM        http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview   (OpenSearch Dashboards; security plugin DISABLED — demo only)
-state: $APP   (logs: generator.log system.log lakewriter.log; the runtime's: run-1/runtime.err)
+state: $APP   (logs: generator.log system.log lakewriter.log committer.log; the runtime's: run-1/runtime.err)
+evidence archive: $APP/evidence-archive   (the committer ships; ULPF keeps a short local buffer: $APP/ev)
 EOF

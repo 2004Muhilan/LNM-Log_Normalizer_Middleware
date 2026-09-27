@@ -78,7 +78,8 @@ func TestJSONXMLAndLEEFRouteParseAndValidate(t *testing.T) {
 	if n := validateEvents(t, out.String()); n != 4 {
 		t.Fatalf("validated %d events", n)
 	}
-	want := map[string][3]any{"json-sensor": {float64(1734567890123), "10.0.0.1", "1.3.0"}, "xml-sensor": {float64(1734567890124), "10.0.0.3", "1.3.0"}, "leef-gw": {float64(1734567890125), "10.0.0.5", "1.4.0"}}
+	// every event names its evidence store since the evidence archive: 1.5.0 (which includes 1.4.0's LEEF envelope)
+	want := map[string][3]any{"json-sensor": {float64(1734567890123), "10.0.0.1", "1.5.0"}, "xml-sensor": {float64(1734567890124), "10.0.0.3", "1.5.0"}, "leef-gw": {float64(1734567890125), "10.0.0.5", "1.5.0"}}
 	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
 		var ev map[string]any
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
@@ -89,7 +90,7 @@ func TestJSONXMLAndLEEFRouteParseAndValidate(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if ev["time"] != w[0] || ev["src_endpoint"].(map[string]any)["ip"] != w[1] || lin["schema_version"] != w[2] {
+		if ev["time"] != w[0] || ev["src_endpoint"].(map[string]any)["ip"] != w[1] || lin["schema_version"] != w[2] || lin["store_id"] == nil {
 			t.Fatalf("%s: time %v src %v version %v", lin["parser_id"], ev["time"], ev["src_endpoint"], lin["schema_version"])
 		}
 		if lin["parser_id"] == "leef-gw" {

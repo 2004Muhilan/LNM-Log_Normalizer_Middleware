@@ -114,7 +114,7 @@ def build_stream(counts: dict[str, int], pools: dict[str, list[bytes]], path: Pa
 
 def replay(packs: list[Path], stream: Path, work: Path) -> dict:
     rmtree(work); work.mkdir(parents=True)
-    cmd = [str(RUNTIME), "run"]
+    cmd = [str(RUNTIME), "run", "--dev-no-evidence-archive"]
     for p in packs:
         cmd += ["--pack", str(p)]
     cmd += ["--source-id", "coverage-replay", "--input", str(stream), "--evidence", str(work / "ev"), "--out", str(work / "out.jsonl"),

@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"ulpf/runtime/internal/dsl"
@@ -22,6 +20,7 @@ import (
 type RenormOptions struct {
 	Packs       []*pack.Pack
 	EvidenceDir string
+	Archive     string // evidence archive: segments deleted locally are read from their archived copies
 	LakeDir     string
 	Reason      string
 	Now         func() time.Time
@@ -82,12 +81,14 @@ func Renormalize(o RenormOptions) (RenormStats, error) {
 		}
 	}
 	records := map[string]evidence.Record{}
-	for _, seg := range evidence.Segments(o.EvidenceDir) {
-		recs, err := evidence.ReadIndex(o.EvidenceDir, seg)
+	loc := evidence.NewLocator(o.EvidenceDir, o.Archive)
+	for _, seg := range loc.Segments() {
+		recs, err := loc.ReadIndex(seg)
 		if err != nil {
 			return st, err
 		}
 		for _, r := range recs {
+			r.StoreID = loc.StoreID
 			records[r.EventID] = r
 		}
 	}
@@ -104,7 +105,7 @@ func Renormalize(o RenormOptions) (RenormStats, error) {
 		}
 		seg, ok := raws[rec.SegmentID]
 		if !ok {
-			if seg, err = os.ReadFile(filepath.Join(o.EvidenceDir, rec.SegmentID+".raw")); err != nil {
+			if seg, _, err = loc.ReadFile(rec.SegmentID, evidence.SuffixRaw); err != nil {
 				return st, err
 			}
 			raws[rec.SegmentID] = seg

@@ -15,12 +15,16 @@ package pipeline
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"ulpf/runtime/internal/archive"
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/egress"
 	"ulpf/runtime/internal/evidence"
@@ -82,8 +86,22 @@ type Options struct {
 	// event, as before 2026-09-27). The wait is measured on the wall clock, never on Now (a fixed golden clock
 	// must not hold a batch forever). A crash loses only frames received and not yet committed — never
 	// parsed, never delivered.
-	CommitEvents  int
-	CommitWait    time.Duration
+	CommitEvents int
+	CommitWait   time.Duration
+	// Evidence archive (laptop branch, 2026-09-27): the local evidence directory is a bounded buffer. Buffer deletes
+	// shipped segments when every deletion condition holds (internal/archive), swept every BufferTick (default 1 s).
+	// BufferCap bounds the local bytes: above BufferWarn of it (default 0.8) one `evidence_buffer_high` record; at the
+	// cap, intake STOPS and one `evidence_buffer_full` record is committed — no older evidence is deleted to make room;
+	// below the warning mark again, one `evidence_buffer_resumed` record. While full: a TCP connection or a file is not
+	// read (the sender waits or drops on its side), HTTP is answered 503 (Admit), a UDP datagram is counted and
+	// discarded — never parsed, never delivered; strict deployments relay UDP through TCP. The cap can be exceeded by
+	// what arrives within one tick. Done ends a wait (shutdown).
+	Buffer        *archive.Buffer
+	BufferCap     int64
+	BufferWarn    float64
+	BufferTick    time.Duration
+	Done          <-chan struct{}
+	StoreID       string // golden outputs: the store id of a new evidence directory
 	MaxEventBytes int
 	// P7. Debatch (default on unless NoDebatch) explodes JSON-array frames into element frames.
 	NoDebatch bool
@@ -126,6 +144,37 @@ type Stats struct {
 	Peers         int            `json:"peers"`
 	Egress        []egress.Stats `json:"egress,omitempty"` // P8: per sink — delivered, retries, stalls, undelivered bytes
 	Commits       int64          `json:"evidence_commits"` // group commit: batches made durable (one write + two fsyncs each)
+	StoreID       string         `json:"store_id"`
+	// the evidence archive: DISABLED (development override) or the local buffer's accounting
+	EvidenceArchive string       `json:"evidence_archive,omitempty"`
+	EvidenceBuffer  *BufferStats `json:"evidence_buffer,omitempty"`
+}
+
+// BufferStats is the local evidence buffer's accounting for a run.
+type BufferStats struct {
+	LocalBytes       int64  `json:"local_bytes"`
+	LocalSegments    int    `json:"local_segments"`
+	PeakLocalBytes   int64  `json:"peak_local_bytes"`
+	Cap              int64  `json:"cap"`
+	DeletedSegments  int    `json:"deleted_segments"`
+	FullEpisodes     int    `json:"full_episodes"`
+	DiscardedFrames  int64  `json:"udp_discarded_frames"` // UDP datagrams discarded while the buffer was full
+	DiscardedBytes   int64  `json:"udp_discarded_bytes"`
+	RefusedHTTP      int64  `json:"http_refused_requests"`
+	FullNow          bool   `json:"full_now"`
+	LastBlockedCause string `json:"last_blocked,omitempty"` // why the oldest local segment stays (one example)
+}
+
+// ErrEvidenceBufferFull is returned to a transport while the local evidence buffer is at its cap.
+var ErrEvidenceBufferFull = errors.New("the local evidence buffer is at its cap (the evidence archive is not taking segments): intake stopped, nothing older deleted")
+
+// Admit is called by the HTTP receiver before it accepts a request: ErrEvidenceBufferFull while the buffer is at its cap.
+func (p *Pipeline) Admit() error {
+	if p.full.Load() {
+		p.refusedHTTP.Add(1)
+		return ErrEvidenceBufferFull
+	}
+	return nil
 }
 
 type quarantined struct {
@@ -169,6 +218,10 @@ type Pipeline struct {
 	pending []staged
 	since   time.Time // wall clock: when the oldest pending frame was staged
 	commit  func() error
+	// the evidence buffer at its cap
+	full                  atomic.Bool
+	discarded, discardedB atomic.Int64
+	refusedHTTP           atomic.Int64
 }
 
 type staged struct {
@@ -317,6 +370,83 @@ func (p *Pipeline) retention(spool *egress.Spool, fw []*egress.Forwarder, o Opti
 	}
 }
 
+// bufferLoop keeps the local evidence directory a bounded buffer (evidence archive): every tick, the segments every
+// deletion condition allows are deleted (archive.Buffer), the local bytes are measured, and the cap is enforced —
+// one `evidence_buffer_high` record above the warning mark (re-armed below half of it), one `evidence_buffer_full`
+// record when intake stops at the cap, one `evidence_buffer_resumed` record when the buffer is below the mark again.
+// Nothing is deleted to make room: only shipped, receipted, covered segments ever leave.
+func (p *Pipeline) bufferLoop(store *evidence.Store, o Options, st *Stats, sourceID string, now func() time.Time, stop chan struct{}) {
+	tick := o.BufferTick
+	if tick <= 0 {
+		tick = time.Second
+	}
+	warn := o.BufferWarn
+	if warn <= 0 || warn >= 1 {
+		warn = 0.8
+	}
+	capB := o.BufferCap
+	warned := false
+	var fullSince time.Time
+	var discarded0, discardedB0, refused0 int64
+	t := time.NewTicker(tick)
+	defer t.Stop()
+	record := func(kind string, usage int64, missing int64, detail string) {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: kind, SourceID: sourceID, Channel: "evidence:buffer", Peer: "evidence-archive", DetectedAt: now().UnixMilli(),
+			Observed: usage, Expected: capB, Missing: missing, Detail: detail}, "evidence-archive")
+	}
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
+		rep := o.Buffer.Sweep(store.OpenSegment())
+		usage := rep.LocalBytes
+		p.mu.Lock()
+		b := st.EvidenceBuffer
+		b.LocalBytes, b.LocalSegments = usage, rep.LocalSegments
+		b.DeletedSegments += len(rep.Deleted)
+		if usage > b.PeakLocalBytes {
+			b.PeakLocalBytes = usage
+		}
+		b.LastBlockedCause = ""
+		for _, seg := range evidence.Segments(o.EvidenceDir) {
+			if why, ok := rep.Blocked[seg]; ok {
+				b.LastBlockedCause = seg + " stays: " + why
+				break
+			}
+		}
+		p.mu.Unlock()
+		if capB <= 0 {
+			continue
+		}
+		mark := int64(warn * float64(capB))
+		switch {
+		case !warned && usage > mark:
+			warned = true
+			record("evidence_buffer_high", usage, 0, fmt.Sprintf("the local evidence buffer holds %d bytes, past %.0f%% of its cap (%d bytes): segments are not leaving — the evidence archive is not taking them, or the committer is not running. Nothing has been refused yet; at the cap intake stops, and no older evidence is deleted to make room", usage, warn*100, capB))
+		case warned && usage < mark/2:
+			warned = false
+		}
+		if !p.full.Load() && usage >= capB {
+			p.full.Store(true)
+			fullSince = time.Now()
+			discarded0, discardedB0, refused0 = p.discarded.Load(), p.discardedB.Load(), p.refusedHTTP.Load()
+			p.mu.Lock()
+			st.EvidenceBuffer.FullEpisodes++
+			p.mu.Unlock()
+			record("evidence_buffer_full", usage, 0, fmt.Sprintf("the local evidence buffer reached its cap (%d of %d bytes) with the evidence archive not taking segments: intake STOPPED — TCP connections and files are not read (the sender waits, or drops on its side), HTTP is answered 503, UDP datagrams are counted and discarded (never parsed, never delivered). No older evidence is deleted to make room. Size the cap as ingest rate x bytes per event x tolerated archive outage", usage, capB))
+		} else if p.full.Load() && usage < mark {
+			p.full.Store(false)
+			d, db, r := p.discarded.Load()-discarded0, p.discardedB.Load()-discardedB0, p.refusedHTTP.Load()-refused0
+			record("evidence_buffer_resumed", usage, d, fmt.Sprintf("intake resumed after %s at the cap: the buffer is back to %d bytes (below %.0f%% of %d). While stopped: %d UDP datagram(s), %d bytes, discarded unread; %d HTTP request(s) answered 503 (the senders keep them); TCP and file input waited",
+				time.Since(fullSince).Round(time.Millisecond), usage, warn*100, capB, d, db, r))
+		}
+	}
+}
+
 func (p *Pipeline) appendGap(r gap.Record, peer string) {
 	b := gap.Canonical(r)
 	fr := frame.Framing{Method: evidence.MethodGapRecord, RawPrefix: []byte{}, RawSuffix: []byte{}, FragmentCount: 1, OriginalMessageLength: len(b), TruncationStatus: "none", FramingConfidence: "high"}
@@ -360,7 +490,7 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 	if now == nil {
 		now = time.Now
 	}
-	store, err := evidence.Open(o.EvidenceDir, evidence.Options{Limits: o.Limits, Now: now, NewID: o.NewID})
+	store, err := evidence.Open(o.EvidenceDir, evidence.Options{Limits: o.Limits, Now: now, NewID: o.NewID, StoreID: o.StoreID})
 	if err != nil {
 		return st, err
 	}
@@ -684,7 +814,39 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 		}
 		return nil
 	}
+	// the local evidence buffer: shipped segments deleted when every condition holds; the cap stops intake
+	stopBuffer := make(chan struct{})
+	bufferDone := make(chan struct{})
+	if o.Buffer != nil {
+		st.EvidenceBuffer = &BufferStats{Cap: o.BufferCap}
+		go func() {
+			defer close(bufferDone)
+			p.bufferLoop(store, o, &st, sourceID, now, stopBuffer)
+		}()
+	} else {
+		close(bufferDone)
+	}
+	udp := func(fr frame.Frame) bool {
+		ch := fr.Channel
+		if ch == "" {
+			ch = o.Channel
+		}
+		return strings.HasPrefix(ch, "udp:") || fr.Framing.Method == "udp_datagram"
+	}
 	err = source(func(fr frame.Frame) error {
+		// the buffer at its cap: nothing is accepted that is not written, and nothing older is deleted to make room
+		for p.full.Load() {
+			if udp(fr) { // a datagram cannot be refused: counted, discarded — never parsed, never delivered
+				p.discarded.Add(1)
+				p.discardedB.Add(int64(len(fr.Raw)))
+				return nil
+			}
+			select { // TCP, file, pull: not read until the buffer drains (the sender waits, or drops on its side)
+			case <-o.Done:
+				return ErrEvidenceBufferFull
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		if p.err != nil {
@@ -735,9 +897,16 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 	}
 	close(stopRetention) // after the drain: a destination still lagging while the others drain is still bounded
 	<-retentionDone
+	close(stopBuffer)
+	<-bufferDone
 	p.mu.Lock()
 	st.Peers = p.tracker.Peers()
 	st.Commits = store.Syncs()
+	st.StoreID = store.ID()
+	if st.EvidenceBuffer != nil {
+		st.EvidenceBuffer.DiscardedFrames, st.EvidenceBuffer.DiscardedBytes, st.EvidenceBuffer.RefusedHTTP = p.discarded.Load(), p.discardedB.Load(), p.refusedHTTP.Load()
+		st.EvidenceBuffer.FullNow = p.full.Load()
+	}
 	if err == nil {
 		err = p.err
 	}

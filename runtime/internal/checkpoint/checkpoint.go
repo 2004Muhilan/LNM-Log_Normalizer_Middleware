@@ -84,21 +84,31 @@ var zeroHash = "sha256:" + strings.Repeat("0", 64)
 // SegmentLeaves recomputes every leaf of a segment from its raw bytes and index, refusing any record
 // whose raw bytes do not hash to the recorded raw_hash (a corrupt segment is never committed).
 func SegmentLeaves(dir, segID string) ([]merkle.Hash, []evidence.Record, error) {
-	recs, err := evidence.ReadIndex(dir, segID)
+	return SegmentLeavesFrom(evidence.NewLocator(dir, ""), segID)
+}
+
+// SegmentLeavesFrom is SegmentLeaves over the local buffer or, for a segment deleted locally, its archived copy.
+// A record whose bytes changed is named in the error: the exact event.
+func SegmentLeavesFrom(l *evidence.Locator, segID string) ([]merkle.Hash, []evidence.Record, error) {
+	recs, err := l.ReadIndex(segID)
 	if err != nil {
 		return nil, nil, err
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, segID+".raw"))
+	raw, where, err := l.ReadFile(segID, evidence.SuffixRaw)
 	if err != nil {
 		return nil, nil, err
+	}
+	copyOf := ""
+	if where == "archive" {
+		copyOf = " (archived copy)"
 	}
 	leaves := make([]merkle.Hash, 0, len(recs))
 	for _, r := range recs {
 		if r.Offset < 0 || r.Offset+int64(r.Length) > int64(len(raw)) {
-			return nil, nil, fmt.Errorf("%s: record %s exceeds the segment", segID, r.EventID)
+			return nil, nil, fmt.Errorf("%s%s: record %s exceeds the segment", segID, copyOf, r.EventID)
 		}
 		if evidence.Hash(raw[r.Offset:r.Offset+int64(r.Length)]) != r.RawHash {
-			return nil, nil, fmt.Errorf("%s: raw bytes of %s do not match raw_hash", segID, r.EventID)
+			return nil, nil, fmt.Errorf("%s%s: raw bytes of %s (bytes %d..%d) do not match raw_hash", segID, copyOf, r.EventID, r.Offset, r.Offset+int64(r.Length))
 		}
 		h, err := merkle.Parse(r.RawHash)
 		if err != nil {
@@ -295,7 +305,14 @@ type Finding struct {
 // signature, chain and root, and reports every discrepancy by name (segment and event where possible).
 // It needs the evidence directory and a trust store — no ULPF state, so it can run anywhere.
 func VerifyAll(dir, cdir string, trust keys.TrustStore) ([]Finding, int, error) {
+	return VerifyAllFrom(evidence.NewLocator(dir, ""), cdir, trust)
+}
+
+// VerifyAllFrom is VerifyAll over the local buffer and the archive: a segment deleted locally is verified from its
+// archived copy; one held in neither place is a finding.
+func VerifyAllFrom(l *evidence.Locator, cdir string, trust keys.TrustStore) ([]Finding, int, error) {
 	var findings []Finding
+	dir := l.Dir
 	if cdir == "" {
 		cdir = filepath.Join(dir, "commit")
 	}
@@ -329,7 +346,7 @@ func VerifyAll(dir, cdir string, trust keys.TrustStore) ([]Finding, int, error) 
 		for _, sr := range ck.Segments {
 			h, _ := merkle.Parse(sr.Root)
 			rh = append(rh, h)
-			leaves, recs, err := SegmentLeaves(dir, sr.SegmentID)
+			leaves, recs, err := SegmentLeavesFrom(l, sr.SegmentID)
 			if err != nil {
 				findings = append(findings, Finding{sr.SegmentID, err.Error()})
 				continue
@@ -339,10 +356,9 @@ func VerifyAll(dir, cdir string, trust keys.TrustStore) ([]Finding, int, error) 
 				// SegmentLeaves; a root mismatch with intact records means the index itself changed
 				findings = append(findings, Finding{sr.SegmentID, fmt.Sprintf("segment root %s differs from committed %s over %d records", got, sr.Root, len(recs))})
 			}
-			if man, err := readManifest(dir, sr.SegmentID); err == nil {
-				rawB, _ := os.ReadFile(filepath.Join(dir, sr.SegmentID+".raw"))
-				if evidence.Hash(rawB) != man.RawSHA256 {
-					findings = append(findings, Finding{sr.SegmentID, "raw file no longer matches its seal manifest"})
+			if _, err := l.Manifest(sr.SegmentID); err == nil {
+				if err := l.CheckSeal(sr.SegmentID); err != nil {
+					findings = append(findings, Finding{sr.SegmentID, err.Error()})
 				}
 			}
 		}
@@ -386,11 +402,16 @@ func merkleRootString(leaves []merkle.Hash) string { return merkle.Root(leaves).
 // LocateTamper names the first record whose raw bytes no longer match its raw_hash — the leaf the
 // verifier points at when a segment root differs.
 func LocateTamper(dir, segID string) (string, error) {
-	recs, err := evidence.ReadIndex(dir, segID)
+	return LocateTamperFrom(evidence.NewLocator(dir, ""), segID)
+}
+
+// LocateTamperFrom is LocateTamper on the local copy or, when deleted locally, the archived copy.
+func LocateTamperFrom(l *evidence.Locator, segID string) (string, error) {
+	recs, err := l.ReadIndex(segID)
 	if err != nil {
 		return "", err
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, segID+".raw"))
+	raw, _, err := l.ReadFile(segID, evidence.SuffixRaw)
 	if err != nil {
 		return "", err
 	}

@@ -24,9 +24,9 @@ EOF
 
 echo "=== 1. octet-counted syslog over TCP: counted frames, a non-transparent line, a 300 KiB message against a 64 KiB cap, a peer cut off mid-frame"
 P=$(freeport)
-$RT run --pack $PACK --listen "tcp:127.0.0.1:$P" --evidence "$W/ev1" --out "$W/out1.jsonl" --quarantine "$W/q1.jsonl" --max-frames 12 --idle-timeout 2s --silence-after 0 2> "$W/rt1.err" &   # 3 counted + 1 LF + 5 pieces of the big message + 1 partial + 2 counted = 12
+$RT run --dev-no-evidence-archive --pack $PACK --listen "tcp:127.0.0.1:$P" --evidence "$W/ev1" --out "$W/out1.jsonl" --quarantine "$W/q1.jsonl" --max-frames 12 --idle-timeout 2s --silence-after 0 2> "$W/rt1.err" &   # 3 counted + 1 LF + 5 pieces of the big message + 1 partial + 2 counted = 12
 RTPID=$!
-sleep 0.5
+for _ in $(seq 1 100); do grep -q "listening for syslog" "$W/rt1.err" 2>/dev/null && break; sleep 0.1; done   # the listener, not a fixed time (load)
 python3 - "$P" "$SAMPLES" "$W/sent1.bin" <<'EOF'
 import socket, sys, time
 port, samples, out = int(sys.argv[1]), sys.argv[2], sys.argv[3]
@@ -93,7 +93,7 @@ lines = open(sys.argv[1]).read().rstrip("\n").split("\n")
 open(sys.argv[2], "w").write(json.dumps(lines, indent=1) + "\n")
 EOF
 cp "$W/drop/batch-001.json" "$W/batch-copy.json"
-$RT run --pack $PACK --pull-dir "$W/drop" --pull-once --evidence "$W/ev2" --out "$W/out2.jsonl" --quarantine "$W/q2.jsonl" 2> "$W/rt2.err"
+$RT run --dev-no-evidence-archive --pack $PACK --pull-dir "$W/drop" --pull-once --evidence "$W/ev2" --out "$W/out2.jsonl" --quarantine "$W/q2.jsonl" 2> "$W/rt2.err"
 grep -o '"received_frames":[0-9]*,"batch_elements":[0-9]*' "$W/rt2.err" | sed 's/^/  stats: /'
 $RT reconstruct --evidence "$W/ev2" --out "$W/rec2.bin" 2>&1 | sed 's/^/  /'
 python3 - "$W" <<'EOF' || status=1
@@ -110,9 +110,9 @@ EOF
 
 echo "=== 3. silencing a source: two UDP senders, one stops; the silence becomes a signed, exportable, verifiable leaf"
 P=$(freeport)
-$RT run --pack $PACK --listen "udp:127.0.0.1:$P" --evidence "$W/ev3" --out "$W/out3.jsonl" --quarantine "$W/q3.jsonl" --max-frames 9 --silence-after 400ms 2> "$W/rt3.err" &
+$RT run --dev-no-evidence-archive --pack $PACK --listen "udp:127.0.0.1:$P" --evidence "$W/ev3" --out "$W/out3.jsonl" --quarantine "$W/q3.jsonl" --max-frames 9 --silence-after 400ms 2> "$W/rt3.err" &
 RTPID=$!
-sleep 0.5
+for _ in $(seq 1 100); do grep -q "listening for syslog" "$W/rt3.err" 2>/dev/null && break; sleep 0.1; done   # a datagram sent before the bind is lost
 python3 - "$P" "$SAMPLES" <<'EOF'
 import socket, sys, time
 port, samples = int(sys.argv[1]), sys.argv[2]

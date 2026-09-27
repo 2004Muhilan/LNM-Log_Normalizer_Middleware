@@ -12,7 +12,8 @@ comes from the pinned table, and every file of that class has the identical sche
   float_t -> DOUBLE, boolean_t -> BOOLEAN, json_t -> JSON, every other type (string, ip, mac, url, uuid, hash, …) -> VARCHAR
 
 Lineage columns come first and are flat — `event_id`, `raw_hash`, `segment_id`, `offset`, `length` plus the pack that
-produced the event — so traceability survives into the lake; the whole `_lineage` block is also kept as JSON.
+produced the event, and `store_id` (1.5.0) — so traceability survives into the lake: `store_id` + `segment_id` + `offset`
++ `raw_hash` is the event's address in the evidence archive; the whole `_lineage` block is also kept as JSON.
 """
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ SCALARS = {"integer_t": "INTEGER", "port_t": "INTEGER", "long_t": "BIGINT", "tim
 LINEAGE = [("event_id", "VARCHAR", "event_id"), ("raw_hash", "VARCHAR", "raw_hash"), ("segment_id", "VARCHAR", "segment_id"),
            ("offset", "BIGINT", "offset"), ("length", "INTEGER", "length"), ("source_id", "VARCHAR", "source_id"),
            ("parser_id", "VARCHAR", "parser_id"), ("parser_version", "VARCHAR", "parser_version"), ("family_id", "VARCHAR", "family_id"),
-           ("ingest_time", "BIGINT", "ingest_time")]
+           ("ingest_time", "BIGINT", "ingest_time"), ("store_id", "VARCHAR", "store_id")]   # store_id: normalized-event 1.5.0 (evidence archive)
 
 
 def q(name: str) -> str:

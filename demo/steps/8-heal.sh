@@ -68,7 +68,7 @@ learn merge "$STATE"/p6/packs/asa-{302013,302014,106023,305011} "$STATE/packs/$F
 echo "--- 4. replay the same capture before and after (own evidence stores; steps 5-7 untouched)"
 CAP="$STATE/p6/mixed.log"
 replay() { # name asa-pack
-  "$RT" run --pack "$2" --pack "$STATE/p6/source-packs/panos" --pack "$STATE/p6/source-packs/fortigate" --pack "$STATE/source-packs/squid" \
+  "$RT" run --dev-no-evidence-archive --pack "$2" --pack "$STATE/p6/source-packs/panos" --pack "$STATE/p6/source-packs/fortigate" --pack "$STATE/source-packs/squid" \
      --source-id mixed-relay-01 --input "$CAP" --evidence "$D/ev-$1" --out "$D/out-$1.jsonl" --quarantine "$D/q-$1.jsonl" 2> "$D/runtime-$1.err" || { cat "$D/runtime-$1.err"; return 1; }
   grep -E '^\{' "$D/runtime-$1.err" | tail -1 > "$D/stats-$1.json"
 }

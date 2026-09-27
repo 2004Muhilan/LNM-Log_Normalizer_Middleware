@@ -3,7 +3,13 @@
 // alter the evidence it commits (the store, which holds CAP_LINUX_IMMUTABLE, cannot sign). Run as a
 // separate unprivileged process/container over the same evidence volume.
 //
-//	ulpf-committer commit --evidence <dir> --key <key.json> [--every 60s]   one pass, or a loop
+//	ulpf-committer commit --evidence <dir> --key <key.json> [--every 60s] [--archive <dir>]   one pass, or a loop
+//
+// Evidence archive (2026-09-27): with --archive the committer is also the SHIPPER — an always-running service
+// (--every) that copies every committed segment and every checkpoint covering it to the archive byte-exact, reads
+// them back, and writes a receipt last. Privileges stay minimal: it reads evidence, writes its commit tree and the
+// archive, and never modifies or deletes evidence (the store deletes, under its own conditions).
+//
 //	ulpf-committer daily  --evidence <dir> --key <key.json> [--day YYYY-MM-DD]
 //	ulpf-committer keygen --authority <id> --out <key.json> [--pub <pub.json>]
 package main
@@ -15,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	"ulpf/runtime/internal/archive"
 	"ulpf/runtime/internal/checkpoint"
 	"ulpf/runtime/internal/keys"
 )
@@ -30,6 +37,7 @@ func main() {
 		cdir := fs.String("commit", "", "commit directory (written; default <evidence>/commit — in production a directory the committer owns and the store cannot write)")
 		keyPath := fs.String("key", "", "committer signing key (json)")
 		every := fs.Duration("every", 0, "loop interval (0 = one pass)")
+		archiveDir := fs.String("archive", "", "the evidence archive: ship committed segments and their checkpoints there after each pass")
 		fs.Parse(os.Args[2:])
 		key, err := keys.Load(*keyPath)
 		die(err)
@@ -48,8 +56,25 @@ func main() {
 		}
 		for {
 			rep, err := checkpoint.Commit(*ev, *cdir, key, imm, time.Now())
-			die(err)
-			json.NewEncoder(os.Stdout).Encode(rep)
+			if err != nil && *every == 0 {
+				die(err)
+			}
+			if err != nil { // a service: report and try again next pass
+				fmt.Fprintln(os.Stderr, "commit:", err)
+			} else if *every == 0 || len(rep.Committed) > 0 {
+				json.NewEncoder(os.Stdout).Encode(rep)
+			}
+			if *archiveDir != "" {
+				sr, err := archive.Ship(*ev, *cdir, *archiveDir, time.Now())
+				switch {
+				case err != nil && *every == 0:
+					die(err)
+				case err != nil:
+					fmt.Fprintln(os.Stderr, "ship (the archive may be down; nothing is deleted locally until it is back):", err)
+				case *every == 0 || len(sr.Shipped) > 0:
+					json.NewEncoder(os.Stdout).Encode(map[string]any{"shipped": sr})
+				}
+			}
 			if *every == 0 {
 				return
 			}

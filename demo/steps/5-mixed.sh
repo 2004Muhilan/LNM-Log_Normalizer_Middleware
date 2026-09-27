@@ -16,12 +16,14 @@ CAP="$STATE/p6/mixed.log"; N=$(grep -c '' "$CAP"); TOTAL=$((N + 3))
 LAKE="$STATE/lake"; chmod -R u+w "$LAKE" 2>/dev/null; rm -rf "$LAKE"   # a fresh run is a fresh lake: versions are never rewritten in place
 EV="$STATE/ev"; rm -rf "$EV" "$STATE/step5"/*.jsonl "$STATE/step5/stats.json" "$STATE/step5/progress.json" "$STATE/step5/gaps.json"
 RATE="${ULPF_DEMO_RATE:-12}"
-"$RT" run --pack "$STATE/p6/source-packs/cisco-asa" --pack "$STATE/p6/source-packs/panos" --pack "$STATE/p6/source-packs/fortigate" --pack "$STATE/source-packs/squid" \
+"$RT" run --dev-no-evidence-archive --pack "$STATE/p6/source-packs/cisco-asa" --pack "$STATE/p6/source-packs/panos" --pack "$STATE/p6/source-packs/fortigate" --pack "$STATE/source-packs/squid" \
    --source-id mixed-relay-01 --listen "tcp:127.0.0.1:$TCP_PORT" --max-frames "$TOTAL" --silence-after 4s --idle-timeout 20s \
    --evidence "$EV" --lake "$LAKE" --out "$STATE/step5/out.jsonl" --quarantine "$STATE/step5/q.jsonl" --ml-out "$STATE/step5/ml.jsonl" 2> "$STATE/step5/runtime.err" &
 RTPID=$!
-sleep 0.7
-kill -0 $RTPID 2>/dev/null || { cat "$STATE/step5/runtime.err"; step_fail "runtime did not start"; }
+# wait for the listener, not a fixed time: under load (the gate's parallel lanes) the runtime can take longer than a
+# second to bind, and a sender refused at connect leaves the runtime waiting for frames that never come
+for _ in $(seq 1 100); do grep -q "listening for syslog over TCP" "$STATE/step5/runtime.err" 2>/dev/null && break; kill -0 $RTPID 2>/dev/null || break; sleep 0.1; done
+kill -0 $RTPID 2>/dev/null && grep -q "listening for syslog over TCP" "$STATE/step5/runtime.err" || { cat "$STATE/step5/runtime.err"; kill $RTPID 2>/dev/null; step_fail "runtime did not start listening within 10 s"; }
 # gap records as they appear (uncommitted for now: the committer runs in step 6)
 ( while kill -0 $RTPID 2>/dev/null; do "$VF" gaps --evidence "$EV" --trust keys/trust --json 2>/dev/null > "$STATE/step5/gaps.json.tmp" && mv "$STATE/step5/gaps.json.tmp" "$STATE/step5/gaps.json"; sleep 1; done ) &
 GAPPID=$!

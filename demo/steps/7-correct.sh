@@ -102,7 +102,7 @@ print(f"  v2: {n} events, 0 invalid against normalized-event")
 EOF
 echo "  write attempts on v1:"
 if ( echo '{"forged":true}' >> "$V1" ) 2>/dev/null; then step_fail "v1 accepted an append"; else echo "    shell append           -> refused (read-only)"; fi
-if "$RT" run --pack "$STATE/source-packs/squid" --input "$SAMPLES" --evidence "$D/ev-scratch" --out /dev/null --lake "$LAKE" > "$D/rewrite-attempt.txt" 2>&1; then step_fail "the runtime re-created v1"; fi
+if "$RT" run --dev-no-evidence-archive --pack "$STATE/source-packs/squid" --input "$SAMPLES" --evidence "$D/ev-scratch" --out /dev/null --lake "$LAKE" > "$D/rewrite-attempt.txt" 2>&1; then step_fail "the runtime re-created v1"; fi
 grep -q "never reopened" "$D/rewrite-attempt.txt" || { cat "$D/rewrite-attempt.txt"; step_fail "v1 re-creation failed for the wrong reason"; }
 echo "    runtime --lake (v1)    -> refused: $(grep -o 'version 1 refused.*' "$D/rewrite-attempt.txt" | head -1)"
 cmp -s "$D/v1.sha256.before" <(sha256sum "$V1" | cut -d' ' -f1) || step_fail "normalization@v1 CHANGED after the write attempts"

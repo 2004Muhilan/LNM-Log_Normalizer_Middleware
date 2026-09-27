@@ -90,7 +90,7 @@ def normalized_golden():
     tmp = Path(tempfile.mkdtemp(prefix="ulpf-golden-"))
     try:
         env = dict(os.environ, ULPF_ROOT=str(ROOT))
-        subprocess.run([RUNTIME_BIN, "run", "--pack", str(SQ), "--input", str(SQ / "samples" / "access.log"),
+        subprocess.run([RUNTIME_BIN, "run", "--dev-no-evidence-archive", "--pack", str(SQ), "--input", str(SQ / "samples" / "access.log"),
                         "--evidence", str(tmp / "evidence"), "--out", str(tmp / "out.jsonl"),
                         "--collector", "col-01", "--channel", "file:/var/log/squid/access.log",
                         "--fixed-clock-ms", "1734567890481", "--deterministic-ids"], check=True, env=env, capture_output=True)

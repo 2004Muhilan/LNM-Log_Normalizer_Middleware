@@ -97,7 +97,7 @@ Oct 10 2018 12:34:56 localhost CiscoASA[999]: %ASA-6-302015: Built outbound UDP 
 EOF
 wc -l < "$M" | sed 's/^/  frames: /'
 rm -rf "$W/ev"
-runtime/bin/ulpf-runtime run --pack "$W/source-packs/cisco-asa" --pack "$W/source-packs/panos" --pack "$W/source-packs/fortigate" --pack "$W/source-packs/squid" \
+runtime/bin/ulpf-runtime run --dev-no-evidence-archive --pack "$W/source-packs/cisco-asa" --pack "$W/source-packs/panos" --pack "$W/source-packs/fortigate" --pack "$W/source-packs/squid" \
    --source-id mixed-relay-01 --input "$M" --evidence "$W/ev" --out "$W/out.jsonl" --quarantine "$W/q.jsonl" --ml-out "$W/ml.jsonl" --fixed-clock-ms 1734567890481 2> "$W/stats.json" || status=1
 python - "$W" <<'PY' || status=1
 import json, sys, collections
@@ -142,7 +142,7 @@ echo "=== family discovery ranking over the mixed capture (no pack, no parser)"
 (cd learning && python tools/discover.py "$M" --top 12 --json "$W/discovery.json") | sed 's/^/  /' || status=1
 
 echo "=== agreement with the reference parser (crosswalk draft; effort metric, not correctness)"
-runtime/bin/ulpf-runtime run --pack "$W/source-packs/cisco-asa" --input "$W/samples/asa-302013.log" --evidence "$W/ev-asa" --out "$W/asa-out.jsonl" --quarantine "$W/asa-q.jsonl" 2>/dev/null || status=1
+runtime/bin/ulpf-runtime run --dev-no-evidence-archive --pack "$W/source-packs/cisco-asa" --input "$W/samples/asa-302013.log" --evidence "$W/ev-asa" --out "$W/asa-out.jsonl" --quarantine "$W/asa-q.jsonl" 2>/dev/null || status=1
 (cd learning && python tools/agreement.py --normalized "$W/asa-out.jsonl" --expected "../$CORPUS/beats-cisco-asa/asa.log-expected.json" --raw "$W/samples/asa-302013.log" --json "$W/agreement-asa.json") | tail -9 | sed 's/^/  /' || status=1
 
 echo "p6-build-packs: $([ $status = 0 ] && echo PASS || echo FAIL)"

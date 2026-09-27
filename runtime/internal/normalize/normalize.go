@@ -216,6 +216,11 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 			"framing_confidence":      ctx.Record.Framing.FramingConfidence,
 		},
 	}
+	if ctx.Record.StoreID != "" {
+		// 1.5.0 (evidence archive): segment ids are unique only within a store; the store id makes segment_id +
+		// offset + raw_hash an address in the archive
+		lineage["store_id"] = ctx.Record.StoreID
+	}
 	if ctx.NormalizationVersion > 1 {
 		if ctx.DerivedFrom < 1 || ctx.DerivedFrom >= ctx.NormalizationVersion {
 			return nil, res, fmt.Errorf("normalization@v%d must be derived_from an earlier version, got %d (invariant 8)", ctx.NormalizationVersion, ctx.DerivedFrom)
@@ -380,9 +385,13 @@ func normVersion(ctx Context) int {
 	return 1
 }
 
-// lineageVersion: 1.4.0 only for an event that carries what 1.4.0 added (a LEEF envelope); everything else keeps
-// declaring 1.3.0, so no existing output — and no golden vector — changes.
+// lineageVersion: 1.5.0 for an event that names its evidence store (every event the runtime emits since the evidence
+// archive; 1.5.0 includes 1.4.0's LEEF envelope); 1.4.0 for one that carries a LEEF envelope and no store id; else
+// 1.3.0.
 func lineageVersion(ctx Context) string {
+	if ctx.Record.StoreID != "" {
+		return "1.5.0"
+	}
 	if ctx.Envelope != nil && ctx.Envelope.Kind == "leef" {
 		return "1.4.0"
 	}

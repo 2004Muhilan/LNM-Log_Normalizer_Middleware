@@ -6,6 +6,14 @@ boundary and witness tests are containers).
 
 ## 1. Demonstrable outcome — the theme demo
 
+> **Scope of the kernel lock, stated plainly (2026-09-27, evidence archive — `docs/evidence-archive-design.md`).**
+> - **Local buffer only.** `FS_IMMUTABLE_FL` protects the **local evidence buffer** only. Since the evidence archive, a
+>   sealed, committed segment is shipped byte-exact to the archive, and the store deletes its local copy when every
+>   deletion condition holds. It first clears the flag it set; only the store holds the capability to do so.
+> - **In the archive:** tampering is **detected**, not prevented. The Merkle proofs and the signed checkpoints name the exact
+>   event whose bytes changed. **Preventing** it needs write-once storage (object lock or WORM), which the deployment supplies.
+>   The demo's archive is a plain folder.
+
 **Tamper one byte in a sealed segment → the verifier names the leaf.** Two containers over one ext4 volume:
 the store (root, `CAP_LINUX_IMMUTABLE`) ingests the golden Squid lines, seals the segment and sets the
 kernel's immutable flag on its three files through the ioctl; the committer (distroless `nonroot`, every

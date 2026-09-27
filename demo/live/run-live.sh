@@ -66,7 +66,7 @@ HTTP_PORT="${ULPF_LIVE_HTTP_PORT:-8516}"
 start_runtime() { # ONE runtime for the whole sequence: two ingress connectors, two egress connectors, packs hot-reloaded from packs.txt
   local d="$LIVE/run-1"; mkdir -p "$d"; : > "$LIVE/packs.txt"
   freeport_check "$IN_PORT" || fail "port $IN_PORT busy"; freeport_check "$HTTP_PORT" || fail "port $HTTP_PORT busy"
-  "$RT" run --pack "$GOLDEN" --packs-file "$LIVE/packs.txt" --source-id live-ingress-01 --listen "tcp:127.0.0.1:$IN_PORT" --listen "http:127.0.0.1:$HTTP_PORT" --idle-timeout 600s \
+  "$RT" run --dev-no-evidence-archive --pack "$GOLDEN" --packs-file "$LIVE/packs.txt" --source-id live-ingress-01 --listen "tcp:127.0.0.1:$IN_PORT" --listen "http:127.0.0.1:$HTTP_PORT" --idle-timeout 600s \
      --evidence "$LIVE/ev" --out "$d/out.jsonl" --quarantine "$d/q.jsonl" --spool "$LIVE/spool" --spool-cap 256MiB --spool-segment 16MiB \
      --forward "bulk+http://$SINK_ADDR" --forward "http://$LAKE_ADDR/ingest" --forward "stdout:" --forward-stall-after 2s --forward-drain 15s \
      > "$d/egress-stdout.ndjson" 2> "$d/runtime.err" &
@@ -301,7 +301,7 @@ for sig in "$SIG1" "$SIG2"; do
   (cd learning && python tools/drift.py --quarantine "$LIVE/run-1/q.jsonl" --evidence "$LIVE/ev" --extract-signature "$sig" --out "$LIVE/backfill.part" 2>/dev/null) > /dev/null && cat "$LIVE/backfill.part" >> "$LIVE/backfill.log"
 done
 rm -f "$LIVE/backfill.part"; mkdir -p "$LIVE/backfill"
-"$RT" run --pack "$GOLDEN" --pack "$LIVE/packs/flowtap-source-1.2" --source-id live-backfill-01 --input "$LIVE/backfill.log" --evidence "$LIVE/ev-backfill" \
+"$RT" run --dev-no-evidence-archive --pack "$GOLDEN" --pack "$LIVE/packs/flowtap-source-1.2" --source-id live-backfill-01 --input "$LIVE/backfill.log" --evidence "$LIVE/ev-backfill" \
    --out "$LIVE/backfill/out.jsonl" --quarantine "$LIVE/backfill/q.jsonl" --spool "$LIVE/backfill/spool" --forward "bulk+http://$SINK_ADDR" --forward "http://$LAKE_ADDR/ingest" --forward-drain 20s 2> "$LIVE/backfill/runtime.err" || { tail -3 "$LIVE/backfill/runtime.err"; fail "backfill run"; }
 grep -E '^\{' "$LIVE/backfill/runtime.err" | tail -1 > "$LIVE/backfill/stats.json"
 phase_done "$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s["frames"], "quarantined lines replayed from the evidence log:", s["usable"], "usable,", s["quarantined"], "still quarantined")' "$LIVE/backfill/stats.json")"

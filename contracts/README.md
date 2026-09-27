@@ -176,6 +176,16 @@ The golden candidate spec and its span map deliberately stay at 1.0.0 to prove t
   asserted by the operator for a source that carries no severity), with the same provenance rules.
 - **pinned tables** carry `category_uid` (hashes changed; cross-check still agrees on all four classes).
 
+## normalized-event 1.5.0 (laptop branch, 2026-09-27) — `store_id`, additive (approved by the sponsor)
+
+- **`_lineage.store_id`** (`st_` + 26 Crockford base32 characters): the evidence store holding the event's raw
+  bytes — the identity of an evidence directory, created once in its `store.json`. Segment ids are unique only
+  within a store (`seg_00000` exists in every directory), and with the evidence archive the local copy of a
+  segment is deleted after shipping: `store_id` + `segment_id` + `offset` + `raw_hash` is the event's address
+  in the archive (`<archive>/<store_id>/segments/<segment_id>.raw`). Every event the runtime emits declares
+  1.5.0 and carries it; 1.5.0 includes 1.4.0's LEEF envelope. Optional in the schema: every earlier document
+  remains valid. The lake (Parquet) and the SIEM template carry it as a column / keyword.
+
 ## normalized-event 1.3.0 (P7) — transport breadth, additive
 
 - **`_lineage.relay_chain`**: every envelope removed by recursive unwrap, outermost first, when more than

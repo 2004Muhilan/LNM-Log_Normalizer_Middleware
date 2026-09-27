@@ -109,7 +109,7 @@ def test_vendor_schema_applier_resolves_named_fields_and_envelope_time(tmp_path)
     # the runtime loads it (signed by the dev authority) and routes the same lines to it, with time from the header
     env = dict(os.environ, ULPF_ROOT=str(ROOT))
     subprocess.run([str(RUNTIME), "verify-pack", "--pack", str(tmp_path / "pack")], check=True, capture_output=True, env=env)
-    out = subprocess.run([str(RUNTIME), "run", "--pack", str(tmp_path / "pack"), "--input", str(samples), "--evidence", str(tmp_path / "ev"), "--ml-out", str(tmp_path / "ml.jsonl")],
+    out = subprocess.run([str(RUNTIME), "run", "--dev-no-evidence-archive", "--pack", str(tmp_path / "pack"), "--input", str(samples), "--evidence", str(tmp_path / "ev"), "--ml-out", str(tmp_path / "ml.jsonl")],
                          check=True, capture_output=True, text=True, env=env)
     events = [json.loads(l) for l in out.stdout.splitlines()]
     assert len(events) == 2 and events[0]["time"] == 1539174896000 and events[0]["src_endpoint"]["ip"] == "100.66.205.104" and events[0]["action_id"] == 1

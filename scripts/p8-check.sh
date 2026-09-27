@@ -58,7 +58,7 @@ grep -aE "^  (ok|FAIL|note)|p8-connectors" /tmp/p8-connectors.log | cut -c1-170 
 echo "=== requirement (k): the final runtime image, no network, values checked"
 DOCKER_BUILDKIT=1 docker build -q -f runtime/Dockerfile --target runtime -t ulpf-runtime . >/dev/null || { echo "  FAIL: image build"; status=1; }
 events=$(docker run --rm --network none -v "$PWD/contracts/golden/squid-native:/pack:ro" -v "$PWD/ocsf/pinned:/ocsf/pinned:ro" -v "$PWD/keys/trust:/keys/trust:ro" \
-  --tmpfs /ev:uid=65532 ulpf-runtime run --pack /pack --input /pack/samples/access.log --evidence /ev --out - 2>/tmp/p8-k.err); rc=$?
+  --tmpfs /ev:uid=65532 ulpf-runtime run --dev-no-evidence-archive --pack /pack --input /pack/samples/access.log --evidence /ev --out - 2>/tmp/p8-k.err); rc=$?
 python3 - "$rc" <<EOF || status=1
 import json, sys
 rc = int(sys.argv[1])

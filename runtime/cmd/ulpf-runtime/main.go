@@ -6,6 +6,10 @@
 //	ulpf-runtime run ... --listen udp::5514 | tcp::6514 | http::8514   (P7: syslog UDP/TCP with RFC 6587 octet counting, HTTP receive)
 //	ulpf-runtime run ... --pull-dir <dir>                              (P7: directory-drop collector)
 //	ulpf-runtime reconstruct --evidence <dir> --out <file>   write the byte-exact original stream
+//
+// Evidence archive (laptop branch, 2026-09-27): `run` REFUSES TO START without --evidence-archive (a separate slot from
+// --lake: raw evidence may be required where analytics may not go — CERT-In's 2022 Directions: 180 days, in India).
+// --dev-no-evidence-archive overrides it for development, loudly.
 package main
 
 import (
@@ -24,11 +28,13 @@ import (
 	"syscall"
 	"time"
 
+	"ulpf/runtime/internal/archive"
 	"ulpf/runtime/internal/checkpoint"
 	"ulpf/runtime/internal/dsl"
 	"ulpf/runtime/internal/egress"
 	"ulpf/runtime/internal/evidence"
 	"ulpf/runtime/internal/frame"
+	"ulpf/runtime/internal/keys"
 	"ulpf/runtime/internal/lake"
 	"ulpf/runtime/internal/pack"
 	"ulpf/runtime/internal/pipeline"
@@ -103,6 +109,13 @@ func main() {
 		channel := fs.String("channel", "", "ingest channel (defaults to file:<input>)")
 		failAfter := fs.Int("fail-after-raw-write", 0, "kill-test hook: exit once the batch holding the Nth frame is committed, before any of it is parsed")
 		commitEvents := fs.Int("commit-events", 256, "group commit (invariant 3): commit the evidence batch at this many frames (1 = an fsync per event)")
+		archiveDir := fs.String("evidence-archive", "", "REQUIRED: the evidence archive (a directory; its own slot, separate from --lake). The committer ships sealed, committed segments there byte-exact; this runtime deletes a local copy only when a signed checkpoint covers it, its receipt matches, the covering checkpoints are shipped, the grace period has passed and no proof is reading it")
+		devNoArchive := fs.Bool("dev-no-evidence-archive", false, "DEVELOPMENT ONLY: run without an evidence archive — the local evidence directory is then the only copy and grows without bound")
+		commitTree := fs.String("commit-dir", "", "with --evidence-archive: the committer's commit tree, read (never written) for the deletion conditions (default <evidence>/commit)")
+		grace := fs.Duration("evidence-grace", 15*time.Minute, "with --evidence-archive: keep a shipped segment locally this long (recent \"Prove it\" lookups stay local)")
+		bufCap := fs.String("evidence-buffer-cap", "8GiB", "with --evidence-archive: the local evidence buffer's hard cap; at it intake stops (TCP/file not read, HTTP 503, UDP counted and discarded) and nothing older is deleted. Size it as ingest rate x bytes per event x tolerated archive outage: 11,574 events/s x ~844 B is ~35 GB per hour")
+		bufWarn := fs.Float64("evidence-buffer-warn", 0.8, "with --evidence-archive: the high-water mark (fraction of the cap): one evidence_buffer_high record")
+		bufTick := fs.Duration("evidence-buffer-tick", time.Second, "with --evidence-archive: how often the buffer is swept and measured")
 		commitWait := fs.Duration("commit-wait", 10*time.Millisecond, "group commit (invariant 3): commit the evidence batch when its oldest frame has waited this long; no frame is parsed or delivered before its batch is durable")
 		var listens packList
 		fs.Var(&listens, "listen", "listener instead of --input: udp::5514, tcp::6514 (RFC 6587 octet counting, newline fallback), http::8514 (POST bodies); tcp: and http: may be given TOGETHER (repeat the flag): one runtime, two ingress connectors, each frame's evidence record names the connector it arrived on")
@@ -125,6 +138,23 @@ func main() {
 		fs.Parse(os.Args[2:])
 		if len(dirs) == 0 {
 			die(fmt.Errorf("at least one --pack is required"))
+		}
+		archiveState := ""
+		switch {
+		case *archiveDir == "" && !*devNoArchive:
+			fmt.Fprintln(os.Stderr, "ulpf-runtime: REFUSING TO START — no evidence archive (--evidence-archive DIR). Raw evidence must be kept in an archive of its own (CERT-In 2022: logs of all ICT systems, 180 days, within India); ULPF keeps only a short local buffer. For development only: --dev-no-evidence-archive")
+			os.Exit(2)
+		case *archiveDir == "":
+			archiveState = "DISABLED (--dev-no-evidence-archive: development only — the local evidence directory is the only copy)"
+			fmt.Fprintln(os.Stderr, "********************************************************************************")
+			fmt.Fprintln(os.Stderr, "WARNING: --dev-no-evidence-archive: NO EVIDENCE ARCHIVE. Development only. The local")
+			fmt.Fprintln(os.Stderr, "evidence directory is the only copy of the raw evidence and is never shipped.")
+			fmt.Fprintln(os.Stderr, "********************************************************************************")
+		default:
+			archiveState = *archiveDir
+			if st, err := os.Stat(*archiveDir); err != nil || !st.IsDir() {
+				fmt.Fprintf(os.Stderr, "evidence archive %s is not reachable now: nothing will be deleted locally until it is, and at --evidence-buffer-cap intake stops\n", *archiveDir)
+			}
 		}
 		listenS := ""
 		if len(listens) > 0 {
@@ -239,6 +269,7 @@ func main() {
 			o.Now = func() time.Time { return t }
 		}
 		if *fixedIDs {
+			o.StoreID = "st_" + strings.Repeat("0", 26)
 			n := 0
 			o.NewID = func(time.Time) string { n++; return fmt.Sprintf("ev_%026d", n) }
 		}
@@ -265,6 +296,12 @@ func main() {
 		var st pipeline.Stats
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		if *archiveDir != "" {
+			capB, err := parseBytes(*bufCap)
+			die(err)
+			o.Buffer = &archive.Buffer{Dir: *evDir, CommitDir: *commitTree, Archive: *archiveDir, Trust: keys.TrustStore{Dir: *trust}, Grace: *grace}
+			o.BufferCap, o.BufferWarn, o.BufferTick, o.Done = capB, *bufWarn, *bufTick, ctx.Done()
+		}
 		switch {
 		case len(listens) > 1:
 			// two ingress connectors in one runtime: syslog/TCP and HTTP receive share the evidence log, the router and
@@ -377,6 +414,10 @@ func main() {
 			die(err)
 			fmt.Fprintf(os.Stderr, "lake: sealed normalization@v1, %d events, %s\n", m.Events, m.SHA256)
 		}
+		st.EvidenceArchive = archiveState
+		if *archiveDir == "" { // before the stats: scripts read the stats as the last line
+			fmt.Fprintln(os.Stderr, "WARNING: this run had NO EVIDENCE ARCHIVE (--dev-no-evidence-archive, development only)")
+		}
 		json.NewEncoder(os.Stderr).Encode(st)
 		undelivered := false
 		for _, es := range st.Egress {
@@ -435,6 +476,7 @@ func main() {
 		evDir := fs.String("evidence", "", "evidence store directory (the raw bytes every version derives from)")
 		lakeDir := fs.String("lake", "", "versioned lake directory")
 		reason := fs.String("reason", "", "why this version exists (the certificate resolved, the pack version applied)")
+		renormArchive := fs.String("evidence-archive", "", "the evidence archive: segments deleted locally are read from their archived copies")
 		contractsDir, pinned := commonFlags(fs)
 		trust, allowUnsigned := signingFlags(fs)
 		fs.Parse(os.Args[2:])
@@ -447,7 +489,7 @@ func main() {
 			die(err)
 			packs = append(packs, p)
 		}
-		st, err := pipeline.Renormalize(pipeline.RenormOptions{Packs: packs, EvidenceDir: *evDir, LakeDir: *lakeDir, Reason: *reason})
+		st, err := pipeline.Renormalize(pipeline.RenormOptions{Packs: packs, EvidenceDir: *evDir, Archive: *renormArchive, LakeDir: *lakeDir, Reason: *reason})
 		die(err)
 		json.NewEncoder(os.Stdout).Encode(st)
 	case "lake":
@@ -496,16 +538,18 @@ func main() {
 		cdir := fs.String("commit", "", "commit directory (default <evidence>/commit)")
 		eventID := fs.String("event-id", "", "event id to export")
 		outDir := fs.String("out", "", "bundle directory to create")
+		exArchive := fs.String("evidence-archive", "", "the evidence archive: an event whose segment was deleted locally is read from the archived copy (checked against its seal record)")
 		fs.Parse(os.Args[2:])
-		b, err := checkpoint.Export(*evDir, *cdir, *eventID, *outDir)
+		b, err := checkpoint.ExportFrom(evidence.NewLocator(*evDir, *exArchive), *cdir, *eventID, *outDir)
 		die(err)
-		fmt.Fprintf(os.Stderr, "exported %s: leaf %d of %s, root %s, checkpoint %s -> %s\n", b.EventID, b.LeafIndex, b.Record.SegmentID, b.SegmentRoot, b.CheckpointID, *outDir)
+		fmt.Fprintf(os.Stderr, "exported %s: leaf %d of %s (%s), root %s, checkpoint %s -> %s\n", b.EventID, b.LeafIndex, b.Record.SegmentID, map[string]string{"local": "local buffer", "archive": "EVIDENCE ARCHIVE — the local copy was deleted after shipping"}[b.EvidenceSource], b.SegmentRoot, b.CheckpointID, *outDir)
 	case "reconstruct":
 		fs := flag.NewFlagSet("reconstruct", flag.ExitOnError)
 		evDir := fs.String("evidence", "", "evidence store directory")
 		outPath := fs.String("out", "-", "output file")
+		rcArchive := fs.String("evidence-archive", "", "the evidence archive: segments deleted locally are read from their archived copies")
 		fs.Parse(os.Args[2:])
-		stream, recs, err := evidence.Reconstruct(*evDir)
+		stream, recs, err := evidence.ReconstructFrom(evidence.NewLocator(*evDir, *rcArchive))
 		die(err)
 		if *outPath == "-" {
 			os.Stdout.Write(stream)

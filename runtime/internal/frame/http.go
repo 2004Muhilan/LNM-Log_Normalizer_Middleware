@@ -27,6 +27,9 @@ type HTTP struct {
 	// Commit, when set, is called after a request's frames are emitted and before it is answered: 202 then
 	// means the frames are durable in the evidence log (group commit, invariant 3). An error answers 503.
 	Commit func() error
+	// Admit, when set, is asked before a request's frames are emitted (evidence archive): an error — the local
+	// evidence buffer at its cap — answers 503 with Retry-After and accepts nothing; the sender keeps the request.
+	Admit func() error
 
 	Requests  atomic.Int64
 	Rejected  atomic.Int64 // 503 (too many in flight) or 405
@@ -70,6 +73,14 @@ func (h *HTTP) Serve(ctx context.Context, ln net.Listener, emit func(Frame) erro
 			return
 		}
 		h.Requests.Add(1)
+		if h.Admit != nil {
+			if err := h.Admit(); err != nil {
+				h.Rejected.Add(1)
+				w.Header().Set("Retry-After", "5")
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
 		if err != nil && len(body) == 0 {
 			http.Error(w, "read: "+err.Error(), http.StatusBadRequest)

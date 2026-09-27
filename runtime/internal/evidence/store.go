@@ -40,6 +40,7 @@ type Record struct {
 	Channel    string        `json:"ingest_channel"`
 	Sequence   int64         `json:"ingest_sequence"`
 	Peer       string        `json:"peer,omitempty"` // P7: the sender within the channel (remote address, file name)
+	StoreID    string        `json:"-"`              // the store the record lives in (store.json; not repeated per index line)
 }
 
 // MethodGapRecord marks an evidence record that is not received bytes but a gap record (P7): the
@@ -62,9 +63,13 @@ type Options struct {
 	Limits Limits
 	Now    func() time.Time
 	NewID  func(time.Time) string
+	// StoreID is used when the directory has no store.json yet (golden outputs); otherwise a new random
+	// id is created once and kept in store.json for the life of the directory.
+	StoreID string
 }
 
 type Store struct {
+	id      string
 	newID   func(time.Time) string
 	dir     string
 	limits  Limits
@@ -102,16 +107,92 @@ func Open(dir string, opts Options) (*Store, error) {
 	if limits.MaxEvents == 0 {
 		limits = DefaultLimits
 	}
-	s := &Store{dir: dir, limits: limits, now: now, newID: newID, states: map[string]string{}, sealErr: map[string]string{}}
+	id, err := ensureStoreID(dir, opts.StoreID)
+	if err != nil {
+		return nil, err
+	}
+	s := &Store{id: id, dir: dir, limits: limits, now: now, newID: newID, states: map[string]string{}, sealErr: map[string]string{}}
 	for _, segID := range Segments(dir) {
-		var n int
-		fmt.Sscanf(segID, "seg_%05d", &n)
-		if n >= s.segN {
-			s.segN = n + 1
-		}
 		s.states[segID] = SegmentState(dir, segID)
 	}
+	// numbering continues past every segment this directory ever held — including those shipped to the archive and
+	// deleted locally (their catalogue files remain): a segment id is never reused within a store
+	s.segN = NextSegmentNumber(dir)
 	return s, nil
+}
+
+// NextSegmentNumber is one past the highest segment number the directory holds or held (local segments and the
+// catalogue of segments shipped and deleted).
+func NextSegmentNumber(dir string) int {
+	next := 0
+	ids := Segments(dir)
+	cat, _ := filepath.Glob(filepath.Join(dir, "catalog", "seg_*.ids"))
+	for _, c := range cat {
+		ids = append(ids, strings.TrimSuffix(filepath.Base(c), ".ids"))
+	}
+	for _, segID := range ids {
+		var n int
+		fmt.Sscanf(segID, "seg_%05d", &n)
+		if n >= next {
+			next = n + 1
+		}
+	}
+	return next
+}
+
+// StoreInfo is store.json: the identity of an evidence directory. Segment ids are unique only within a store; the
+// archive keys everything under the store id, and every normalized event names it (_lineage.store_id, 1.5.0).
+type StoreInfo struct {
+	StoreID   string `json:"store_id"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+func ensureStoreID(dir, want string) (string, error) {
+	p := filepath.Join(dir, "store.json")
+	if b, err := os.ReadFile(p); err == nil {
+		var si StoreInfo
+		if err := json.Unmarshal(b, &si); err != nil || si.StoreID == "" {
+			return "", fmt.Errorf("%s: unreadable store identity: %v", p, err)
+		}
+		return si.StoreID, nil
+	}
+	if want == "" {
+		want = "st_" + strings.TrimPrefix(newEventID(time.Now()), "ev_")
+	}
+	b, _ := json.Marshal(StoreInfo{StoreID: want, CreatedAt: time.Now().UnixMilli()})
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil {
+		return "", err
+	}
+	if f, err := os.Open(tmp); err == nil {
+		_ = f.Sync()
+		f.Close()
+	}
+	return want, os.Rename(tmp, p)
+}
+
+// ReadStoreID returns the store id of an evidence directory ("" when it has none yet).
+func ReadStoreID(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, "store.json"))
+	if err != nil {
+		return ""
+	}
+	var si StoreInfo
+	_ = json.Unmarshal(b, &si)
+	return si.StoreID
+}
+
+// ID is the store's identity.
+func (s *Store) ID() string { return s.id }
+
+// OpenSegment is the segment currently being written ("" between segments): never shipped, never deleted.
+func (s *Store) OpenSegment() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.seg == nil {
+		return ""
+	}
+	return s.segID
 }
 
 func (s *Store) openSegment() error {
@@ -249,18 +330,7 @@ func ReadIndex(dir, segID string) ([]Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	var recs []Record
-	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
-		if line == "" {
-			continue
-		}
-		var r Record
-		if err := json.Unmarshal([]byte(line), &r); err != nil {
-			return nil, fmt.Errorf("%s index: %w", segID, err)
-		}
-		recs = append(recs, r)
-	}
-	return recs, nil
+	return parseIndex(segID, data)
 }
 
 // Append writes raw bytes and the index record, fsyncs both (with anything staged before it), and
@@ -345,7 +415,7 @@ func (s *Store) stageLocked(raw []byte, fr frame.Framing, sourceID, collector, c
 	s.seq++
 	rec := Record{
 		EventID: s.newID(s.now()), RawHash: Hash(raw), SegmentID: s.segID, Offset: s.segLen, Length: len(raw),
-		Framing: fr, IngestTime: s.now().UnixMilli(), SourceID: sourceID, Collector: collector, Channel: channel, Sequence: s.seq, Peer: peer,
+		Framing: fr, IngestTime: s.now().UnixMilli(), SourceID: sourceID, Collector: collector, Channel: channel, Sequence: s.seq, Peer: peer, StoreID: s.id,
 	}
 	line, _ := json.Marshal(rec)
 	s.rawBuf = append(s.rawBuf, raw...)
@@ -368,28 +438,24 @@ func (s *Store) State(segID string) string {
 // Reconstruct replays every segment in order and returns prefix + raw + suffix for every event —
 // the byte-exact original stream (the P2 kill-test criterion).
 func Reconstruct(dir string) ([]byte, []Record, error) {
-	idxs, _ := filepath.Glob(filepath.Join(dir, "seg_*.idx.jsonl"))
-	sort.Strings(idxs)
+	return ReconstructFrom(NewLocator(dir, ""))
+}
+
+// ReconstructFrom is Reconstruct over the local buffer and the archive: segments deleted locally are read from
+// their archived copies.
+func ReconstructFrom(l *Locator) ([]byte, []Record, error) {
 	var out []byte
 	var recs []Record
-	for _, ip := range idxs {
-		segID := strings.TrimSuffix(filepath.Base(ip), ".idx.jsonl")
-		raw, err := os.ReadFile(filepath.Join(dir, segID+".raw"))
+	for _, segID := range l.Segments() {
+		raw, _, err := l.ReadFile(segID, SuffixRaw)
 		if err != nil {
 			return nil, nil, err
 		}
-		data, err := os.ReadFile(ip)
+		idx, err := l.ReadIndex(segID)
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
-			if line == "" {
-				continue
-			}
-			var r Record
-			if err := json.Unmarshal([]byte(line), &r); err != nil {
-				return nil, nil, fmt.Errorf("%s: %w", ip, err)
-			}
+		for _, r := range idx {
 			if r.Offset+int64(r.Length) > int64(len(raw)) {
 				return nil, nil, fmt.Errorf("%s: record %s exceeds segment", segID, r.EventID)
 			}

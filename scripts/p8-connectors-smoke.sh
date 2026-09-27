@@ -24,7 +24,7 @@ EOF
 }
 run() { # name, extra args...   (input by the caller)
   local name=$1; shift
-  "$RT" run --pack $PACK --evidence "$W/ev-$name" --out "$W/out-$name.jsonl" --quarantine "$W/q-$name.jsonl" "$@" 2> "$W/err-$name.txt"
+  "$RT" run --dev-no-evidence-archive --pack $PACK --evidence "$W/ev-$name" --out "$W/out-$name.jsonl" --quarantine "$W/q-$name.jsonl" "$@" 2> "$W/err-$name.txt"
 }
 
 echo "=== ingress: six lines in through each connector, the same six events out"

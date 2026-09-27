@@ -390,3 +390,101 @@ there for a decision before building:
 Gate after these changes: `bash scripts/gate.sh` PASS in 723 s (lanes A 439 s — Go suite 108 tests, 0 skipped; D 377 s — the
 one-source query returns Fortinet and flowtap; G20 713 s and G33 621 s — same facts both runs). The WSL2 and Docker virtual
 disks did not grow across the measurement and the gate (75.884 GB and 84.65 GB before and after).
+
+## 12. The evidence archive — ULPF keeps only a short local buffer (2026-09-27, built)
+
+The sponsor answered yes to all four points of `docs/evidence-archive-design.md` §6 and it is built. §0 of that document
+lists the code, the tests and the few places the build differs from the design text.
+
+**The four answers, as built:**
+1. **`_lineage.store_id`**, normalized-event **1.5.0**:
+   - the golden vector is regenerated;
+   - the lake has a `store_id` column, and the SIEM template maps it as a keyword.
+2. **The runtime deletes; the committer ships.** The store clears the kernel flag it set, only under the deletion conditions,
+   which keeps the P5 separation.
+3. **The committer is an always-running service** (`--every 5s --archive`). It reads evidence, writes its commit tree and the
+   archive, and never modifies or deletes evidence.
+4. **UDP at the cap is counted, discarded and recorded** in the `evidence_buffer_full` / `_resumed` records, never parsed or
+   delivered. Strict deployments relay UDP through TCP, as documented.
+
+**What the runtime enforces:**
+- **An archive is required.** `run` refuses to start without `--evidence-archive` (exit 2); `--dev-no-evidence-archive`
+  overrides it with a banner, a line before the stats, and `"evidence_archive": "DISABLED …"` in the stats.
+- **Shipping:** byte-exact, read back and checked against the seal record; the receipt is written last. A restart resumes, and
+  the archive is never overwritten.
+- **Deletion needs all five conditions:**
+  - a signed checkpoint covers the segment;
+  - the receipt matches the seal record, and the archived bytes still hash to it when re-read;
+  - the covering checkpoints are shipped, byte-identical;
+  - the grace period has passed;
+  - no proof is reading the segment.
+
+  Never by age alone.
+- **Checkpoints stay local**, for the chain.
+- **The cap:** a high-water record, then at the cap intake stops and a committed `evidence_buffer_full` record is written;
+  nothing older is deleted.
+  - TCP and file input wait.
+  - HTTP gets 503 with `Retry-After`.
+  - UDP datagrams are counted and discarded.
+- **One lookup path** (`evidence.Locator`: local, else the archive, with the local catalogue of deleted segments) serves:
+  - "Prove it", export and reconstruct;
+  - renormalize;
+  - `ulpf-verify evidence|gaps|locate`.
+- **Protection, recorded in the P5 report:** the kernel lock covers only the local buffer. In the archive, tampering is
+  detected (the verifier names the exact event); preventing it needs write-once storage.
+
+**The demo:**
+- `start-demo.sh` starts the committer beside the console; the archive is `$APP/evidence-archive`, a folder beside the lake.
+  The runtime runs with a grace period of 60 s and a buffer cap of 64 MiB.
+- **The System page** has a new block: segments shipped, segments pending (open, or not yet committed or shipped), local
+  buffer usage against the cap, segments deleted locally, and whether the committer is running.
+- **Pre-flight** checks:
+  - the archive location is writable;
+  - the committer's key is present and trusted;
+  - the runtime refuses to start without an archive.
+- **`apps-check`**:
+  - waits for shipped segments to leave the buffer;
+  - exports an event whose segment was deleted locally from the archive, and verifies its bundle;
+  - runs **Prove it** on the oldest SIEM document whose segment is gone, and requires it to read the archive;
+  - prints the local disk used.
+- **Every other test and demo sequence runs with `--dev-no-evidence-archive`:** the gate's scripts, `twice.sh`, the live
+  sequence, the throughput harness and the golden vectors.
+
+**Local evidence disk in the demo, before and after shipping** (a shortened apps-check: two formats, real SIEM, ~5 minutes):
+
+| | bytes | segments |
+|---|---|---|
+| evidence written (all local if nothing were shipped) | 1,153,535 | 52 |
+| local at the end of the check (inside the 60 s grace period) | 579,052 | 26 |
+| local one grace period after the stream stopped | **2,829** (the open segment) | 1 |
+| kept locally for good: catalogue (event id → deleted segment), deletion log, `store.json` | ~60 KB | — |
+| in the archive | 1,150,706 of segment files, plus the commit tree mirror | 51 shipped |
+
+While the stream runs, the local buffer holds about one grace period of evidence plus the segments not yet committed. At
+the demo's rate (~14 events/s) that is a few hundred KB, 0.5 % of the 64 MiB cap.
+
+**In the full gate's demo check** (six formats, ~6 minutes, grace 60 s):
+- 3,108,042 bytes of evidence were written in 139 segments.
+- At the end, 558,572 bytes (18 %) were local in 26 segments; the rest was shipped (136 segments) and deleted locally (108).
+- 129 KB of catalogue and deletion log is kept locally.
+
+**Found by the gate and fixed** (the first two gate runs failed; the third passed):
+1. **Step 5 of the demo sequence started its sender after a fixed 0.7 s.** Under the gate's parallel load the runtime was not
+   listening yet, so the sender was refused and the runtime waited forever.
+   - `demo/steps/5-mixed.sh` now waits for the runtime to report it is listening.
+   - So does `scripts/p7-demo.sh`, which had the same fixed sleep for TCP and UDP.
+2. **The System console's count of parsed events could fall short by a few**, while the SIEM, the lake and `out.jsonl` agreed
+   with each other.
+   - The console reads the index files, then the outcomes. An outcome read before its index line was dropped.
+   - Group commit writes a batch's index lines and outcomes between the two reads, which widened the window.
+   - Such lines are now kept and matched on the next tick.
+3. **An index file could be deleted locally before the console had read all of it** (the console lagging by more than the
+   grace period). The console now finishes such a file from its archived copy, which is byte-identical.
+
+Gate after these changes: `bash scripts/gate.sh` PASS in 748 s:
+- lane A 412 s — Go suite 115 tests, 0 skipped;
+- lane D 416 s — 3,031 parsed = 3,031 SIEM documents = 3,031 lake rows; "Prove it" read the archive; the one-source query
+  returns Fortinet and flowtap;
+- lanes G20 739 s and G33 623 s — same facts both runs.
+
+The WSL2 and Docker virtual disks did not grow (75.884 GB and 84.65 GB before and after).

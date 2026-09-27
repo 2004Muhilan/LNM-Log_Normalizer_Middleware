@@ -32,7 +32,7 @@ echo "=== 1. store (root + CAP_LINUX_IMMUTABLE): ingest the golden samples, seal
 # small segments so several seal during one run; the last one stays OPEN on purpose (no Close before exit? Run closes; so we ingest twice: the second run leaves nothing open — instead we create an OPEN segment by writing a partial one below)
 docker run --rm --user 0 --cap-add LINUX_IMMUTABLE --network none \
   -v "$VOL:/ev" -v "$PWD/contracts/golden/squid-native:/pack:ro" -v "$PWD/ocsf/pinned:/ocsf/pinned:ro" -v "$PWD/keys/trust:/keys/trust:ro" \
-  ulpf-runtime run --pack /pack --input /pack/samples/access.log --evidence /ev --out /dev/null --contracts /contracts --pinned /ocsf/pinned/index.json --trust /keys/trust \
+  ulpf-runtime run --dev-no-evidence-archive --pack /pack --input /pack/samples/access.log --evidence /ev --out /dev/null --contracts /contracts --pinned /ocsf/pinned/index.json --trust /keys/trust \
   --deterministic-ids --fixed-clock-ms 1734567890481 2>/dev/null
 # make an OPEN segment by hand: raw+idx without a seal manifest (what a crashed writer leaves behind)
 docker run --rm --user 0 -v "$VOL:/ev" alpine:3.20 sh -c 'printf "open event\n" > /ev/seg_00009.raw; printf "{\"event_id\":\"ev_open\",\"raw_hash\":\"sha256:0\",\"segment_id\":\"seg_00009\",\"offset\":0,\"length\":11}\n" > /ev/seg_00009.idx.jsonl'
