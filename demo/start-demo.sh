@@ -18,8 +18,8 @@ cd "$ROOT"
 APP="$STATE/app"
 stop() {
   for f in generator system lakewriter fakesiem; do [ -f "$APP/$f.pid" ] && kill "$(cat "$APP/$f.pid")" 2>/dev/null; rm -f "$APP/$f.pid"; done
-  for _ in $(seq 1 30); do pgrep -f "demo/apps/[gs][a-z]*.py|adapters/lake/[l]akewriter.py" > /dev/null || break; sleep 0.5; done   # the console drains the runtime, the lake writer flushes
-  pkill -9 -f "demo/apps/[gs][a-z]*.py" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" 2>/dev/null
+  for _ in $(seq 1 30); do pgrep -f "demo/apps/[gs][a-z]*.py|adapters/lake/[l]akewriter.py --lake $APP/" > /dev/null || break; sleep 0.5; done   # the console drains the runtime, the lake writer flushes
+  pkill -9 -f "demo/apps/[gs][a-z]*.py" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py --lake $APP/" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" 2>/dev/null
   pkill -f "[p]acks-file $APP/packs.txt" 2>/dev/null; return 0
 }
 if [ "${1:-start}" = "stop" ]; then stop; [ "${ULPF_SIEM:-opensearch}" = "fake" ] || bash demo/siem/siem.sh stop > /dev/null; echo "stopped"; exit 0; fi
@@ -48,7 +48,7 @@ setsid -f python adapters/lake/lakewriter.py --lake "$APP/lake" --listen 127.0.0
 setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN" --python "$(command -v python)" --lake "$APP/lake" "${PROV[@]}" > "$APP/system.log" 2>&1
 setsid -f python3 demo/apps/generator.py --rate "${ULPF_LIVE_RATE:-6}" > "$APP/generator.log" 2>&1
 sleep 2
-pgrep -f "demo/apps/[g]enerator.py" > "$APP/generator.pid"; pgrep -f "demo/apps/[s]ystem.py" > "$APP/system.pid"; pgrep -f "adapters/lake/[l]akewriter.py" > "$APP/lakewriter.pid"
+pgrep -f "demo/apps/[g]enerator.py" > "$APP/generator.pid"; pgrep -f "demo/apps/[s]ystem.py" > "$APP/system.pid"; pgrep -f "adapters/lake/[l]akewriter.py --lake $APP/" > "$APP/lakewriter.pid"
 pgrep -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" > "$APP/fakesiem.pid" 2>/dev/null
 for f in generator system lakewriter; do [ -s "$APP/$f.pid" ] || { echo "$f did not start:"; tail -5 "$APP/$f.log"; exit 1; }; done
 cat <<EOF

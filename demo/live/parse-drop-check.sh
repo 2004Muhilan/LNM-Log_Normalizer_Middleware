@@ -9,7 +9,7 @@ source "$(dirname "$(readlink -f "$0")")/../lib.sh"
 cd "$ROOT"
 LIVE="$STATE/live"; D="$LIVE/parse-drop"; PORT="${ULPF_LIVE_TCP_PORT:-6515}"
 [ -f "$LIVE/packs/flowtap-v1/pack.json" ] || { echo "no promoted flowtap pack: run demo/live/run-live.sh first"; exit 1; }
-pkill -f "demo/live/flowgen.py" 2>/dev/null; chmod -R u+w "$D" 2>/dev/null; rm -rf "$D"; mkdir -p "$D/run-1"
+pkill -f "demo/live/[f]lowgen.py .*$D/" 2>/dev/null; chmod -R u+w "$D" 2>/dev/null; rm -rf "$D"; mkdir -p "$D/run-1"
 "$RT" run --pack "$GOLDEN" --pack "$LIVE/packs/flowtap-v1" --source-id live-ingress-01 --listen "tcp:127.0.0.1:$PORT" --idle-timeout 60s \
    --evidence "$D/ev" --out "$D/run-1/out.jsonl" --quarantine "$D/run-1/q.jsonl" 2> "$D/runtime.err" & RTPID=$!
 (cd learning && exec python tools/drift.py --watch "$D/run-1" --json "$D/watch.json" --window 40 --threshold 0.8 --min-frames 20 --interval 0.5 --stop-file "$D/watch.stop") > "$D/watch.log" 2>&1 & WPID=$!

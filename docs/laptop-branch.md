@@ -163,6 +163,12 @@ the evidence log, so the range is recoverable by re-deriving it (**no re-deliver
 size production as rate × tolerated outage — one hour at 11 600 events/s is ~54 GB. `--out` is unchanged and optional
 with `--spool`; the six steps, the goldens and the phase checks still use it.
 
+**Decided 2026-09-27 — no exemption from the cap.** A destination that is still accepting but more than the cap behind (a
+burst) is skipped exactly like a dead one: the cap is a hard bound on the disk, and protecting the disk protects the evidence
+log, which matters more than a skipped range (which is recorded, never silent). Size the cap as **rate × tolerated
+outage** (one hour at 11 600 events/s of ~1.3 KB ≈ 54 GB; the demo's 256 MiB holds ~9.5 h at 6 events/s).
+**Follow-up, not built: a re-delivery tool** that re-derives a skipped range from the evidence log for one destination.
+
 **Reversal, recorded: the run RESUMES.** "Every run creates a fresh spool" (P8) is reversed for `--spool`: a run resumes
 the spool and every destination's cursor; `--spool-fresh` starts over. Cursors persist only after the destination
 acknowledged; a destination without acknowledgement (syslog) gets its last batch again after a restart (at most a
@@ -204,7 +210,7 @@ two batches that inference types differently get one identical schema); lineage 
 JSON. Exactly once through redelivery and crashes: ULPF sends each batch's spool range; the writer keeps a durable
 high-water mark per spool, stages with fsync before acknowledging, rotates by size or age, writes a hidden temporary file
 and renames it (a crash never shows a half-written file), names files by their spool range (a repeated flush replaces
-the same file). **Measured cost of the fixed schema:** ~3 600 schema elements (network activity), ~280 KB of footer, ~390
+the same file). **Decided 2026-09-27 — the full schema stays**; trimming it to what the loaded packs emit would reopen the consistency problem. **Measured cost of the fixed schema:** ~3 600 schema elements (network activity), ~280 KB of footer, ~390
 KB fixed per file — heavy for the demo's 10-second rotation, a few percent for production-sized files.
 DuckDB's own UI does **not** work offline (measured: it serves its page by fetching assets from ui.duckdb.org; with no
 network it answers HTTP 500), so the System console has a read-only lake page with fixed queries (`/lake`).
@@ -265,3 +271,44 @@ Found on the way, fixed, stated:
   two 33-layer runs. Not seen at the laptop's 20-layer split.
 
 Not run on the laptop.
+
+## 9. One-command gate, 12.7 minutes (2026-09-27)
+
+`bash scripts/gate.sh` (the laptop: `--laptop`, no 33-layer lane). It runs everything the gate above ran — the phase
+checks, the contract check, the demo check with the real SIEM, and the acceptance criterion (six steps twice and the live
+sequence twice, on 20 and 33 layers) — in **12.7 minutes** (759 s, all PASS), where the same work sequentially took ~45
+minutes (44.5 measured on the last full run) and over an hour with reruns. No test was removed.
+
+Where the time went, measured from the last sequential gate: phase checks 9.4 min, SIEM + contract 0.7, fixture demo check
+3.8, then per configuration six steps twice (4.1 / 2.9), live sequence twice (5.9 / 3.6) and a demo check with the model
+(7.6 / 6.2). Three causes, three fixes:
+- **The phase checks are cumulative**: every one re-ran the full Go suite (≈9 times per gate), the Python suite (≈8), the
+  golden-vector check and the key bootstrap, four of them the invariant-2 image build; the witness test ran three times,
+  the boundary test and the four-vendor build twice (once to show the output, once for the exit status). Now the gate runs
+  each ONCE (the Go suite with `-v` for the no-silent-skip scan, the Python suite with `-rs`), and `ULPF_GATE_SHARED=1`
+  makes each phase check run only its unique part. Run on their own, the phase checks are unchanged (cumulative), except
+  that the double runs are gone for good.
+- **Everything was sequential.** Now four lanes run at once: A (suites + phase checks), D (SIEM, contract, fixture demo
+  check), G20 and G33 (six steps twice, live sequence twice), each model lane with its own state directory, ports, model
+  server and witness container (`ULPF_DEMO_STATE`, `ULPF_*_PORT`, `ULPF_LLAMA_NAME`, `ULPF_WITNESS_NAME`). The two model
+  servers share the desktop GPU.
+- **The model-driven demo checks (13.8 min) duplicated what the model lanes test**; the gate runs the demo check once, with
+  fixture proposals (the destinations, not the model, are what it tests). `ULPF_DEMO_PROVIDER=model bash demo/apps-check.sh`
+  stays as a pre-demo check.
+
+Isolation needed for lanes, fixed on the way: `reset.sh` killed EVERY `ulpf-runtime`/`ulpf-committer` on the machine and
+re-ran the key bootstrap (which re-signs the golden pack) — now it kills only its own state directory's processes and the
+gate bootstraps once; every `pkill` in the demo scripts is scoped to its state directory (the first parallel run failed
+because the demo check's stop killed the other lanes' lake writers).
+
+| lane | what | time |
+|---|---|---|
+| shared | keys, binaries, golden signature, gofmt, vet, golden vectors | 8 s |
+| A | Go suite 17 s (0 skipped), Python 18 s (99), invariant 2 10 s, p1 2, p2 12, p3 14, p4 12, p5 63, p6 32, p8 (incl. p7, coverage) 199 | 379 s |
+| D | contract check 56 s; demo check, six formats, real SIEM 288 s | 344 s |
+| G20 | six steps twice 120.8 / 110.5 s (same facts); live sequence twice 248 / 184 s (same facts) | 751 s |
+| G33 | six steps twice 68.6 / 54.0 s (same facts); live sequence twice 214 / 175 s (same facts) | 612 s |
+
+The critical path is G20: its runs are 25–40 % slower than alone (CPU and GPU contention). **The laptop variant
+(`--laptop`) is not measured**: one small GPU, 10 GB — expect it to be dominated by the 20-layer lane at laptop speed.
+

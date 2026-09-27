@@ -24,7 +24,7 @@ GAPID=$(python3 -c 'import json,sys; rs=[json.loads(l) for l in open(sys.argv[1]
 "$RT" export --evidence "$EV" --event-id "$EVID" --out "$D/bundle-event" 2>&1 | tee "$D/export.txt"
 "$RT" export --evidence "$EV" --event-id "$GAPID" --out "$D/bundle-gap" 2>&1 | tee -a "$D/export.txt"
 for b in bundle-event bundle-gap; do
-  docker run --rm --name ulpf-demo-witness --network none -v "$D/$b:/bundle:ro" -v "$ROOT/keys/trust:/trust:ro" ulpf-verify bundle --bundle /bundle --trust /trust 2>&1 | tee "$D/witness-$b.txt"
+  docker run --rm --name "$WITNESS_NAME" --network none -v "$D/$b:/bundle:ro" -v "$ROOT/keys/trust:/trust:ro" ulpf-verify bundle --bundle /bundle --trust /trust 2>&1 | tee "$D/witness-$b.txt"
 done
 grep -q "VERIFY: OK" "$D/witness-bundle-event.txt" && grep -q "VERIFY: OK" "$D/witness-bundle-gap.txt" || step_fail "witness did not verify the bundles"
 echo "--- tamper: flip one byte inside the first event of the sealed segment"

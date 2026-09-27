@@ -8,20 +8,22 @@ source "$(dirname "$(readlink -f "$0")")/lib.sh"
 cd "$ROOT"
 t0=$(date +%s)
 echo "=== reset: stopping runtime, senders, committer"
-pkill -x ulpf-runtime 2>/dev/null; pkill -x ulpf-committer 2>/dev/null
+# only the processes of THIS state directory (scripts/gate.sh runs several demo lanes and the phase checks at once)
+pkill -f "ulpf-(runtime|committer) .*$STATE/" 2>/dev/null
 [ -f "$STATE/sender.pid" ] && kill "$(cat "$STATE/sender.pid")" 2>/dev/null
-pkill -f "demo/steps/5-sender" 2>/dev/null
+pkill -f "demo/steps/5-sender.py .*$STATE/" 2>/dev/null
 # the live sequence's apps (demo/live): generator, consumer, the drift watch
-pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/live/sink.py" 2>/dev/null; pkill -f "tools/drift.py --watch" 2>/dev/null
-docker rm -f ulpf-demo-witness >/dev/null 2>&1
+pkill -f "demo/live/flowgen.py .*$STATE/" 2>/dev/null; pkill -f "tools/drift.py --watch $STATE/" 2>/dev/null
+pkill -f "demo/siem/fake_bulk.py .*$STATE/" 2>/dev/null; pkill -f "adapters/lake/lakewriter.py .*$STATE/" 2>/dev/null
+docker rm -f "$WITNESS_NAME" >/dev/null 2>&1
 if [ "${1:-}" = "--all" ]; then
   bash "$ROOT/demo/llama-server.sh" stop
 fi
-bash "$ROOT/demo/start-demo.sh" stop > /dev/null 2>&1   # the three demo apps live under $STATE/app: never wipe it under them
+[ -d "$STATE/app" ] && bash "$ROOT/demo/start-demo.sh" stop > /dev/null 2>&1   # the demo apps live under $STATE/app: never wipe it under them
 echo "=== reset: state directory $STATE"
 chmod -R u+w "$STATE" 2>/dev/null; rm -rf "$STATE"; mkdir -p "$STATE"
 echo "=== reset: binaries and dev keys"
-bash scripts/keys-bootstrap.sh > /dev/null || { echo "keys/binaries FAILED"; exit 1; }
+if [ "${ULPF_GATE_SHARED:-0}" = 1 ]; then echo "  (built and signed once by scripts/gate.sh)"; else bash scripts/keys-bootstrap.sh > /dev/null || { echo "keys/binaries FAILED"; exit 1; }; fi
 echo "=== reset: witness image"
 docker image inspect ulpf-verify >/dev/null 2>&1 || DOCKER_BUILDKIT=1 docker build -q -f runtime/Dockerfile --target verify -t ulpf-verify . >/dev/null || { echo "ulpf-verify image FAILED"; exit 1; }
 echo "=== reset: vendor packs and the mixed capture (recorded Granite proposals; ~1 min)"

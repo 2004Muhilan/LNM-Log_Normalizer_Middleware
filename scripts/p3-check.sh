@@ -7,16 +7,16 @@ source "${ULPF_ENV_FILE:-$HOME/.ulpf-env}"
 cd "$(dirname "$(readlink -f "$0")")/.."
 export ULPF_ROOT="$PWD"
 status=0
-bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }   # local dev keys + signed golden pack (never committed)
+[ "${ULPF_GATE_SHARED:-0}" = 1 ] || { bash scripts/keys-bootstrap.sh >/dev/null || { echo "key bootstrap failed"; exit 1; }; }   # local dev keys + signed golden pack (never committed); run once by scripts/gate.sh
 echo "=== runtime build"
 (cd runtime && [ -z "$(gofmt -l ./internal ./cmd ./contracts | tee /dev/stderr)" ] && go vet ./... && go build -o bin/ulpf-runtime ./cmd/ulpf-runtime) || status=1
 echo "=== golden vectors + contract suites"
-python contracts/golden/tools/build_vectors.py --check || status=1
+[ "${ULPF_GATE_SHARED:-0}" = 1 ] || { python contracts/golden/tools/build_vectors.py --check || status=1; }   # run once by scripts/gate.sh
 (cd learning && python -m ulpf_contracts --golden | tail -1) || status=1
 echo "=== runtime suite"
-(cd runtime && go test -count=1 ./... 2>&1 | grep -vE "no test files") || status=1
+[ "${ULPF_GATE_SHARED:-0}" = 1 ] || { (cd runtime && go test -count=1 ./... 2>&1 | grep -vE "no test files") || status=1; }   # run once by scripts/gate.sh
 echo "=== learning-plane suite"
-(cd learning && python -m pytest -q 2>&1 | tail -5) || status=1
+[ "${ULPF_GATE_SHARED:-0}" = 1 ] || { (cd learning && python -m pytest -q 2>&1 | tail -5) || status=1; }   # run once by scripts/gate.sh
 echo "=== review CLI, scripted (the demo sequence)"
 S=/tmp/ulpf-p3-session; rm -rf "$S" /tmp/ulpf-p3-pack
 (cd learning && python -m ulpf_learn onboard --samples ../contracts/golden/squid-native/samples/access.log --source-id squid-proxy-01 --operator op-014 --session "$S" | sed 's/^/  /') || status=1

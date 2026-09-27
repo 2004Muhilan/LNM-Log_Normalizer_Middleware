@@ -23,7 +23,8 @@ DEMO_MODEL_FILE="${ULPF_DEMO_MODEL_FILE:-Qwen3.5-4B-Q4_K_M.gguf}"
 DEMO_MODELS_DIR="${ULPF_DEMO_MODELS_DIR:-$HOME/ulpf-models}"
 LLAMA_IMAGE="${ULPF_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}"
 LLAMA_PORT="${ULPF_LLAMA_PORT:-8081}"
-LLAMA_NAME="ulpf-demo-llama"
+LLAMA_NAME="${ULPF_LLAMA_NAME:-ulpf-demo-llama}"
+WITNESS_NAME="${ULPF_WITNESS_NAME:-ulpf-demo-witness}"   # scripts/gate.sh runs two demo lanes at once
 # 20 layers on the GPU on EVERY machine: the offload split changes the 4B's labels, hence the certificates on
 # stage (20 -> pos_1/pos_3/pos_5, the set the runbook narrates; 33/33 -> pos_1/pos_3/pos_4). Pre-flight pins it.
 LLAMA_NGL="${ULPF_LLAMA_NGL:-20}"

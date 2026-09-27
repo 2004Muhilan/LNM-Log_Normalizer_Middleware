@@ -147,7 +147,7 @@ EOF
 }
 
 # ------------------------------------------------------------------------------------------------ set-up
-stop_all 2>/dev/null; pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py" 2>/dev/null; pkill -f "tools/drift.py --watch" 2>/dev/null
+stop_all 2>/dev/null; pkill -f "demo/live/[f]lowgen.py .*$LIVE/" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py .*$LIVE/" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py .*$LIVE/" 2>/dev/null; pkill -f "tools/[d]rift.py --watch $LIVE/" 2>/dev/null
 chmod -R u+w "$LIVE" 2>/dev/null; rm -rf "$LIVE"; mkdir -p "$LIVE"
 [ -f "$GOLDEN/pack.json.sig" ] || fail "golden pack unsigned (demo/reset.sh)"
 start_sink; start_lake

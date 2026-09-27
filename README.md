@@ -23,6 +23,9 @@ was tried and rejected, and what the next phase inherits.
 
 ## Three ways in
 
+**The gate, one command:** `bash scripts/gate.sh` — every check, the demo check with the real SIEM, and six steps + the live
+sequence twice on both model configurations, in parallel lanes: 12.7 min on the desktop (`--laptop` on the laptop).
+
 ### 1. The demo with pages — three applications, everything a button (laptop branch)
 
 ```bash

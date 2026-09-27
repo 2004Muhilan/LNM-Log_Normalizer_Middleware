@@ -35,7 +35,7 @@ check "tcp port $TCP_PORT free for the mixed stream" bash -c "$(declare -f freep
 OSV="${ULPF_OPENSEARCH_VERSION:-2.19.2}"
 check "SIEM images local (OpenSearch + Dashboards $OSV)" bash -c "docker image inspect opensearchproject/opensearch:$OSV --format '{{.Size}}' > /dev/null && docker image inspect opensearchproject/opensearch-dashboards:$OSV --format '{{.Size}}' > /dev/null && echo 'both present, no pull needed'"
 check "DuckDB in the venv (lake writer + lake page; no extension downloads used)" bash -c 'python -c "import duckdb; print(\"duckdb\", duckdb.__version__)"'
-check "demo ports free (6515 8516 8765 8780 8792; SIEM 9200 5601 may already be ours)" bash -c "$(declare -f freeport_check); for p in 6515 8516 8765 8780 8792; do freeport_check \$p || { echo \"port \$p busy\"; exit 1; }; done; for p in 9200 5601; do freeport_check \$p || docker ps --format '{{.Names}} {{.Ports}}' | grep -q \":\$p->\" || { echo \"port \$p busy (not our SIEM)\"; exit 1; }; done; echo free"
+check "live-sequence ports free (${ULPF_LIVE_TCP_PORT:-6515} ${ULPF_LIVE_HTTP_PORT:-8516} ${ULPF_LIVE_SINK:-127.0.0.1:8790} ${ULPF_LIVE_LAKE:-127.0.0.1:8792}; the demo apps check their own)" bash -c "$(declare -f freeport_check); for p in ${ULPF_LIVE_TCP_PORT:-6515} ${ULPF_LIVE_HTTP_PORT:-8516} $(echo ${ULPF_LIVE_SINK:-127.0.0.1:8790} | cut -d: -f2) $(echo ${ULPF_LIVE_LAKE:-127.0.0.1:8792} | cut -d: -f2); do freeport_check \$p || { echo \"port \$p busy\"; exit 1; }; done; echo free"
 check "memory headroom" bash -c 'a=$(free -m | awk "/Mem:/{print \$7}"); [ "$a" -gt 1500 ] && echo "${a} MB available in WSL"'
 mkdir -p "$STATE"
 python3 - "$STATE/preflight.json" "$fails" "${results[@]}" <<'EOF'
