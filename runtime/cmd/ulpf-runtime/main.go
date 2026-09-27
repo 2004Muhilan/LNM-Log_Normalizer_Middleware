@@ -101,7 +101,9 @@ func main() {
 		qPath := fs.String("quarantine", "", "quarantine JSONL output")
 		collector := fs.String("collector", "col-01", "collector id")
 		channel := fs.String("channel", "", "ingest channel (defaults to file:<input>)")
-		failAfter := fs.Int("fail-after-raw-write", 0, "kill-test hook: exit after the Nth raw write")
+		failAfter := fs.Int("fail-after-raw-write", 0, "kill-test hook: exit once the batch holding the Nth frame is committed, before any of it is parsed")
+		commitEvents := fs.Int("commit-events", 256, "group commit (invariant 3): commit the evidence batch at this many frames (1 = an fsync per event)")
+		commitWait := fs.Duration("commit-wait", 10*time.Millisecond, "group commit (invariant 3): commit the evidence batch when its oldest frame has waited this long; no frame is parsed or delivered before its batch is durable")
 		var listens packList
 		fs.Var(&listens, "listen", "listener instead of --input: udp::5514, tcp::6514 (RFC 6587 octet counting, newline fallback), http::8514 (POST bodies); tcp: and http: may be given TOGETHER (repeat the flag): one runtime, two ingress connectors, each frame's evidence record names the connector it arrived on")
 		packsFile := fs.String("packs-file", "", "a file listing further pack directories, one per line; re-read on SIGHUP: packs are loaded by the same fail-closed loader and swapped in between two frames without a restart; every change is a pack_activated record in the evidence log")
@@ -225,7 +227,7 @@ func main() {
 			lakeW, outW = lw, io.MultiWriter(outW, lw)
 		}
 		o := pipeline.Options{Packs: packs, SourceID: *sourceID, ML: mlw, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: outW, Quarantine: q, FailAfterRawWrite: *failAfter,
-			MaxEventBytes: *maxEvent, NoDebatch: *noDebatch, SilenceAfter: *silence}
+			CommitEvents: *commitEvents, CommitWait: *commitWait, MaxEventBytes: *maxEvent, NoDebatch: *noDebatch, SilenceAfter: *silence}
 		var multi *frame.Multiline
 		if *mlStart != "" {
 			re, err := regexp.Compile(*mlStart)
@@ -300,7 +302,7 @@ func main() {
 					terr = e
 				}
 				return terr
-			}, o, func(p *pipeline.Pipeline) { t.OnClose = p.Lost; livePipe = p })
+			}, o, func(p *pipeline.Pipeline) { t.OnClose = p.Lost; h.Commit = p.Commit; livePipe = p })
 			die(err)
 		case strings.HasPrefix(*listen, "udp:"):
 			// syslog over UDP: one datagram per frame; every received byte is evidence, the envelope is
@@ -340,7 +342,7 @@ func main() {
 				o.Channel = "http:" + addr
 			}
 			fmt.Fprintf(os.Stderr, "receiving HTTP POST bodies on %s\n", ln.Addr())
-			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return h.Serve(ctx, ln, emit) }, o, func(p *pipeline.Pipeline) { livePipe = p })
+			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return h.Serve(ctx, ln, emit) }, o, func(p *pipeline.Pipeline) { h.Commit = p.Commit; livePipe = p })
 			die(err)
 			fmt.Fprintf(os.Stderr, "http: requests=%d rejected=%d truncated=%d\n", h.Requests.Load(), h.Rejected.Load(), h.Truncated.Load())
 		case *listen != "":

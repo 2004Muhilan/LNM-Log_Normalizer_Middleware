@@ -24,6 +24,9 @@ type HTTP struct {
 	MaxEventBytes int
 	MaxConcurrent int
 	MaxFrames     int64
+	// Commit, when set, is called after a request's frames are emitted and before it is answered: 202 then
+	// means the frames are durable in the evidence log (group commit, invariant 3). An error answers 503.
+	Commit func() error
 
 	Requests  atomic.Int64
 	Rejected  atomic.Int64 // 503 (too many in flight) or 405
@@ -110,7 +113,15 @@ func (h *HTTP) Serve(ctx context.Context, ln net.Listener, emit func(Frame) erro
 				cancel()
 			}
 		}
+		var cerr error
+		if h.Commit != nil && emitErr == nil {
+			cerr = h.Commit()
+		}
 		mu.Unlock()
+		if cerr != nil {
+			http.Error(w, "not committed to the evidence log: "+cerr.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if over {
 			h.Truncated.Add(1)

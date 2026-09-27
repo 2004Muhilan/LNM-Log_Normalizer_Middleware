@@ -50,7 +50,7 @@ class Flowtap:
         self.rng = random.Random(seed)
         self.n = 0
 
-    def line(self, fmt: int, now: float, shape: str = "positional", burst: bool = False) -> str:
+    def line(self, fmt: int, now: float, shape: str = "positional", burst: bool = False, src: str | None = None) -> str:
         r = self.rng
         self.n += 1
         inside = f"10.4.{r.randint(1, 9)}.{r.randint(2, 250)}"
@@ -60,7 +60,10 @@ class Flowtap:
             a = BURST_SOURCE
         ts = f"{now:.3f}"
         proto = r.choice(["tcp", "tcp", "udp"])
-        cols = [ts, "2" if burst else r.choice(["1", "1", "1", "2"]), {"tcp": "6", "udp": "17"}[proto] if fmt == 2 else proto, a, str(r.randint(32768, 60999)), b, str(r.choice([443, 80, 53, 22, 8443])),
+        verdict = "2" if burst else r.choice(["1", "1", "1", "2"])
+        if src:   # a denied flow from a given source (the shared source, below); the random sequence is the same as without it
+            a, verdict = src, "2"
+        cols = [ts, verdict, {"tcp": "6", "udp": "17"}[proto] if fmt == 2 else proto, a, str(r.randint(32768, 60999)), b, str(r.choice([443, 80, 53, 22, 8443])),
                 str(r.randint(100000, 9000000)), str(r.randint(100000, 90000000))]
         if fmt == 2:
             cols.append(r.choice(ZONES))
@@ -69,6 +72,10 @@ class Flowtap:
 
 SHAPES = ["positional", "csv", "kv", "json", "xml", "leef"]
 BURST_SOURCE = "198.18.7.7"   # RFC 2544 benchmarking range: never a real host
+# the SHARED source: an address the FortiGate in the recorded four-vendor capture also denies (srcip=10.10.10.10,
+# action="deny"). The demo generator sends a denied flow from it every SHARED_EVERY lines, so one query for one
+# attacker returns two different devices that logged it — unified visibility across vendors (requirement f)
+SHARED_SOURCE, SHARED_EVERY = "10.10.10.10", 15
 
 
 def render(shape: str, c: list) -> str:

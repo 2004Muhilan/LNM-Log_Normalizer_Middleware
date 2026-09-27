@@ -9,8 +9,10 @@ of what is measured; the content repeats (98 distinct lines), which a real strea
 
   1  parse     ulpf-bench: framing -> unwrap -> route -> parse -> normalize -> JSON, no evidence store, no egress;
                1, 4 and 8 independent pipelines (the scaling model: one stream per runtime process)
-  2  evidence  the real runtime binary, `run --input`: raw bytes hashed and written FIRST with two fsyncs per event
-               (invariant 3), then parsed; on the ext4 disk (how it runs) and on tmpfs (the fsync cost isolated)
+  2  evidence  the real runtime binary, `run --input`: raw bytes hashed and staged, committed in batches (group commit,
+               invariant 3: no event parsed or delivered before its batch is durable; defaults 256 frames / 10 ms), then
+               parsed; on the ext4 disk (how it runs) and on tmpfs (the fsync cost isolated); 2c: the same with
+               --commit-events 1 (an fsync per event, as built before 2026-09-27) for the before/after on the same commit
   3  bulk      `ulpf-runtime forward` of N normalized events into OpenSearch through the bulk sink alone
   4  e2e       the real runtime: evidence (ext4) -> spool -> OpenSearch (bulk) AND the Parquet lake writer, timed until
                BOTH have acknowledged every event; then the lake is flushed and counted
@@ -171,7 +173,7 @@ def m_parse(a, workers, repeat):
 
 
 # ------------------------------------------------------------------ 2 evidence
-def m_evidence(a, n, where):
+def m_evidence(a, n, where, extra=()):
     run = Path(tempfile_dir(a, where))
     try:
         inp = run / "input.log"; replicate(a.mixed, n, inp)
@@ -179,7 +181,7 @@ def m_evidence(a, n, where):
         c0, _ = children_rusage()
         t0 = time.time()
         p = subprocess.Popen([str(RT), "run", *pack_args(a), "--source-id", "bench-mixed-01", "--input", str(inp), "--evidence", str(ev),
-                              "--out", "/dev/null", "--quarantine", "/dev/null"], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                              "--out", "/dev/null", "--quarantine", "/dev/null", *extra], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         g = Guard(a, run, lambda: [p.pid])
         _, err = p.communicate()
         wall = time.time() - t0
@@ -190,7 +192,8 @@ def m_evidence(a, n, where):
         st = json.loads([l for l in err.splitlines() if l.startswith("{")][-1])
         evb = du(ev)
         return {"events": st["frames"], "emitted": st["emitted"], "wall_s": wall, "cpu_s": c1 - c0, "eps": st["frames"] / wall, "eps_per_core": st["frames"] / max(c1 - c0, 1e-9),
-                "max_rss_mb": rss, "evidence_bytes": evb, "evidence_bytes_per_event": evb / st["frames"], "input_bytes": inp.stat().st_size, "where": where}
+                "max_rss_mb": rss, "evidence_bytes": evb, "evidence_bytes_per_event": evb / st["frames"], "input_bytes": inp.stat().st_size, "where": where,
+                "evidence_commits": st.get("evidence_commits"), "events_per_commit": st["frames"] / max(st.get("evidence_commits") or 1, 1)}
     finally:
         shutil.rmtree(run, ignore_errors=True)
 
@@ -351,7 +354,7 @@ def m_e2e(a, n):
                 "runtime_cpu_s": c1 - c0, "runtime_max_rss_mb": rss, "lakewriter_cpu_s": (lw1 - lw0) if lw0 is not None and lw1 is not None else None, "lakewriter_rss_mb": lw_rss,
                 "opensearch_cpu_s": (cpu1 - cpu0) if cpu0 is not None and cpu1 is not None else None, "opensearch_mem_max_mb": max(mem) if mem else None,
                 "opensearch_docs": docs, "opensearch_index_bytes": size, "lake_rows": rows, "lake_parquet_bytes": pq, "lake_files": len(fs), "normalized_jsonl_bytes": jsonl,
-                "evidence_bytes": evb, "peak_run_bytes": g.peak, "rejected": sum(e.get("rejected_events", 0) for e in st.get("egress", []))}
+                "evidence_bytes": evb, "peak_run_bytes": g.peak, "evidence_commits": st.get("evidence_commits"), "rejected": sum(e.get("rejected_events", 0) for e in st.get("egress", []))}
     finally:
         if lw and lw.poll() is None:
             lw.terminate(); lw.wait(30)
@@ -381,7 +384,7 @@ def main():
     osv = http("GET", "/")[1].get("version", {}).get("number")
     machine = {"cpu": cpu, "logical_cpus": os.cpu_count(), "memory_gb_visible_to_wsl": round(mem_gb, 1), "kernel": platform.release(), "disk": "WSL2 ext4 virtual disk (evidence, spool, lake); OpenSearch data in Docker Desktop's disk",
                "opensearch": osv, "opensearch_heap": "512 MB", "go": sh(["go", "version"]).stdout.strip(), "commit": sh(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"]).stdout.strip(),
-               "at": dt.datetime.now().isoformat(timespec="seconds")}
+               "at": dt.datetime.now().isoformat(timespec="seconds"), "group_commit": "runtime defaults: --commit-events 256, --commit-wait 10ms"}
     print("machine:", json.dumps(machine))
     res = {"machine": machine, "input": {"file": "the four-vendor mixed capture (demo/reset.sh -> scripts/p6-build-packs.sh)", "distinct_lines": sum(1 for l in open(a.mixed) if l.strip()),
                                          "packs": ["squid-native (golden)", "cisco-asa", "panos", "fortigate"], "note": "repeated to the sample size; content repeats"}, "runs": {}}
@@ -396,8 +399,9 @@ def main():
         record(f"1_parse_{w}_workers", [m_parse(a, w, rep) for _ in range(reps)], ["events", "wall_s", "eps", "eps_per_core", "cpu_s", "max_rss_mb"])
     cal = m_evidence(a, 3000, "ext4")                      # calibrate: size each evidence run to ~30 s
     n_ev = int(min(1_000_000, max(20_000, cal["eps"] * (8 if a.quick else 30))))
-    record("2_evidence_ext4", [m_evidence(a, n_ev, "ext4") for _ in range(reps)], ["events", "wall_s", "eps", "eps_per_core", "cpu_s", "max_rss_mb", "evidence_bytes_per_event"])
-    record("2b_evidence_tmpfs", [m_evidence(a, n_ev, "tmpfs") for _ in range(reps)], ["events", "wall_s", "eps", "eps_per_core", "cpu_s", "max_rss_mb"])
+    record("2_evidence_ext4", [m_evidence(a, n_ev, "ext4") for _ in range(reps)], ["events", "wall_s", "eps", "eps_per_core", "cpu_s", "max_rss_mb", "evidence_bytes_per_event", "events_per_commit"])
+    record("2b_evidence_tmpfs", [m_evidence(a, n_ev, "tmpfs") for _ in range(reps)], ["events", "wall_s", "eps", "eps_per_core", "cpu_s", "max_rss_mb", "events_per_commit"])
+    record("2c_evidence_ext4_fsync_per_event", [m_evidence(a, 3000 if a.quick else 6000, "ext4", ("--commit-events", "1")) for _ in range(reps)], ["events", "wall_s", "eps", "eps_per_core", "cpu_s", "events_per_commit"])
     # a normalized JSONL for the bulk sink alone: the parse path's output, from the real binary
     run = Path(tempfile_dir(a, "ext4")); inp = run / "in.log"; n_bulk = 30_000 if a.quick else 150_000
     replicate(a.mixed, int(n_bulk / 0.9) + 100, inp)
@@ -408,7 +412,9 @@ def main():
         record("3_bulk_into_opensearch", [m_bulk(a, run / "normalized.jsonl", n_bulk) for _ in range(reps)], ["events", "wall_s", "eps", "forwarder_cpu_s", "opensearch_cpu_s", "opensearch_mem_max_mb", "index_bytes_per_event"])
         record("3b_lake_writer_alone", [m_lake(a, run / "normalized.jsonl") for _ in range(reps)], ["events", "wall_s", "eps", "eps_per_core", "lakewriter_cpu_s", "files", "event_days", "parquet_vs_jsonl"])
         shutil.rmtree(run, ignore_errors=True)
-        n_e2e = int(min(400_000, max(20_000, res["runs"]["2_evidence_ext4"]["median"]["eps"] * (10 if a.quick else 45))))
+        # bounded: the lake writer (~1,700/s alone) sets the end-to-end pace once the evidence is batched; 200 000 events is
+        # ~2 minutes of it and ~1.3 GB of run files at most (evidence, spool, index, lake)
+        n_e2e = int(min(20_000 if a.quick else 200_000, max(20_000, res["runs"]["2_evidence_ext4"]["median"]["eps"] * (10 if a.quick else 45))))
         record("4_end_to_end", [m_e2e(a, n_e2e) for _ in range(reps)], ["events", "wall_s", "eps_end_to_end", "runtime_cpu_s", "lakewriter_cpu_s", "opensearch_cpu_s", "opensearch_mem_max_mb",
                                                                         "opensearch_index_bytes", "lake_parquet_bytes", "normalized_jsonl_bytes", "evidence_bytes"])
     finally:

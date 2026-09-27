@@ -23,7 +23,7 @@ was tried and rejected, and what the next phase inherits.
 
 ## Three ways in
 
-**Throughput, measured:** [docs/throughput.md](docs/throughput.md) — parse ~10,600 events/s per process; with the evidence log as built, 215/s per stream on this disk.
+**Throughput, measured:** [docs/throughput.md](docs/throughput.md) — parse ~10,400 events/s per process; with the evidence log (group commit, invariant 3 as amended 2026-09-27) 5,232/s per stream, 27× the fsync-per-event figure; end to end into OpenSearch and the lake 1,507/s, set by the lake writer. Evidence archive: [design, not built](docs/evidence-archive-design.md).
 
 **The gate, one command:** `bash scripts/gate.sh` — every check, the demo check with the real SIEM, and six steps + the live
 sequence twice on both model configurations, in parallel lanes: 12.7 min on the desktop (`--laptop` on the laptop).

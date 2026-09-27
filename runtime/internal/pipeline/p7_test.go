@@ -373,26 +373,31 @@ func TestSequenceGapFromStructuredData(t *testing.T) {
 	for i, seq := range []int{1, 2, 5, 6} {
 		fmt.Fprintf(&wrapped, "<134>1 2024-12-19T00:00:00Z proxy01 squid 1234 - [meta sequenceId=\"%d\"] %s\n", seq, lines[i])
 	}
-	var out, q bytes.Buffer
-	o := fixedOpts(t, p, &out, &q)
-	st, err := Run(bytes.NewReader(wrapped.Bytes()), o)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.Emitted != 4 || st.GapRecords != 1 || st.GapKinds["sequence_gap"] != 1 {
-		t.Fatalf("stats: %+v", st)
-	}
-	recs, _ := evidence.ReadIndex(o.EvidenceDir, "seg_00000")
-	raw, _ := os.ReadFile(filepath.Join(o.EvidenceDir, "seg_00000.raw"))
-	for _, r := range recs {
-		if r.Framing.Method == evidence.MethodGapRecord {
-			g, _ := gap.Parse(raw[r.Offset : r.Offset+int64(r.Length)])
-			if g.Kind != "sequence_gap" || g.Expected != 3 || g.Observed != 5 || g.Missing != 2 {
-				t.Fatalf("gap: %+v", g)
-			}
-			// the gap leaf follows the message that revealed it, in the same segment
-			if r.Sequence != 4 {
-				t.Fatalf("gap record position: %+v", r)
+	// commit per event: the leaf directly follows the message that revealed it; group commit (the default): the
+	// message is interpreted only once its batch is durable, so the leaf follows that batch — after the message,
+	// in the same segment, naming the last message before the gap
+	for _, c := range []struct{ events, at int }{{1, 4}, {0, 5}} {
+		var out, q bytes.Buffer
+		o := fixedOpts(t, p, &out, &q)
+		o.CommitEvents = c.events
+		st, err := Run(bytes.NewReader(wrapped.Bytes()), o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Emitted != 4 || st.GapRecords != 1 || st.GapKinds["sequence_gap"] != 1 {
+			t.Fatalf("stats: %+v", st)
+		}
+		recs, _ := evidence.ReadIndex(o.EvidenceDir, "seg_00000")
+		raw, _ := os.ReadFile(filepath.Join(o.EvidenceDir, "seg_00000.raw"))
+		for _, r := range recs {
+			if r.Framing.Method == evidence.MethodGapRecord {
+				g, _ := gap.Parse(raw[r.Offset : r.Offset+int64(r.Length)])
+				if g.Kind != "sequence_gap" || g.Expected != 3 || g.Observed != 5 || g.Missing != 2 || g.LastEventID != recs[1].EventID {
+					t.Fatalf("gap: %+v", g)
+				}
+				if r.Sequence != int64(c.at) {
+					t.Fatalf("commit-events %d: gap record position %d, want %d: %+v", c.events, r.Sequence, c.at, r)
+				}
 			}
 		}
 	}

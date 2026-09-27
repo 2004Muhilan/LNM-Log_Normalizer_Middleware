@@ -102,3 +102,55 @@ func TestPullDirectoryCollector(t *testing.T) {
 	_ = p2.Serve(context.Background(), func(Frame) error { t.Fatal("re-read"); return nil })
 	_ = time.Second
 }
+
+// Group commit (invariant 3): the receiver answers 202 only after Commit returned — the request's frames are
+// durable in the evidence log when the sender is told they were accepted; a failed commit answers 503.
+func TestHTTPAcceptedMeansCommitted(t *testing.T) {
+	var mu sync.Mutex
+	emitted, committedAt := 0, -1
+	fail := false
+	h := &HTTP{Addr: "127.0.0.1:0", MaxEventBytes: 4096}
+	h.Commit = func() error {
+		mu.Lock()
+		defer mu.Unlock()
+		if fail {
+			return io.ErrShortWrite
+		}
+		committedAt = emitted
+		return nil
+	}
+	ln, err := h.Listen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = h.Serve(ctx, ln, func(fr Frame) error { mu.Lock(); emitted++; mu.Unlock(); return nil })
+	}()
+	url := "http://" + ln.Addr().String() + "/ingest"
+	resp, err := http.Post(url, "text/plain", strings.NewReader("a\nb\nc\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	mu.Lock()
+	if resp.StatusCode != 202 || committedAt != 3 {
+		t.Fatalf("202 must follow the commit of all 3 frames: status %d, committed after %d", resp.StatusCode, committedAt)
+	}
+	fail = true
+	mu.Unlock()
+	resp, err = http.Post(url, "text/plain", strings.NewReader("d\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 503 {
+		t.Fatalf("a failed commit must not be answered 202: %d", resp.StatusCode)
+	}
+	cancel()
+	wg.Wait()
+}

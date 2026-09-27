@@ -338,3 +338,55 @@ bounded by the same (143/s). Raised, not built: group commit for the evidence lo
 Gate after these changes: `bash scripts/gate.sh` PASS in 796 s (lanes A 436 s, D 364 s, G20 787 s, G33 605 s); lane D
 re-run after the dashboard field fix: PASS (310 s).
 
+## 11. Group commit, a shared attacker across two devices, the evidence archive design (2026-09-27)
+
+**Group commit (decision 1, approved).** Invariant 3 now reads: *no event is parsed or delivered until the batch containing its
+raw bytes is durable on disk.*
+- **The evidence store:** `AppendBuffered` stages a frame (hash, record and offset are final) and `Sync` writes the batch and
+  fsyncs the segment and the index. `Append`/`AppendFrom` stay durable before they return; gap records and annotations use
+  them.
+- **The pipeline:** commits at `--commit-events` (256) or `--commit-wait` (10 ms, wall clock), whichever comes first, and only
+  then interprets the batch, in order.
+- **Committed first:** a reload, a closed connection and a silence sweep, so a `pack_activated` leaf still precedes every event
+  interpreted under it.
+- **HTTP receive:** answers 202 only after the commit (503 if it fails).
+- **Visible change:** a sequence-gap record now follows the batch of the message that revealed it, not the message itself
+  (tested both ways).
+- **One test's hidden pacing:** the spool-cap test's "healthy" destination only kept up because an fsync per event paced the
+  stream; the test now paces at 4 ms.
+- **Wording changed in:** the plan (§2 row 3, §11 row 65), the store and pipeline package comments, the CLI help, the harness,
+  and dated notes in the P2 and P8 reports.
+- **Tests:**
+  - the kill-test, rewritten: batches of 2, death after the batch holding frame 3; 4 frames are recovered byte-exact and the
+    output holds only the first batch;
+  - a property test: nothing is written downstream while a frame is staged;
+  - the time cap: a lone frame is committed within the wait;
+  - HTTP: 202 comes after the commit, and a failed commit answers 503.
+
+**Re-measured (`docs/throughput.md`, three runs each, medians):**
+
+| | before (fsync per event) | after (group commit) |
+|---|---|---|
+| parse | 10,431/s | unchanged |
+| with the evidence log | 195/s | **5,232/s** (27×; 0.45 billion a day per stream, extrapolated) |
+| end to end, into OpenSearch and the lake | 143/s | **1,507/s**, now set by the lake writer (1,670/s alone) |
+
+- The evidence path is now CPU-bound: 3,978 events per CPU-second, so 2.9 cores on average for one billion a day.
+- The virtual disks did not grow.
+
+**One attacker, two devices (decision 4).** Every 15th line from the generator is a denied flow from 10.10.10.10, which the
+FortiGate in the recorded capture also denies. `Flowtap.line(src=…)` keeps the random sequence unchanged.
+- The saved search *Denied connections from 10.10.10.10 — every device that logged it* returns Fortinet and flowtap.
+- `demo/apps-check.sh` requires both.
+
+**Evidence archive (decisions 2 and 3): designed, not built.** See `docs/evidence-archive-design.md`. Four points are raised
+there for a decision before building:
+1. segment ids are per directory, so a `store_id` in `_lineage` is needed, which is a contract change;
+2. the runtime, which holds the capability that sets the immutable flag, is also the one to clear it and delete;
+3. the committer becomes a continuously running service, and ships;
+4. UDP cannot be refused at the cap.
+
+
+Gate after these changes: `bash scripts/gate.sh` PASS in 723 s (lanes A 439 s — Go suite 108 tests, 0 skipped; D 377 s — the
+one-source query returns Fortinet and flowtap; G20 713 s and G33 621 s — same facts both runs). The WSL2 and Docker virtual
+disks did not grow across the measurement and the gate (75.884 GB and 84.65 GB before and after).

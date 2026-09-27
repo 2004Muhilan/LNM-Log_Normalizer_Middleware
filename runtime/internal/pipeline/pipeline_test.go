@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"ulpf/runtime/internal/evidence"
+	"ulpf/runtime/internal/frame"
 	"ulpf/runtime/internal/pack"
 )
 
@@ -118,9 +119,10 @@ func TestUnknownSignatureQuarantines(t *testing.T) {
 	}
 }
 
-// Invariant 3 kill-test: the process dies right after the Nth raw write, before parsing. The
-// evidence store must then reconstruct the ingested stream BYTE-EXACTLY (prefix + raw + suffix),
-// including the event that was never parsed.
+// Invariant 3 kill-test under group commit: batches of 2; the process dies right after the batch holding
+// the 3rd frame (frames 3 and 4) is committed, before either is parsed. The evidence store must then
+// reconstruct the four committed frames BYTE-EXACTLY (prefix + raw + suffix), including the two never
+// parsed, and the normalized output must hold only the first batch: nothing was emitted ahead of evidence.
 func TestKillAfterRawWriteReconstructsByteExact(t *testing.T) {
 	if os.Getenv("ULPF_KILL_HELPER") == "1" {
 		return
@@ -134,8 +136,9 @@ func TestKillAfterRawWriteReconstructsByteExact(t *testing.T) {
 		t.Fatal(err)
 	}
 	evDir := t.TempDir()
+	outPath := filepath.Join(t.TempDir(), "out.jsonl")
 	cmd := exec.Command(os.Args[0], "-test.run=TestKillHelper")
-	cmd.Env = append(os.Environ(), "ULPF_KILL_HELPER=1", "ULPF_KILL_INPUT="+inPath, "ULPF_KILL_EVIDENCE="+evDir, "ULPF_KILL_PACK="+p.Dir, "ULPF_KILL_ROOT="+repoRoot(t))
+	cmd.Env = append(os.Environ(), "ULPF_KILL_HELPER=1", "ULPF_KILL_INPUT="+inPath, "ULPF_KILL_EVIDENCE="+evDir, "ULPF_KILL_PACK="+p.Dir, "ULPF_KILL_ROOT="+repoRoot(t), "ULPF_KILL_OUT="+outPath)
 	err := cmd.Run()
 	var ee *exec.ExitError
 	if !errors.As(err, &ee) || ee.ExitCode() != 137 {
@@ -145,13 +148,91 @@ func TestKillAfterRawWriteReconstructsByteExact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(recs) != 3 {
-		t.Fatalf("expected 3 durable records, got %d", len(recs))
+	if len(recs) != 4 {
+		t.Fatalf("expected 4 durable records (two committed batches of 2), got %d", len(recs))
 	}
-	lines := bytes.SplitAfterN(in, []byte("\n"), 4)
-	want := append(append(append([]byte{}, lines[0]...), lines[1]...), lines[2]...)
+	lines := bytes.SplitAfterN(in, []byte("\n"), 5)
+	want := bytes.Join(lines[:4], nil)
 	if !bytes.Equal(got, want) {
 		t.Fatalf("reconstruction is not byte-exact\n got=%q\nwant=%q", got, want)
+	}
+	outB, _ := os.ReadFile(outPath)
+	emitted := strings.Split(strings.TrimSpace(string(outB)), "\n")
+	if len(emitted) != 2 || !strings.Contains(emitted[0], recs[0].EventID) || !strings.Contains(emitted[1], recs[1].EventID) {
+		t.Fatalf("only the first batch may have been parsed and emitted, got %d line(s): %s", len(emitted), outB)
+	}
+}
+
+// Invariant 3 as a property of the running pipeline: at every write of a normalized event, a quarantine
+// record or a spool line, nothing is staged — every frame received so far is durable.
+func TestNothingEmittedAheadOfEvidence(t *testing.T) {
+	p := loadGoldenPack(t)
+	in, _ := os.ReadFile(filepath.Join(p.Dir, "samples", "access.log"))
+	in = append(append(bytes.Repeat(in, 40), []byte("not a squid line at all\n")...), bytes.Repeat(in, 3)...)
+	var pl *Pipeline
+	var writes, violations int
+	check := writerFunc(func(b []byte) (int, error) {
+		writes++
+		if pl.store.Unsynced() != 0 {
+			violations++
+		}
+		return len(b), nil
+	})
+	var out, q bytes.Buffer
+	o := fixedOpts(t, p, &out, &q)
+	o.Out, o.Quarantine, o.CommitEvents = check, check, 7
+	st, err := RunFramesWith(func(emit func(frameT) error) error { return scanLines(in, emit) }, o, func(x *Pipeline) { pl = x })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Emitted != 258 || st.Quarantined != 1 || writes == 0 || violations != 0 {
+		t.Fatalf("emitted %d quarantined %d writes %d, written while frames were staged: %d", st.Emitted, st.Quarantined, writes, violations)
+	}
+	if n := pl.store.Syncs(); n < 259/7 {
+		t.Fatalf("expected a commit per batch of 7 (>= %d), got %d", 259/7, n)
+	}
+}
+
+// The time cap: a frame that is not followed by others (a quiet listener) is committed and emitted after
+// CommitWait, while the source is still open — a batch never waits for company.
+func TestCommitWaitBoundsLatency(t *testing.T) {
+	p := loadGoldenPack(t)
+	in, _ := os.ReadFile(filepath.Join(p.Dir, "samples", "access.log"))
+	first := bytes.SplitAfterN(in, []byte("\n"), 2)[0]
+	var out bytes.Buffer
+	o := fixedOpts(t, p, &out, nil)
+	o.Quarantine, o.CommitWait = nil, 20*time.Millisecond
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	var pl *Pipeline
+	ready := make(chan struct{})
+	go func() {
+		_, err := RunFramesWith(func(emit func(frameT) error) error {
+			if err := scanLines(first, emit); err != nil {
+				return err
+			}
+			<-release // the source stays open: no end-of-stream commit
+			return nil
+		}, o, func(x *Pipeline) { pl = x; close(ready) })
+		done <- err
+	}()
+	<-ready
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		pl.mu.Lock()
+		n, committed := pl.st.Emitted, pl.store.Syncs()
+		pl.mu.Unlock()
+		if n == 1 && committed >= 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a lone frame was not committed and emitted within 2 s (commit wait 20 ms)")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -168,7 +249,20 @@ func TestKillHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out bytes.Buffer
-	_, _ = Run(f, Options{Pack: p, EvidenceDir: os.Getenv("ULPF_KILL_EVIDENCE"), Collector: "col-01", Channel: "file:test", Out: &out, FailAfterRawWrite: 3})
+	out, err := os.Create(os.Getenv("ULPF_KILL_OUT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = Run(f, Options{Pack: p, EvidenceDir: os.Getenv("ULPF_KILL_EVIDENCE"), Collector: "col-01", Channel: "file:test", Out: out, FailAfterRawWrite: 3, CommitEvents: 2, CommitWait: time.Hour})
 	t.Fatal("Run returned; the kill hook did not fire")
+}
+
+type frameT = frame.Frame
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(b []byte) (int, error) { return f(b) }
+
+func scanLines(in []byte, emit func(frame.Frame) error) error {
+	return frame.Newline{MaxEventBytes: 65536}.Scan(bytes.NewReader(in), emit)
 }

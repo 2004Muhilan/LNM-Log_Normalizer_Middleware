@@ -3,8 +3,11 @@
 // Lifecycle: OPEN (appending) -> SEALED (no further appends) -> IMMUTABLE (write-protected).
 // Merkle commitment over IMMUTABLE segments is P5; nothing here depends on it.
 //
-// Invariant 3: Append fsyncs both the segment and the index before returning, and the pipeline
-// parses an event only after Append has returned.
+// Invariant 3 (group commit, 2026-09-27): no event is parsed or delivered until the batch containing its
+// raw bytes is durable on disk. AppendBuffered hashes an event and stages its raw bytes and index record
+// in memory; Sync writes the staged batch and fsyncs the segment and the index; the pipeline parses the
+// events of a batch only after Sync has returned. Append/AppendFrom are AppendBuffered + Sync — durable
+// before they return (gap records and every other annotation use them). Sealing syncs first.
 package evidence
 
 import (
@@ -77,6 +80,10 @@ type Store struct {
 	opened  time.Time
 	states  map[string]string
 	sealErr map[string]string
+	// the staged batch: raw bytes and index lines not yet written; segLen and segEv include them
+	rawBuf, idxBuf []byte
+	staged         int
+	syncs          int64
 }
 
 func Open(dir string, opts Options) (*Store, error) {
@@ -155,6 +162,9 @@ func (s *Store) Seal() error {
 func (s *Store) sealLocked() error {
 	if s.seg == nil {
 		return nil
+	}
+	if err := s.syncLocked(); err != nil {
+		return err
 	}
 	for _, f := range []*os.File{s.seg, s.idx} {
 		if err := f.Sync(); err != nil {
@@ -253,8 +263,8 @@ func ReadIndex(dir, segID string) ([]Record, error) {
 	return recs, nil
 }
 
-// Append writes raw bytes and the index record, fsyncs both, and returns the record. It seals and
-// rotates when the open segment has reached any limit.
+// Append writes raw bytes and the index record, fsyncs both (with anything staged before it), and
+// returns the record. It seals and rotates when the open segment has reached any limit.
 func (s *Store) Append(raw []byte, fr frame.Framing, sourceID, collector, channel string) (Record, error) {
 	return s.AppendFrom(raw, fr, sourceID, collector, channel, "")
 }
@@ -263,6 +273,65 @@ func (s *Store) Append(raw []byte, fr frame.Framing, sourceID, collector, channe
 func (s *Store) AppendFrom(raw []byte, fr frame.Framing, sourceID, collector, channel, peer string) (Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	rec, err := s.stageLocked(raw, fr, sourceID, collector, channel, peer)
+	if err != nil {
+		return rec, err
+	}
+	return rec, s.syncLocked()
+}
+
+// AppendBuffered stages the event: the record (id, hash, segment, offset) is final, the bytes are NOT
+// yet on disk. The caller must not parse or deliver the event before Sync returns (invariant 3).
+func (s *Store) AppendBuffered(raw []byte, fr frame.Framing, sourceID, collector, channel, peer string) (Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stageLocked(raw, fr, sourceID, collector, channel, peer)
+}
+
+// Sync writes the staged batch and fsyncs the segment and the index: every record returned so far is
+// durable when it returns nil.
+func (s *Store) Sync() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.syncLocked()
+}
+
+// Unsynced is the number of staged records not yet durable.
+func (s *Store) Unsynced() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.staged
+}
+
+// Syncs is the number of batch commits so far (each one write + two fsyncs).
+func (s *Store) Syncs() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.syncs
+}
+
+func (s *Store) syncLocked() error {
+	if s.staged == 0 || s.seg == nil {
+		return nil
+	}
+	if _, err := s.seg.Write(s.rawBuf); err != nil {
+		return err
+	}
+	if _, err := s.idx.Write(s.idxBuf); err != nil {
+		return err
+	}
+	if err := s.seg.Sync(); err != nil {
+		return err
+	}
+	if err := s.idx.Sync(); err != nil {
+		return err
+	}
+	s.rawBuf, s.idxBuf, s.staged = s.rawBuf[:0], s.idxBuf[:0], 0
+	s.syncs++
+	return nil
+}
+
+func (s *Store) stageLocked(raw []byte, fr frame.Framing, sourceID, collector, channel, peer string) (Record, error) {
 	if s.seg != nil && (s.segEv >= s.limits.MaxEvents || s.segLen+int64(len(raw)) > s.limits.MaxBytes || s.now().Sub(s.opened) >= s.limits.MaxAge) {
 		if err := s.sealLocked(); err != nil {
 			return Record{}, err
@@ -278,19 +347,10 @@ func (s *Store) AppendFrom(raw []byte, fr frame.Framing, sourceID, collector, ch
 		EventID: s.newID(s.now()), RawHash: Hash(raw), SegmentID: s.segID, Offset: s.segLen, Length: len(raw),
 		Framing: fr, IngestTime: s.now().UnixMilli(), SourceID: sourceID, Collector: collector, Channel: channel, Sequence: s.seq, Peer: peer,
 	}
-	if _, err := s.seg.Write(raw); err != nil {
-		return Record{}, err
-	}
 	line, _ := json.Marshal(rec)
-	if _, err := s.idx.Write(append(line, '\n')); err != nil {
-		return Record{}, err
-	}
-	if err := s.seg.Sync(); err != nil {
-		return Record{}, err
-	}
-	if err := s.idx.Sync(); err != nil {
-		return Record{}, err
-	}
+	s.rawBuf = append(s.rawBuf, raw...)
+	s.idxBuf = append(append(s.idxBuf, line...), '\n')
+	s.staged++
 	s.segLen += int64(len(raw))
 	s.segEv++
 	return rec, nil

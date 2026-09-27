@@ -548,8 +548,8 @@ demo stands on.
   streams are *constructed*, and a real replay per step is what catches a family stealing another's traffic (none did).
 - **Absolute-minute axis** — not measured (§4). A relative axis (% of hand-authoring cost) hides that both totals are small.
 - **A fitted or smoothed curve** — nine points.
-- **Work directory on disk** — the evidence store fsyncs every raw write (invariant 3, untouched); ~90 replays took
-  9 min 19 s on ext4 and 1 min 37 s on tmpfs. The script uses `/dev/shm`.
+- **Work directory on disk** — the evidence store fsynced every raw write (invariant 3 as it then was; group commit since
+  2026-09-27); ~90 replays took 9 min 19 s on ext4 and 1 min 37 s on tmpfs. The script uses `/dev/shm`.
 - **Naming the tool `coverage.py`** — shadows the `coverage` package under pytest; it is `coverage_curve.py`.
 
 ### 13.7 Optional audit items — one half-closed, two left owed

@@ -167,7 +167,9 @@ def dashboards(osd_url):
     ]
     # requirement (f) made visible: ONE query, ONE set of field names, every device — possible only because every source
     # arrives as the same OCSF class with the same attribute names
-    for sid, title, q in (("ulpf-denied-one-source", "Denied connections from one source address — any device (edit the address)", 'action_id:2 and src_endpoint.ip:"10.10.10.2"'),
+    # 10.10.10.10: denied by the FortiGate in the recorded capture AND by the flowtap generator (every 15th line) — one
+    # attacker, two devices, one query
+    for sid, title, q in (("ulpf-denied-one-source", "Denied connections from 10.10.10.10 — every device that logged it (edit the address)", 'action_id:2 and src_endpoint.ip:"10.10.10.10"'),
                           ("ulpf-denied-internal", "Denied connections from the internal network (10.0.0.0/8) — every device", 'action_id:2 and src_endpoint.ip:"10.0.0.0/8"')):
         objs.append({"type": "search", "id": sid, "attributes": {"title": title, "description": "The same query over every vendor: the field names are OCSF's, not the device's.",
                      "columns": ["metadata.product.vendor_name", "src_endpoint.ip", "dst_endpoint.ip", "dst_endpoint.port", "action_id", "_lineage.event_id"],

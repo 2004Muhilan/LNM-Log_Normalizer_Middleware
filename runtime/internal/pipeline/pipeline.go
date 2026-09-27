@@ -1,7 +1,10 @@
 // Package pipeline wires framing -> raw evidence write -> route -> parse -> normalize -> emit, in
-// exactly that order (architecture §2.5). Raw bytes are hashed and durably written before any
-// interpretation (invariant 3); routing never tries parsers (invariant 6); a parse or tiling failure
-// quarantines the event rather than emitting a guess (invariant 5).
+// exactly that order (architecture §2.5). Invariant 3 (group commit): no event is parsed or delivered
+// until the batch containing its raw bytes is durable on disk — frames are hashed and staged, a batch is
+// committed (one write, one fsync of the segment and one of the index) when it reaches CommitEvents or its
+// oldest frame has waited CommitWait, and only then are its frames interpreted, in arrival order. Routing
+// never tries parsers (invariant 6); a parse or tiling failure quarantines the event rather than emitting a
+// guess (invariant 5).
 //
 // P7 additions, in pipeline order: de-batching (a frame that is a JSON array becomes N frames BEFORE
 // the raw write, so every element is its own evidence record); recursive envelope unwrap (relay chain
@@ -71,10 +74,17 @@ type Options struct {
 	Now         func() time.Time
 	NewID       func(time.Time) string
 	Limits      evidence.Limits
-	// FailAfterRawWrite > 0 makes the process exit hard right after the Nth event's raw write has
-	// been fsynced and before it is parsed — the kill-test hook (invariant 3).
+	// FailAfterRawWrite > 0 makes the process exit hard right after the batch holding the Nth event has
+	// been committed (fsynced) and before any event of that batch is parsed — the kill-test hook (invariant 3).
 	FailAfterRawWrite int
-	MaxEventBytes     int
+	// Group commit (invariant 3): a batch is committed at CommitEvents staged frames or when its oldest frame
+	// has waited CommitWait, whichever comes first (defaults 256 and 10 ms; CommitEvents 1 is an fsync per
+	// event, as before 2026-09-27). The wait is measured on the wall clock, never on Now (a fixed golden clock
+	// must not hold a batch forever). A crash loses only frames received and not yet committed — never
+	// parsed, never delivered.
+	CommitEvents  int
+	CommitWait    time.Duration
+	MaxEventBytes int
 	// P7. Debatch (default on unless NoDebatch) explodes JSON-array frames into element frames.
 	NoDebatch bool
 	// SilenceAfter > 0 turns on silence detection per peer, swept every SilenceAfter/2 while the
@@ -115,6 +125,7 @@ type Stats struct {
 	GapKinds      map[string]int `json:"gap_kinds"`
 	Peers         int            `json:"peers"`
 	Egress        []egress.Stats `json:"egress,omitempty"` // P8: per sink — delivered, retries, stalls, undelivered bytes
+	Commits       int64          `json:"evidence_commits"` // group commit: batches made durable (one write + two fsyncs each)
 }
 
 type quarantined struct {
@@ -154,12 +165,42 @@ type Pipeline struct {
 	source  string
 	now     func() time.Time
 	err     error
+	// group commit: frames staged in the evidence store, not yet durable, not yet interpreted
+	pending []staged
+	since   time.Time // wall clock: when the oldest pending frame was staged
+	commit  func() error
+}
+
+type staged struct {
+	fr      frame.Frame
+	rec     evidence.Record
+	channel string
+	n       int // frame number (st.Frames when staged)
+}
+
+// Commit makes every staged frame durable and interprets it (the HTTP receiver calls it before it answers
+// 202: an accepted request is on disk).
+func (p *Pipeline) Commit() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.commitLocked()
+}
+
+func (p *Pipeline) commitLocked() error {
+	if p.commit == nil || len(p.pending) == 0 {
+		return p.err
+	}
+	if err := p.commit(); err != nil && p.err == nil {
+		p.err = err
+	}
+	return p.err
 }
 
 // Lost appends a connection_lost gap record for peer (called by a transport's OnClose).
 func (p *Pipeline) Lost(peer, reason string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.commitLocked() // the peer's last frames are interpreted before the record that says it went away
 	p.appendGap(p.tracker.Lost(peer, p.source, p.o.Channel, reason, p.now()), peer)
 }
 
@@ -178,6 +219,11 @@ func (p *Pipeline) Reload(packs []*pack.Pack, reason string) error {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	// frames received before the reload are interpreted by the packs they arrived under, before the
+	// pack_activated leaf: "from that leaf on" stays true under group commit
+	if err := p.commitLocked(); err != nil {
+		return err
+	}
 	next := map[string]string{}
 	for _, pk := range packs {
 		next[pk.PackID] = pk.PackVersion + " " + pk.FileSHA256
@@ -452,6 +498,7 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 					return
 				case <-t.C:
 					p.mu.Lock()
+					p.commitLocked() // frames already received count as heard before silence is judged
 					for _, r := range p.tracker.Sweep(now()) {
 						p.appendGap(r, r.Peer)
 					}
@@ -460,21 +507,73 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 			}
 		}()
 	}
+	commitEvents, commitWait := o.CommitEvents, o.CommitWait
+	if commitEvents <= 0 {
+		commitEvents = 256
+	}
+	if commitWait <= 0 {
+		commitWait = 10 * time.Millisecond
+	}
+	var interpret func(fr frame.Frame, rec evidence.Record, channel string) error
+	// 1. raw evidence write: hashed and staged here; nothing looks at the bytes until the batch is durable
 	one := func(fr frame.Frame) error {
 		st.Frames++
-		// 1. raw evidence write — durable before anything else looks at the bytes
 		channel := o.Channel
 		if fr.Channel != "" {
 			channel = fr.Channel
 		}
-		rec, err := store.AppendFrom(fr.Raw, fr.Framing, sourceID, o.Collector, channel, fr.Peer)
+		rec, err := store.AppendBuffered(fr.Raw, fr.Framing, sourceID, o.Collector, channel, fr.Peer)
 		if err != nil {
 			return err
 		}
-		if o.FailAfterRawWrite > 0 && st.Frames == o.FailAfterRawWrite {
-			out.Flush()
-			os.Exit(137) // kill-test: die after the raw write, before parsing
+		if len(p.pending) == 0 {
+			p.since = time.Now()
 		}
+		p.pending = append(p.pending, staged{fr, rec, channel, st.Frames})
+		if len(p.pending) >= commitEvents || time.Since(p.since) >= commitWait {
+			return p.commitLocked()
+		}
+		return nil
+	}
+	// the commit: one write and two fsyncs for the batch, THEN its frames are interpreted in arrival order
+	p.commit = func() error {
+		batch := p.pending
+		p.pending = nil
+		if err := store.Sync(); err != nil {
+			return err
+		}
+		if o.FailAfterRawWrite > 0 && batch[0].n <= o.FailAfterRawWrite && o.FailAfterRawWrite <= batch[len(batch)-1].n {
+			out.Flush()
+			os.Exit(137) // kill-test: die after the batch holding the Nth frame is durable, before any of it is parsed
+		}
+		for _, s := range batch {
+			if err := interpret(s.fr, s.rec, s.channel); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	// a batch that stops growing (a listener gone quiet) is committed by the clock, not left waiting
+	stopCommit := make(chan struct{})
+	commitDone := make(chan struct{})
+	go func() {
+		defer close(commitDone)
+		t := time.NewTicker(commitWait / 2)
+		defer t.Stop()
+		for {
+			select {
+			case <-stopCommit:
+				return
+			case <-t.C:
+				p.mu.Lock()
+				if len(p.pending) > 0 && time.Since(p.since) >= commitWait {
+					p.commitLocked()
+				}
+				p.mu.Unlock()
+			}
+		}
+	}()
+	interpret = func(fr frame.Frame, rec evidence.Record, channel string) error {
 		if fr.Framing.FramingConfidence == "low" {
 			st.LowConfidence++
 		}
@@ -606,6 +705,13 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 		}
 		return one(fr)
 	})
+	close(stopCommit)
+	<-commitDone
+	p.mu.Lock()
+	if cerr := p.commitLocked(); err == nil { // the last batch: whatever arrived is committed and interpreted
+		err = cerr
+	}
+	p.mu.Unlock()
 	close(stopSweep)
 	sweepWG.Wait()
 	if len(forwarders) > 0 {
@@ -631,6 +737,7 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 	<-retentionDone
 	p.mu.Lock()
 	st.Peers = p.tracker.Peers()
+	st.Commits = store.Syncs()
 	if err == nil {
 		err = p.err
 	}

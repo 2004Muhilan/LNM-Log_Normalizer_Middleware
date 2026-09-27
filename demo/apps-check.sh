@@ -83,6 +83,10 @@ if [ "${ULPF_SIEM:-opensearch}" != "fake" ] && [ "$(st "d['runtime']['relay_avai
   X=$(agg '{"bool":{"filter":[{"term":{"action_id":2}},{"term":{"src_endpoint.ip":"10.0.0.0/8"}}]}}')
   echo "cross-vendor query 'denied connections from 10.0.0.0/8, every device': $X"
   [ "$(echo "$X" | tr '|' '\n' | grep -c .)" -ge 2 ] || fail "the cross-vendor query must return more than one device"
+  # one attacker, two devices: 10.10.10.10 is denied by the FortiGate in the capture and by the generator (every 15th line)
+  for _ in $(seq 1 60); do O=$(agg '{"bool":{"filter":[{"term":{"action_id":2}},{"term":{"src_endpoint.ip":"10.10.10.10"}}]}}'); echo "$O" | grep -q Fortinet && echo "$O" | grep -q flowtap && break; sleep 1; done
+  echo "one-source query 'denied connections from 10.10.10.10': $O"
+  echo "$O" | grep -q Fortinet && echo "$O" | grep -q flowtap || fail "the one-source query must show the FortiGate and the generator logging the same attacker"
   if curl -s -m 2 http://127.0.0.1:5601/api/status > /dev/null; then
     for sid in ulpf-denied-one-source ulpf-denied-internal; do
       [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:5601/api/saved_objects/search/$sid")" = 200 ] || fail "saved search $sid missing in Dashboards"

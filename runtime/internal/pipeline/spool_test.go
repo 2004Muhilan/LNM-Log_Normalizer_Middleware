@@ -109,10 +109,12 @@ func TestSpoolCapSkipsOnlyTheSlowestDestinationAndRecordsEverySkip(t *testing.T)
 	defer srv.Close()
 	dead := "syslog+tcp://" + deadAddr(t)
 	ev, sp := t.TempDir(), t.TempDir()
-	// paced like a live stream (one line per millisecond): a HEALTHY destination keeps up and is never more than the cap
-	// behind; only the dead one falls past it. (Fed all at once, even a healthy one can be momentarily past a tiny cap —
-	// and is then skipped too: the cap is a hard bound on the disk, the approved policy.)
-	st, err := Run(&pacedReader{lines: bytes.SplitAfter(squidLines(t, 60), []byte("\n")), every: time.Millisecond}, spoolOpts(t, ev, sp, srv.URL, dead))
+	// paced like a live stream (one line per 4 ms): a HEALTHY destination keeps up and is never more than the cap behind;
+	// only the dead one falls past it. The forwarder polls every 200 ms, so a healthy destination can be ~50 events (~90 KB)
+	// behind at this rate — under the 96 KB cap. (Before group commit an fsync per event paced this stream implicitly.
+	// Fed all at once, even a healthy one can be momentarily past a tiny cap — and is then skipped too: the cap is a hard
+	// bound on the disk, the approved policy.)
+	st, err := Run(&pacedReader{lines: bytes.SplitAfter(squidLines(t, 60), []byte("\n")), every: 4 * time.Millisecond}, spoolOpts(t, ev, sp, srv.URL, dead))
 	if err != nil {
 		t.Fatal(err)
 	}

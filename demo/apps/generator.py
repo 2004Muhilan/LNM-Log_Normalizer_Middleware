@@ -10,6 +10,9 @@ Everything is a button on the page (POST /api/set):
   running     generation on / off
   drift       "firmware 2.0": the protocol becomes its IANA number and a zone field is appended, in whatever shape is on
 
+Every 15th line is a denied flow from 10.10.10.10 — an address the FortiGate in the recorded four-vendor capture also
+denies — so the SIEM's one-source search shows two different devices logging the same attacker.
+
 Lines are queued and sent in order; while no connector is chosen (or ULPF is not listening) the queue grows, bounded,
 and is delivered on reconnect. TCP has no application acknowledgement: a receiver crash can lose lines in flight.
 """
@@ -25,12 +28,12 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "live"))
-from flowgen import SHAPES, Flowtap  # noqa: E402
+from flowgen import SHAPES, SHARED_EVERY, SHARED_SOURCE, Flowtap  # noqa: E402
 
 UI = Path(__file__).resolve().parents[1] / "ui"
 LOCK = threading.Lock()
 S = {"app": "flowtap generator", "connector": "none", "shape": "positional", "running": False, "drift": False, "rate": 6.0, "generated": 0, "sent": 0, "backlog": 0,
-     "connected": False, "dropped_queue_full": 0, "burst": 0, "recent": [], "shapes": SHAPES, "connectors": {}, "by_shape": {}}
+     "connected": False, "dropped_queue_full": 0, "burst": 0, "shared_source": SHARED_SOURCE, "shared_sent": 0, "recent": [], "shapes": SHAPES, "connectors": {}, "by_shape": {}}
 MAX_QUEUE = 5000
 
 
@@ -62,7 +65,8 @@ def worker(targets):
             with LOCK:
                 S["generated"] += 1
         while running and now >= next_t:
-            line = gen.line(2 if drift else 1, next_t, shape)
+            shared = gen.n % SHARED_EVERY == SHARED_EVERY - 1
+            line = gen.line(2 if drift else 1, next_t, shape, src=SHARED_SOURCE if shared else None)
             if len(backlog) >= MAX_QUEUE:
                 backlog.popleft()
                 with LOCK:
@@ -70,6 +74,7 @@ def worker(targets):
             backlog.append(line); recent.append({"shape": shape + (" v2" if drift else ""), "line": line})
             with LOCK:
                 S["generated"] += 1
+                S["shared_sent"] += shared
                 k = shape + (" v2" if drift else ""); S["by_shape"][k] = S["by_shape"].get(k, 0) + 1
             next_t += 1.0 / rate
         if sock is not None and sock_kind != conn:
