@@ -31,6 +31,11 @@ check "llama-server on $LLAMA_PORT (ngl $LLAMA_NGL, ctx $LLAMA_CTX)" bash -c "cu
 check "llama-server answers a completion" bash -c "curl -s -m 60 http://127.0.0.1:$LLAMA_PORT/v1/chat/completions -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the single word ok.\"}],\"max_tokens\":4,\"temperature\":0}' | python3 -c 'import json,sys; d=json.load(sys.stdin); c=d[\"choices\"][0]; n=d[\"usage\"][\"completion_tokens\"]; assert n > 0, \"no tokens generated\"; print(str(n)+\" tokens generated, finish=\"+str(c.get(\"finish_reason\")))'"
 check "witness image (ulpf-verify)" bash -c 'docker image inspect ulpf-verify --format "{{.Size}}" | awk "{printf \"%.1f MB\", \$1/1048576}"'
 check "tcp port $TCP_PORT free for the mixed stream" bash -c "$(declare -f freeport_check); freeport_check $TCP_PORT && echo free"
+# air gap: every image and wheel the destinations need is local BEFORE the network goes (a pull on stage cannot happen offline)
+OSV="${ULPF_OPENSEARCH_VERSION:-2.19.2}"
+check "SIEM images local (OpenSearch + Dashboards $OSV)" bash -c "docker image inspect opensearchproject/opensearch:$OSV --format '{{.Size}}' > /dev/null && docker image inspect opensearchproject/opensearch-dashboards:$OSV --format '{{.Size}}' > /dev/null && echo 'both present, no pull needed'"
+check "DuckDB in the venv (lake writer + lake page; no extension downloads used)" bash -c 'python -c "import duckdb; print(\"duckdb\", duckdb.__version__)"'
+check "demo ports free (6515 8516 8765 8780 8792; SIEM 9200 5601 may already be ours)" bash -c "$(declare -f freeport_check); for p in 6515 8516 8765 8780 8792; do freeport_check \$p || { echo \"port \$p busy\"; exit 1; }; done; for p in 9200 5601; do freeport_check \$p || docker ps --format '{{.Names}} {{.Ports}}' | grep -q \":\$p->\" || { echo \"port \$p busy (not our SIEM)\"; exit 1; }; done; echo free"
 check "memory headroom" bash -c 'a=$(free -m | awk "/Mem:/{print \$7}"); [ "$a" -gt 1500 ] && echo "${a} MB available in WSL"'
 mkdir -p "$STATE"
 python3 - "$STATE/preflight.json" "$fails" "${results[@]}" <<'EOF'

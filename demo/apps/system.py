@@ -5,8 +5,9 @@ Demo assembly, not pipeline: it parses no log and decides no mapping; every step
 
     system.py --state DIR            (started by demo/start-demo.sh, which exports what demo/lib.sh resolves)
 
-  one runtime   ingress syslog/TCP + HTTP POST; egress HTTP POST + syslog/TCP + stdout->file, all three always configured:
-                a connector nobody listens on is a stalled delivery with its own cursor (an evidence-log record), not an error
+  one runtime   ingress syslog/TCP + HTTP POST; egress to N DESTINATIONS from demo/apps/destinations.json (a list: a
+                transport plus an encoding each — here the SIEM over the bulk encoding and the data lake over HTTP), through
+                a BOUNDED spool with one cursor per destination: one dead destination never holds another back
   monitor       tails the evidence index, out.jsonl and q.jsonl; who is connected is read off the evidence records
                 (ingest channel + peer), never off the generator
   NEW FORMAT    an unknown signature nobody has onboarded -> onboarding. Policy switch `auto_onboard`: ON = starts by itself
@@ -87,6 +88,10 @@ class System:
         self.runtime = None
         self.reloads = 0
         self.tick_lock = threading.Lock()
+        self.destinations = json.loads(Path(a.destinations).read_text())
+        self.health = {}                          # destination name -> (up, detail, checked_at)
+        self.siem_action = None                   # outage / recover in progress
+        self.traces = {}                          # event id -> the round trip's result
         self.held = set()                         # trigger keys the operator rolled back: no automatic healing until a restart
 
     # ------------------------------------------------------------------ runtime
@@ -94,11 +99,11 @@ class System:
         self.run.mkdir(parents=True, exist_ok=True)
         (self.dir / "packs.txt").write_text("")
         a = self.a
-        self.forwards = [("HTTP POST", f"http://{a.db_http}/ingest"), ("Syslog over TCP", f"syslog+tcp://{a.db_tcp}"), ("File (stdout connector)", "stdout:")]
         cmd = [a.rt, "run", "--pack", a.golden, "--packs-file", str(self.dir / "packs.txt"), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
-               "--idle-timeout", "3600s", "--evidence", str(self.ev), "--out", str(self.run / "out.jsonl"), "--quarantine", str(self.run / "q.jsonl"), "--forward-stall-after", "2s", "--forward-drain", "3s"]
-        for _, u in self.forwards:
-            cmd += ["--forward", u]
+               "--idle-timeout", "3600s", "--evidence", str(self.ev), "--out", str(self.run / "out.jsonl"), "--quarantine", str(self.run / "q.jsonl"),
+               "--spool", str(self.dir / "spool"), "--spool-cap", a.spool_cap, "--forward-stall-after", "2s", "--forward-drain", "5s"]
+        for d in self.destinations:   # N destinations, any kind: the list decides, not the code
+            cmd += ["--forward", d["url"]]
         self.runtime = subprocess.Popen(cmd, stdout=open(self.run / "egress-stdout.ndjson", "wb"), stderr=open(self.run / "runtime.err", "wb"), cwd=str(ROOT))
 
     def err_text(self):
@@ -198,8 +203,101 @@ class System:
                 self.jobs.append(job)
                 threading.Thread(target=self.run_job, args=(job,), daemon=True).start()
 
+    def probe(self):
+        """UP / DOWN per destination, from its own health URL (one probe per second, not per page refresh)."""
+        import urllib.request
+        for d in self.destinations:
+            try:
+                with urllib.request.urlopen(d["health"], timeout=1.5) as r:
+                    self.health[d["name"]] = (r.status < 500, f"HTTP {r.status}", time.time())
+            except Exception as ex:
+                self.health[d["name"]] = (False, type(ex).__name__, time.time())
+        siem = next((d for d in self.destinations if d.get("kind") == "siem" and d.get("metrics")), None)
+        if siem and self.health.get(siem["name"], (False,))[0] and time.time() - getattr(self, "_metrics_at", 0) >= 5:
+            self._metrics_at = time.time()   # the quarantine panel in the SIEM's dashboard: the console's counts, posted as documents
+            c = self.state_counts()
+            try:
+                body = json.dumps({"time": int(time.time() * 1000), **c}).encode()
+                urllib.request.urlopen(urllib.request.Request(siem["metrics"], data=body, method="POST", headers={"Content-Type": "application/json"}), timeout=2).read()
+            except Exception:
+                pass
+
+    def state_counts(self):
+        with LOCK:
+            evs = [self.events[i] for i in self.order if not self.events[i].get("record")]
+        return {"frames": len(evs), "usable": sum(1 for e in evs if e.get("ok") is True), "quarantined": sum(1 for e in evs if e.get("ok") is False)}
+
+    def siem_control(self, action):
+        if action not in ("outage", "recover") or self.siem_action:
+            raise ValueError("outage | recover, one at a time")
+        def run():
+            self.siem_action = action
+            try:
+                r = subprocess.run(["bash", str(ROOT / "demo" / "siem" / "siem.sh"), action], capture_output=True, text=True, timeout=240)
+                print(f"siem {action}: {(r.stdout + r.stderr).strip()[-200:]}", flush=True)
+            finally:
+                self.siem_action = None
+        threading.Thread(target=run, daemon=True).start()
+
+    def lake_view(self, event_id=None):
+        """The read-only lake page: fixed DuckDB queries over the Parquet the lake writer wrote (DuckDB's own UI fetches its
+        assets from ui.duckdb.org at request time — measured: HTTP 500 with no network — so the demo cannot use it)."""
+        import duckdb
+        lake = Path(self.a.lake)
+        con = duckdb.connect()
+        out = {"sources": [], "latest": [], "lookup": None, "writer": None}
+        try:
+            import urllib.request
+            out["writer"] = json.loads(urllib.request.urlopen(self.a.lake_status, timeout=1).read())
+        except Exception:
+            pass
+        for src in sorted((lake / "ext").glob("*")) if (lake / "ext").exists() else []:
+            fs = sorted(str(f) for f in src.rglob("*.parquet"))
+            if not fs:
+                continue
+            days = con.execute(f"SELECT eventDay, count(*), count(DISTINCT filename) FROM read_parquet({fs!r}, hive_partitioning=true, filename=true) GROUP BY 1 ORDER BY 1").fetchall()
+            schemas = {json.dumps(con.execute(f"DESCRIBE SELECT * FROM read_parquet('{f}')").fetchall()) for f in fs}
+            size = sum(Path(f).stat().st_size for f in fs)
+            out["sources"].append({"source": src.name, "path": str(src.relative_to(lake)) + "/region=…/accountId=…/eventDay=…/", "files": len(fs), "bytes": size, "distinct_schemas": len(schemas),
+                                   "columns": len(json.loads(next(iter(schemas)))), "days": [{"day": str(d), "rows": r, "files": n} for d, r, n in days]})
+            if src.name == "ulpf_network_activity":
+                out["latest"] = [dict(zip(("event_id", "raw_hash", "segment_id", "offset", "time", "src", "dst", "action_id", "family_id", "file"), r)) for r in con.execute(
+                    f"SELECT event_id, raw_hash, segment_id, \"offset\", time, src_endpoint.ip, dst_endpoint.ip, action_id, family_id, filename FROM read_parquet({fs!r}, filename=true) ORDER BY time DESC LIMIT 25").fetchall()]
+                for r in out["latest"]:
+                    r["file"] = str(Path(r["file"]).relative_to(lake))
+            if event_id:
+                hit = con.execute(f"SELECT event_id, raw_hash, segment_id, \"offset\", length, source_id, parser_id, family_id, filename FROM read_parquet({fs!r}, filename=true) WHERE event_id = ?", [event_id]).fetchone()
+                if hit:
+                    out["lookup"] = dict(zip(("event_id", "raw_hash", "segment_id", "offset", "length", "source_id", "parser_id", "family_id", "file"), hit))
+                    out["lookup"]["file"] = str(Path(out["lookup"]["file"]).relative_to(lake))
+        return out
+
+    def findings(self):
+        siem = next((d for d in self.destinations if d.get("kind") == "siem"), None)
+        if not siem or not self.health.get(siem["name"], (False,))[0] or not siem.get("findings"):
+            return []
+        sys.path.insert(0, str(ROOT / "demo" / "apps"))
+        import trace
+        try:
+            return trace.findings(siem["findings"])
+        except Exception:
+            return []
+
+    def prove(self, event_id):
+        sys.path.insert(0, str(ROOT / "demo" / "apps"))
+        import trace
+        siem = next((d for d in self.destinations if d.get("kind") == "siem"), {})
+        work = self.dir / "trace"; work.mkdir(exist_ok=True)
+        t = trace.trace(event_id, str(self.ev), self.a.lake, siem.get("findings", "http://127.0.0.1:9200"), str(work))
+        self.traces[event_id] = t
+        return t
+
     def loop(self):
+        last_probe = 0
         while True:
+            if time.time() - last_probe >= 1:
+                last_probe = time.time()
+                threading.Thread(target=self.probe, daemon=True).start()
             try:
                 with self.tick_lock:
                     self.tick()
@@ -437,21 +535,27 @@ class System:
                 a["connected"] = a["idle_s"] < 3
                 a["alert"] = any(j.get("host") == h and j["state"] not in ("done", "failed") for j in self.jobs)
             recent = [self.events[i] for i in self.order[-40:] if not self.events[i].get("record") and self.events[i].get("ok") is not None]
-            egress = []
-            for n, (label, url) in enumerate(self.forwards):
-                cur = {}
+            curs = {}
+            for f in (self.dir / "spool").glob("cursor-*.json"):
                 try:
-                    cur = json.loads((self.run / f"out.jsonl.egress-{n}.cursor").read_text())
-                except (OSError, ValueError):
+                    c = json.loads(f.read_text()); curs[c["sink"]] = c
+                except (OSError, ValueError, KeyError):
                     pass
-                st = self.egress.get(cur.get("sink") or url, self.egress.get(url, {}))
-                egress.append({"label": label, "url": url, "state": st.get("state") or ("delivering" if cur.get("delivered_events") else "idle"), "since": st.get("since"),
-                               "delivered": cur.get("delivered_events", 0), "last_event_id": cur.get("last_event_id"), "consumer": self.inventory.get("_consumers", {}).get(url.split("//")[-1].split("/")[0], "")})
+            usable = sum(a["usable"] for a in apps.values())
+            egress = []
+            for d in self.destinations:
+                sink = ("bulk+" + d["url"][len("bulk+"):]) if d["url"].startswith("bulk+") else d["url"]
+                cur = curs.get(sink, {})
+                up, why, _ = self.health.get(d["name"], (False, "not probed yet", 0))
+                st = self.egress.get(sink, {})
+                egress.append({"name": d["name"], "kind": d.get("kind"), "url": d["url"], "ui": d.get("ui"), "up": up, "why": why, "delivery": st.get("state") or ("delivering" if cur.get("delivered_events") else "waiting"),
+                               "delivered": cur.get("delivered_events", 0), "ahead_by": max(0, usable - cur.get("delivered_events", 0)), "skipped": cur.get("skipped_events", 0),
+                               "rejected": cur.get("rejected_events", 0), "last_event_id": cur.get("last_event_id")})
             jobs = [{k: v for k, v in j.items() if k not in ("go", "promote")} for j in self.jobs]
             return {"policy": self.policy, "runtime": {"up": self.runtime is not None and self.runtime.poll() is None, "ingress": [{"label": "Syslog over TCP", "addr": self.a.in_tcp}, {"label": "HTTP POST", "addr": self.a.in_http}],
                                                        "packs": [{"pack_id": v["pack_id"], "pack_version": v["pack_version"], "family": v["family"]} for v in self.active.values()], "reloads": self.reloads,
                                                        "provider": self.a.provider, "pack_records": self.pack_records[-6:]},
-                    "apps": list(apps.values()), "egress": egress, "jobs": jobs, "alerts": self.alerts, "attributes": ATTRIBUTES,
+                    "apps": list(apps.values()), "egress": egress, "siem_action": self.siem_action, "jobs": jobs, "alerts": self.alerts, "attributes": ATTRIBUTES,
                     "counts": {"frames": sum(a["events"] for a in apps.values()), "usable": sum(a["usable"] for a in apps.values()), "quarantined": sum(a["quarantined"] for a in apps.values())},
                     "parse_success": round(sum(1 for e in recent if e["ok"]) / len(recent), 3) if recent else None}
 
@@ -508,7 +612,16 @@ def handler(sysm):
             if p == "/api/log":
                 d = sysm.describe(q.get("id", ""))
                 return self._send(200 if d else 404, json.dumps(d).encode())
-            f = {"/": "system.html", "/theme.css": "theme.css"}.get(p)
+            if p == "/api/lake":
+                try:
+                    return self._send(200, json.dumps(sysm.lake_view(q.get("event_id")), default=str).encode())
+                except Exception as ex:
+                    return self._send(200, json.dumps({"error": f"{type(ex).__name__}: {ex}", "sources": [], "latest": []}).encode())
+            if p == "/api/findings":
+                return self._send(200, json.dumps(sysm.findings()).encode())
+            if p == "/api/trace":
+                return self._send(200, json.dumps(sysm.traces.get(q.get("id", ""))).encode())
+            f = {"/": "system.html", "/lake": "lake.html", "/theme.css": "theme.css"}.get(p)
             if not f:
                 return self._send(404, b"not found", "text/plain")
             self._send(200, (UI / f).read_bytes(), "text/css" if f.endswith(".css") else "text/html; charset=utf-8")
@@ -529,6 +642,10 @@ def handler(sysm):
                     job["promote"].set()
                 elif self.path == "/api/rollback":
                     sysm.rollback(d.get("alert"))
+                elif self.path == "/api/siem":
+                    sysm.siem_control(d.get("action"))
+                elif self.path == "/api/prove" and str(d.get("event_id", "")).startswith("ev_"):
+                    threading.Thread(target=sysm.prove, args=(d["event_id"],), daemon=True).start()
                 else:
                     raise ValueError("unknown request")
                 self._send(204)
@@ -544,7 +661,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="ULPF demo: the system console")
     ap.add_argument("--state", required=True); ap.add_argument("--listen", default="127.0.0.1:8765")
     ap.add_argument("--rt", default=str(ROOT / "runtime" / "bin" / "ulpf-runtime")); ap.add_argument("--golden", default=str(ROOT / "contracts" / "golden" / "squid-native"))
-    ap.add_argument("--in-tcp", default="127.0.0.1:6515"); ap.add_argument("--in-http", default="127.0.0.1:8516"); ap.add_argument("--db-http", default="127.0.0.1:8790"); ap.add_argument("--db-tcp", default="127.0.0.1:8791")
+    ap.add_argument("--in-tcp", default="127.0.0.1:6515"); ap.add_argument("--in-http", default="127.0.0.1:8516"); ap.add_argument("--destinations", default=str(ROOT / "demo" / "apps" / "destinations.json"))
+    ap.add_argument("--spool-cap", default="256MiB"); ap.add_argument("--lake", required=True); ap.add_argument("--lake-status", default="http://127.0.0.1:8792/status")
     ap.add_argument("--python", default="python"); ap.add_argument("--provider", choices=["model", "fixture"], default="fixture")
     ap.add_argument("--model-id", default=""); ap.add_argument("--server", default="http://127.0.0.1:8081"); ap.add_argument("--backend", default="unknown")
     a = ap.parse_args()

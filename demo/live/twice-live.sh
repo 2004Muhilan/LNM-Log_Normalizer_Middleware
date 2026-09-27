@@ -4,7 +4,7 @@
 # it), the event class, the certificates the demo is built around, the request and the number of evidence requests, the
 # assertions, typed values, the ALERT (binding, what propagated, what was promoted, what was withheld, the pack version), the
 # signatures the monitor fired on, the evidence-log records for the outage and the pack changes, and that the accounting
-# balanced (generated == evidence records == database rows). Counts are NOT compared: the generator runs on a clock.
+# balanced (generated == evidence records == SIEM documents == lake rows, one Parquet schema). Counts are NOT compared: the generator runs on a clock.
 # The model's other certificates are NOT compared either: its labels on the unasserted columns vary with the sample
 # lines, which carry real timestamps (they are printed for both runs).
 # Needs what the six steps need: demo/reset.sh once, and the model server for the live provider.

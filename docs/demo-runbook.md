@@ -17,6 +17,36 @@ figures are in [demo-machine-setup.md](demo-machine-setup.md) — prepare the ma
 Measured here: the GTX 1650 laptop, WSL2 at its default 7.7 GB cap, driver 616.64, twice in a row on
 2026-09-07 (§5).
 
+## The demo with pages (laptop branch) — what to say
+
+**Before (T-30 min, network still available once):** `pip install -r learning/requirements.txt` (DuckDB); pull the SIEM
+images (`docker pull opensearchproject/opensearch:2.19.2 opensearchproject/opensearch-dashboards:2.19.2`); then offline:
+`bash demo/preflight.sh` (it checks both images and DuckDB are local), `python3 demo/siem/contract-check.py --limits`
+(the gate's SIEM stand-in answers like the real OpenSearch — run it before the SIEM is under demo load), then
+`bash demo/start-demo.sh`. **Say once, early: the OpenSearch security plugin is disabled in this demo to save memory. It
+is not a production configuration.**
+
+1. **The line to open with (multi-destination):** "ULPF is middleware. It does not know it is talking to OpenSearch or to a
+   lake — a destination is a transport and an encoding, and this one list decides where events go. Each destination has its
+   own cursor over one bounded spool, so a dead one never holds the others back."
+2. Generator: connector, a format, *Start*. System: the application appears; onboarding runs; both destination blocks show
+   **UP** and *ahead by 0*. SIEM (tab 4): the dashboard fills — events by class, denies over time, top sources, quarantine
+   count. Data lake (tab 3): Parquet files per day, **one schema in every file**, lineage columns first.
+3. **The outage:** System → *Stop the SIEM (outage)*. "The SIEM is gone. Watch the two counters: the SIEM's *ahead by* climbs,
+   the lake's stays at zero — ingestion does not wait for anyone, and the lake does not wait for the SIEM. The interruption is
+   itself an evidence record." → *Start the SIEM again*: "Its backlog arrives from its own cursor, the counter falls to zero,
+   and because the document id is the event id, a redelivered event overwrites — nothing is stored twice."
+4. **Detections:** Generator → *Attack burst*; about a minute later the finding is in the System page (and in the SIEM's own
+   Security Analytics page). "We wrote a custom log type and two rules — OpenSearch's prebuilt OCSF rules only cover AWS logs."
+5. **The strongest moment — Prove it:** "Take the SIEM's finding. Its document id is ULPF's event id. From that id: the
+   original bytes out of the evidence log, hashed again right now, their Merkle proof checked under a signed checkpoint by a
+   verifier that holds only a public key — and the same event in the lake, same hash. A SIEM finding back to the original
+   evidence, provably unaltered." (The committer runs in the development seam — sealed, not kernel-immutable; say so if asked.)
+6. Drift, self-healing and the per-log view are unchanged (docs/laptop-branch.md §5).
+
+What not to say: that the lake is "Security Lake compatible" (it follows the layout convention; never tested against it);
+that Splunk or a CEF SIEM was tested (fake receivers only); that the security plugin is on.
+
 ## 1. Before the judges walk in (T-30 min)
 
 The machine is prepared per [demo-machine-setup.md](demo-machine-setup.md). Open two WSL terminals in the
@@ -215,6 +245,12 @@ protected by its API (exclusive create, consecutive versions), read-only file mo
 then names the version. v1 being "byte-identical" is a checked hash, not a cryptographic commitment.
 
 ## The live sequence — generators in, a consumer out, and everything that can go wrong in between (three plain pages)
+
+> **Laptop branch, 2026-09-27:** in the scripted sequence the consumer is now THREE destinations — the SIEM stand-in
+> (`demo/siem/fake_bulk.py`, contract-checked against OpenSearch), the lake writer, and stdout. Phase D kills the SIEM:
+> the lake keeps flowing while the SIEM falls behind, then the SIEM's backlog arrives with no document twice. Phase H
+> balances generated == evidence records == SIEM documents == lake rows (one Parquet schema). The pages described below
+> were removed; read the terminal.
 
 `bash demo/live/run-live.sh` after the usual set-up (reset, model server, UI). Parallel to the six steps; everything it
 writes is under `~/ulpf-demo/live`. **About 3 min at 20 layers, about 2 min at 33** (two model calls; timings in

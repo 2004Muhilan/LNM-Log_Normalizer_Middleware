@@ -52,7 +52,7 @@ page shows when a log is selected (`GET /api/log?id=ev_…` on :8765 returns the
 ## 3. Laptop compatibility
 
 Nothing here is machine-specific: no new dependency (Go stdlib, Python stdlib + what the venv already has), no GPU
-use. Ports of the three-app demo, all on 127.0.0.1: 8780 generator, 8765 system, 8790 + 8791 database, 6515 + 8516 ULPF ingress. Pre-flight still pins 20 GPU layers (the laptop's split) and the default
+use. Ports of the demo, all on 127.0.0.1: 8780 generator, 8765 system (and /lake), 8792 lake writer, 9200 OpenSearch, 5601 Dashboards, 6515 + 8516 ULPF ingress. Pre-flight still pins 20 GPU layers (the laptop's split) and the default
 llama image is the upstream one the laptop uses; `ULPF_LLAMA_IMAGE=ulpf-llama` is a desktop-only override. A fresh
 clone needs its git-ignored inputs: `corpus/cache`, `ocsf/cache`, `models/cache/Qwen3.5-4B-Q4_K_M.gguf`
 (`docs/demo-machine-setup.md`). **Not run on the laptop** — built and gated on the desktop only.
@@ -96,7 +96,10 @@ bash demo/start-demo.sh              # fresh state every time; `bash demo/start-
 |---|---|---|
 | **1 Generator** :8780 (`demo/apps/generator.py`) | a log-producing application, outside ULPF | ingress connector: Syslog over TCP · HTTP POST · Disconnected — format: Positional · CSV · key=value · JSON · XML · LEEF — Start/stop — **Trigger format drift** ("firmware 2.0": the protocol becomes a number, a zone field appears) |
 | **2 System** :8765 (`demo/apps/system.py`) | ULPF: one runtime, the monitor, onboarding and healing | policy **Auto-onboard ON/OFF**, **Answers: prepared sheet / ask me**; per alert **Roll back**; click an application → its incoming logs → click a log → raw / format / normalized |
-| **3 Database** :8790 (`demo/apps/database.py`) | a consumer application (SQLite), outside ULPF | egress connector: HTTP POST · Syslog over TCP · File (stdout connector) · Disconnected; click a row → the stored OCSF event |
+| **3 Data lake** :8765/lake | the lake's own read-only view (DuckDB, fixed queries) | find one event by `event_id` |
+| **4 SIEM** :5601 | OpenSearch Dashboards (the SIEM's own UI): the dashboard and Security Analytics findings | — |
+
+*Replaced 2026-09-27: the SQLite consumer page ("3 Database", `demo/apps/database.py`) is removed; see §7.*
 
 What happens, and on what authority:
 
@@ -128,19 +131,137 @@ offers two connectors because the runtime serves TCP and HTTP together, not UDP.
 itself (it is the operator's console, bound to 127.0.0.1); the binding authenticates nobody, as before.
 `bash demo/apps-check.sh` walks all of this headless through the same HTTP APIs the buttons call.
 
-## 6. The gate (desktop, 2026-09-22, after the last change — the router narrowing included)
+## 7. Egress as middleware — N destinations, a bounded spool, a SIEM and a lake (2026-09-27)
 
-`p1-check` … `p8-check` pass (26 / 74 / 31 / 37 / 83 / 74 / 189 s; zero skipped tests, 26 golden files byte-identical, coverage
-figures regenerate byte for byte); the Go suite and 90 Python tests pass.
+ULPF is not built around a SIEM or a lake. A destination is a **transport plus an encoding**, and anything that speaks a
+supported pair connects with no product-specific code. OCSF stays the internal format; every encoding is a projection of
+it at the edge. Destinations are a list (`--forward` repeated; the demo reads `demo/apps/destinations.json`).
 
-| | six steps, run 1 / run 2 | scripted live sequence, run 1 / run 2 | same facts shown | three-app check, model (key=value, LEEF, JSON) |
+| encoding | transport | flag | tested against |
+|---|---|---|---|
+| OCSF JSON (NDJSON) | HTTP POST | `http(s)://…` | unit tests; the lake writer |
+| OCSF JSON in RFC 5424 | syslog over TCP (RFC 6587) | `syslog+tcp://…` | unit tests (P8) |
+| `_bulk` (OpenSearch / Elasticsearch) | HTTP | `bulk+http(s)://host:port[?index=…]` | **real OpenSearch 2.19.2** + the contract-checked stand-in |
+| Splunk HEC envelope | HTTP | `hec+http(s)://…` (token in `$ULPF_HEC_TOKEN`) | a fake collector only — not a live Splunk |
+| CEF (lossy projection) | syslog over TCP | `cef+tcp://…` | ULPF's own CEF parser reads it back; not a live CEF SIEM |
+| OCSF JSON | stdout / a file | `stdout:` | unit tests |
+| Parquet | HTTP → the lake writer (`adapters/lake`) | `http://…/ingest` | DuckDB; tests; the gate |
+
+**One cursor per destination (confirmed, P8 already did this).** One forwarder per destination, each with its own
+goroutine, backoff and cursor; a dead destination next to a live one delivers nothing and delays nothing (measured:
+500 of 500 events to the live one in 314 ms while the other was down). Cursors are now keyed by the destination's NAME,
+not its position in the list.
+
+**The bounded spool** (`--spool DIR --spool-cap 256MiB --spool-segment 16MiB`; `egress/spool.go`). Before, the spool was
+the `--out` file: one file, never trimmed. Now: 16 MiB segments named by their global offset; a segment is removed when
+every destination has passed it (**the slowest destination governs retention**); above **80 % of the cap** a lagging
+destination gets one `egress_lagging` evidence record ("nothing has been skipped yet"); above the cap the destinations
+still inside the oldest segment are moved past it, each move an **`egress_skipped`** evidence record naming the
+destination, the first and last `event_id`, the count and the byte range — that destination only; the raw bytes stay in
+the evidence log, so the range is recoverable by re-deriving it (**no re-delivery tool is built**). The cap is a flag:
+256 MiB is the demo value (events here are ~1.3 KB: ~206 000 events, ~9.5 h at 6/s); `--spool-cap` defaults to 1 GiB;
+size production as rate × tolerated outage — one hour at 11 600 events/s is ~54 GB. `--out` is unchanged and optional
+with `--spool`; the six steps, the goldens and the phase checks still use it.
+
+**Reversal, recorded: the run RESUMES.** "Every run creates a fresh spool" (P8) is reversed for `--spool`: a run resumes
+the spool and every destination's cursor; `--spool-fresh` starts over. Cursors persist only after the destination
+acknowledged; a destination without acknowledgement (syslog) gets its last batch again after a restart (at most a
+redelivery, never a loss); a half-written last line is cut back on reopening and recorded as `spool_truncated`.
+
+**Rejections (the approved classification).** Per-document 429/5xx inside a bulk answer: retried, those only.
+Whole-request 429/5xx: retried with backoff (a stall). 413: split; a single event still too large is rejected.
+Document-level mapping/parse errors: **`egress_rejected`** evidence record (event, destination, error type, reason), then
+passed over — shown loudly on the System page, because it almost always means the index template is wrong. A whole-request
+400/401/403 is never a rejection (it is our encoding or our credentials): a stall. The bulk action is `index`, not
+`create`: a redelivery overwrites (a new `_version`), it does not duplicate and does not fail with 409.
+
+**The SIEM: OpenSearch 2.19.2 + Dashboards** (`demo/siem/`, Apache 2.0, offline, **security plugin DISABLED to save
+memory — demo only, not hardening**). One index per OCSF class (`ulpf-ocsf-<class_uid>`), an index template (IPs `ip`,
+times `date`, strings keyword, `unmapped` as `flat_object`), `_id = event_id`. Dashboard "ULPF — normalized events":
+events by class, denied connections over time, top source addresses, quarantine count (the console posts its counts to
+`ulpf-metrics`). Security Analytics: its prebuilt OCSF detections cover CloudTrail, Route 53 and VPC Flow only, so a
+custom log type `ulpf_ocsf_network`, two rules — a known-bad address, and a deny spike (an aggregation rule: more than 3
+denies from one source per minute) — and a detector over `ulpf-ocsf-4001` every minute. **Verified against our indices:**
+findings within a minute, naming documents by `_id` = `event_id`. The Generator's **Attack burst** (12 denied flows from
+198.18.7.7) makes the spike rule demonstrable; a per-event "denied" rule was dropped (a finding every second).
+
+**The contract check — the stand-in cannot drift** (`demo/siem/contract-check.py --limits`, outside the gate, run before
+any demo). The gate uses `demo/siem/fake_bulk.py`; the check sends the same requests to it and to real OpenSearch and
+compares what matters (the errors flag; per document status, result, `_version`, error type; the count afterwards): new
+documents, redelivery (updated, v2), an invalid IP rejected alone, the coercions the mapping allows, a type conflict,
+`create` → 409; with `--limits`, a throwaway container with a 4 KB request limit and a one-slot write queue: a real 413,
+and real 429s both as whole requests and per document. It caught a real drift on its first run: OpenSearch names a
+throttled write `rejected_execution_exception`, the stand-in said `es_rejected_execution_exception` (Elasticsearch's
+name) — fixed; ULPF classifies by status, so behaviour did not change.
+
+**The lake: OCSF Parquet in Amazon Security Lake's layout convention** (`adapters/lake/lakewriter.py`, a destination
+adapter that ships with ULPF; DuckDB writes and reads it). `ext/ulpf_<class>/region=local/accountId=000000000000/
+eventDay=YYYYMMDD/part-<spool>-<first>-<last>.parquet` — this FOLLOWS the layout convention; it is **not tested against
+Security Lake**. Local disk only (no object storage: MinIO is archived; SeaweedFS would be the choice, and DuckDB's
+`httpfs` would need pre-baking). Every file's schema comes from the **pinned OCSF class table**, never inferred (tested:
+two batches that inference types differently get one identical schema); lineage columns first (`event_id`, `raw_hash`,
+`segment_id`, `offset`, `length`, the pack), the whole lineage as JSON too; a class with no pinned table is kept whole as
+JSON. Exactly once through redelivery and crashes: ULPF sends each batch's spool range; the writer keeps a durable
+high-water mark per spool, stages with fsync before acknowledging, rotates by size or age, writes a hidden temporary file
+and renames it (a crash never shows a half-written file), names files by their spool range (a repeated flush replaces
+the same file). **Measured cost of the fixed schema:** ~3 600 schema elements (network activity), ~280 KB of footer, ~390
+KB fixed per file — heavy for the demo's 10-second rotation, a few percent for production-sized files.
+DuckDB's own UI does **not** work offline (measured: it serves its page by fetching assets from ui.duckdb.org; with no
+network it answers HTTP 500), so the System console has a read-only lake page with fixed queries (`/lake`).
+
+**The traceability round trip** (`demo/apps/trace.py`; the System page's **Prove it**): a Security Analytics finding →
+its `event_id` → the SIEM document's lineage → the raw bytes from the evidence log, re-hashed → a signed Merkle checkpoint
+(committer in the development seam `ULPF_COMMIT_SEALED=1`, said so) → `ulpf-runtime export` → `ulpf-verify bundle`:
+VERIFY OK → the same event in the lake, same `raw_hash`. Requirements (a) and (d) end to end; where Proof of Derivation
+plugs in later.
+
+**The outage, redone.** *Stop the SIEM* (`docker stop`): the SIEM's block turns red, its *ahead by* climbs (measured 103
+and 115 in two runs), the lake's stays at 0; *Start the SIEM again*: the backlog arrives from its cursor, the counter falls
+to 0, and the SIEM's document count equals the events ULPF parsed — no loss, no duplicate (measured: 695 = 695 = 695 lake
+rows). The scripted live sequence does the same with the stand-in (killed, restarted with its state).
+
+**Memory** (desktop, measured under load): OpenSearch 1.33 GiB (512 MB heap), Dashboards 184 MiB, model server at 20 layers
+1.73 GiB, lake writer 128 MiB, console 125 MiB, runtime 19 MiB. **Laptop estimate** against its 10 GB WSL cap: the model
+server larger there (~2–3 GB with the CPU repack of the layers not on the GPU), so ~5–6.5 GB at peak with Docker's own
+overhead — **expected to fit, with ~3.5 GB to spare; not measured on the laptop.** Do not run `contract-check.py --limits`
+during the demo (it starts a second OpenSearch). Fallbacks: `ULPF_SIEM_DASHBOARDS=0` (OpenSearch only: a screen is lost,
+the System page still shows the SIEM's status and counts), `ULPF_SIEM=fake` (no containers). Disk: the two images are
+~4.7 GB.
+
+## 8. The gate (desktop, 2026-09-27, after the last change — egress as middleware included)
+
+`p1-check` … `p8-check` pass (34 / 47 / 39 / 47 / 102 / 84 / 209 s; zero skipped tests, 26 golden files byte-identical,
+coverage figures regenerate byte for byte); the Go suite (13 packages) and 99 Python tests pass.
+`demo/siem/contract-check.py --limits`: PASS — the stand-in answers like OpenSearch 2.19.2 on every scenario, including a
+real 413 and real 429s (whole-request and per-document).
+
+| | six steps, run 1 / run 2 | scripted live sequence, run 1 / run 2 | same facts shown | demo check, model (key=value, LEEF, JSON), real SIEM |
 |---|---|---|---|---|
-| 20 layers (the laptop's split, pinned) | 89.1 s / 89.3 s | 177 s / 167 s | yes / yes | PASS, 367 s |
-| 33 of 33 layers (desktop only) | 45.7 s / 45.9 s | 134 s / 144 s | yes / yes | PASS, 273 s |
+| 20 layers (the laptop's split, pinned) | 86.4 s / 86.2 s | 196 s / 157 s | yes / yes | PASS, 454 s |
+| 33 of 33 layers (desktop only) | 45.2 s / 47.8 s | 141 s / 141 s | yes / yes | PASS, 369 s |
 
-Three-app check with fixture proposals, all six formats in one session (onboard + drift + answers each, then the database's
-disconnect / reconnect / connector switch): PASS — 377 rows stored for 377 parsed events, 633 duplicates ignored.
-The pages themselves were clicked through in a browser on the desktop (connector, format, start, the application's log list,
-one log's detail, the drift alert, both dropdown answers, the corrected pack). **Nothing here has run on the laptop.**
-One model call was 32–62 s at 20 layers on the desktop; on the laptop expect longer, the six steps at 150–160 s (measured
-there on 2026-09-07) and the scripted live sequence correspondingly slower.
+Demo check with fixture proposals, all six formats in one session, real OpenSearch: PASS — outage: SIEM 94 behind, lake 0;
+a Security Analytics finding (known-bad address) proven back to the evidence in six steps; 692 parsed = 692 SIEM documents
+= 692 lake rows (692 distinct event ids), 0 rejected. In every live run the outage showed the SIEM's cursor frozen (e.g.
+79 → 79) while the lake's advanced (87 → 124).
+
+Found on the way, fixed, stated:
+- `rangeIDs` counted a skipped range as empty (the batch read ran past the range): caught by the skip test.
+- With `--spool`, `--out` was no longer flushed per event, so its live readers saw half lines: restored.
+- The lake writer's JSON path for a class without a pinned table had an operator-precedence bug: caught by its test.
+- The stand-in answered `es_rejected_execution_exception` (Elasticsearch's name) where OpenSearch says
+  `rejected_execution_exception`: caught by the contract check on its first run.
+- Test harness only: the cap test fed its input all at once, so under load a HEALTHY destination was momentarily past the
+  96 KiB test cap and was (correctly, by the approved policy) skipped once — the input is now paced like a live stream;
+  the demo check pressed *drift* before one event of the new pack had been parsed, so the source binding (correctly)
+  refused to heal — it now waits for events to flow first; the live sequence's outage assertion used arbitrary thresholds
+  (SIEM ≥ 40 behind, lake +40) that missed by one or three events — it now asserts the exact invariant (the SIEM's cursor
+  does not move, the lake's advances and stays current).
+- Not fixed, observed once: one gate run's P5 witness test saw an empty bind-mounted bundle directory (Docker Desktop
+  mounting a `/tmp` path); the same test passed standalone at once and in the next two gate runs.
+- Observed once, in the 33-layer configuration (desktop only): the model gave no label for column 6 in one live run, so the
+  certificate the scripted demo is built around did not form (phase B stopped, loudly). The model sees real-timestamped
+  sample lines, which differ every run; the positional onboarding path is unchanged by this work. It passed in the next
+  two 33-layer runs. Not seen at the laptop's 20-layer split.
+
+Not run on the laptop.

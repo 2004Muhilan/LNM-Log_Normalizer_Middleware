@@ -40,8 +40,18 @@ type Options struct {
 	// Egress sink the pipeline flushes Out after every event, reports a sink that stops accepting as an
 	// `egress_stalled` gap record in the evidence log (and `egress_resumed` when it catches up), and drains the
 	// forwarders for EgressDrain before it returns. Ingestion never waits for a sink; nothing is dropped.
-	Egress           []EgressSink
-	SpoolPath        string
+	Egress    []EgressSink
+	SpoolPath string
+	// Laptop branch: a BOUNDED, segmented spool (egress.Spool) instead of SpoolPath. Retention follows the slowest
+	// destination; above SpoolCap the destinations still inside the oldest segment are moved past it, each move an
+	// `egress_skipped` evidence record; above SpoolWarn (default 80 % of the cap) a destination's lag is an
+	// `egress_lagging` record first. The run resumes the spool and every destination's cursor (SpoolFresh starts over).
+	SpoolDir         string
+	SpoolCap         int64
+	SpoolSegment     int64
+	SpoolWarn        float64
+	SpoolFresh       bool
+	SpoolTick        time.Duration // retention check interval (default 250 ms; tests shorten it)
 	EgressStallAfter time.Duration
 	EgressDrain      time.Duration
 	EgressTimeout    time.Duration
@@ -192,6 +202,75 @@ func (p *Pipeline) Reload(packs []*pack.Pack, reason string) error {
 	return nil
 }
 
+// retention keeps the segmented spool bounded (laptop branch). Every tick: closed segments every destination has passed
+// are removed (the slowest destination governs retention); a destination whose lag passes the warning mark gets one
+// `egress_lagging` record (re-armed below half of it); when the retained bytes pass the cap, every destination still
+// inside the oldest closed segment is asked to move past it — the forwarder records the move as `egress_skipped` — and
+// the segment is removed on a later tick, once no cursor points into it. The disk can exceed the cap by about one
+// segment plus what arrives between two ticks; the cap must be at least two segments.
+func (p *Pipeline) retention(spool *egress.Spool, fw []*egress.Forwarder, o Options, sourceID string, now func() time.Time, stop chan struct{}) {
+	capB := o.SpoolCap
+	if capB <= 0 {
+		capB = 1 << 30
+	}
+	warn := o.SpoolWarn
+	if warn <= 0 || warn >= 1 {
+		warn = 0.8
+	}
+	warned := make([]bool, len(fw))
+	tick := o.SpoolTick
+	if tick <= 0 {
+		tick = 250 * time.Millisecond
+	}
+	t := time.NewTicker(tick)
+	defer t.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
+		segs := egress.ListSegments(spool.Dir)
+		if len(segs) == 0 {
+			continue
+		}
+		head, open := spool.Head(), spool.OpenBase()
+		minCur := head
+		for i, f := range fw {
+			c := f.Offset()
+			if c < minCur {
+				minCur = c
+			}
+			lag := head - c
+			switch {
+			case !warned[i] && float64(lag) > warn*float64(capB):
+				warned[i] = true
+				cur := f.Cursor()
+				p.mu.Lock()
+				p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "egress_lagging", SourceID: sourceID, Channel: "egress:" + cur.Sink, Peer: cur.Sink, DetectedAt: now().UnixMilli(),
+					LastEventID: cur.LastEventID, Missing: lag, Expected: capB,
+					Detail: fmt.Sprintf("this destination is %d bytes behind, past %.0f%% of the spool cap (%d bytes): if it does not recover, the oldest events it has not received will be skipped for it — nothing has been skipped yet", lag, warn*100, capB)}, cur.Sink)
+				p.mu.Unlock()
+			case warned[i] && float64(lag) < warn*float64(capB)/2:
+				warned[i] = false
+			}
+		}
+		for _, sg := range segs {
+			if sg.Base != open && sg.End() <= minCur {
+				spool.Remove(sg)
+			}
+		}
+		segs = egress.ListSegments(spool.Dir)
+		if len(segs) > 1 && head-segs[0].Base > capB && segs[0].Base != open {
+			for _, f := range fw {
+				if f.Offset() < segs[0].End() {
+					f.RequestSkip(segs[0].End())
+				}
+			}
+		}
+	}
+}
+
 func (p *Pipeline) appendGap(r gap.Record, peer string) {
 	b := gap.Canonical(r)
 	fr := frame.Framing{Method: evidence.MethodGapRecord, RawPrefix: []byte{}, RawSuffix: []byte{}, FragmentCount: 1, OriginalMessageLength: len(b), TruncationStatus: "none", FramingConfidence: "high"}
@@ -274,8 +353,24 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 	// interruption of ARRIVAL does
 	var forwarders []*egress.Forwarder
 	reported := map[string]bool{}
+	var spool *egress.Spool
+	if o.SpoolDir != "" && len(o.Egress) > 0 {
+		var trunc *egress.Truncation
+		var err error
+		if spool, trunc, err = egress.OpenSpool(o.SpoolDir, o.SpoolSegment, o.SpoolFresh); err != nil {
+			return st, err
+		}
+		defer spool.Close()
+		if trunc != nil {
+			p.mu.Lock()
+			p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "spool_truncated", SourceID: sourceID, Channel: "egress:spool", Peer: trunc.Segment, DetectedAt: now().UnixMilli(),
+				Missing: trunc.Bytes, Observed: trunc.At,
+				Detail: fmt.Sprintf("a half-written line at the end of spool segment %s (%d bytes) was cut on restart: the event it held is not delivered from the spool; its raw bytes are in the evidence log", trunc.Segment, trunc.Bytes)}, "spool")
+			p.mu.Unlock()
+		}
+	}
 	if len(o.Egress) > 0 {
-		if o.SpoolPath == "" {
+		if o.SpoolPath == "" && spool == nil {
 			return st, fmt.Errorf("egress needs the normalized output in a file (--out FILE): the file is the delivery spool")
 		}
 		timeout := o.EgressTimeout
@@ -288,7 +383,25 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 				return st, err
 			}
 			name := sink.Name()
-			f := &egress.Forwarder{Spool: o.SpoolPath, CursorPath: e.CursorPath, Sink: sink, StallAfter: o.EgressStallAfter,
+			f := &egress.Forwarder{Spool: o.SpoolPath, Seg: spool, CursorPath: e.CursorPath, Sink: sink, StallAfter: o.EgressStallAfter,
+				OnSkip: func(s egress.Skip) {
+					p.mu.Lock()
+					defer p.mu.Unlock()
+					what := fmt.Sprintf("%d event(s), %s … %s", s.Count, s.FirstID, s.LastID)
+					if s.Count < 0 {
+						what = "a range already removed from the spool (this destination's cursor was older than the retained spool)"
+					}
+					p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "egress_skipped", SourceID: sourceID, Channel: "egress:" + name, Peer: name, DetectedAt: now().UnixMilli(),
+						LastEventID: s.LastID, Missing: s.Count, Expected: s.From, Observed: s.To,
+						Detail: fmt.Sprintf("spool cap reached while this destination was the slowest: %s (spool bytes %d–%d) will not be delivered to it; this destination only — every other destination is unaffected. The raw bytes remain in the evidence log, so the range is recoverable by re-deriving from it; no re-delivery tool is built", what, s.From, s.To)}, name)
+				},
+				OnReject: func(r egress.Reject) {
+					p.mu.Lock()
+					defer p.mu.Unlock()
+					p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "egress_rejected", SourceID: sourceID, Channel: "egress:" + name, Peer: name, DetectedAt: now().UnixMilli(),
+						LastEventID: r.EventID, Missing: 1,
+						Detail: fmt.Sprintf("the destination refused event %s permanently (%s: %s); passed over for this destination. The event stays in the evidence log and in every destination that accepted it — a rejection usually means the destination's index template is wrong", r.EventID, r.Type, r.Reason)}, name)
+				},
 				OnStall: func(s egress.Stall) {
 					p.mu.Lock()
 					defer p.mu.Unlock()
@@ -304,11 +417,21 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 						LastSeenAt: s.Since.UnixMilli(), LastEventID: s.LastEventID, SilenceMS: s.Duration.Milliseconds(), Missing: s.LagEvents,
 						Detail: fmt.Sprintf("sink accepting again: %d event(s) delivered late, none dropped", s.LagEvents)}, name)
 				}}
-			if err := f.Start(true); err != nil { // the run has just created the spool: the cursor starts at zero
+			if err := f.Start(spool == nil || o.SpoolFresh); err != nil { // a single-file spool was just created by this run: the cursor starts at zero; a segmented spool resumes
 				return st, err
 			}
 			forwarders = append(forwarders, f)
 		}
+	}
+	stopRetention := make(chan struct{})
+	retentionDone := make(chan struct{})
+	if spool != nil {
+		go func() {
+			defer close(retentionDone)
+			p.retention(spool, forwarders, o, sourceID, now, stopRetention)
+		}()
+	} else {
+		close(retentionDone)
 	}
 	// silence sweeps while a listener source runs (a file source ends before any sweep matters)
 	stopSweep := make(chan struct{})
@@ -438,8 +561,15 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 		if _, err := out.Write(append(b, '\n')); err != nil {
 			return err
 		}
+		if spool != nil {
+			if err := spool.Append(append(b, '\n')); err != nil {
+				return err
+			}
+		}
 		if len(forwarders) > 0 {
-			if err := out.Flush(); err != nil { // the spool is read by the forwarders: an event is deliverable as soon as it is emitted
+			// the single-file spool is read by the forwarders; with a segmented spool, --out is still read live (the
+			// drift monitor, the demo console): in both cases an emitted event is a complete line at once, as before
+			if err := out.Flush(); err != nil {
 				return err
 			}
 		}
@@ -497,6 +627,8 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 			st.Egress = append(st.Egress, es)
 		}
 	}
+	close(stopRetention) // after the drain: a destination still lagging while the others drain is still bounded
+	<-retentionDone
 	p.mu.Lock()
 	st.Peers = p.tracker.Peers()
 	if err == nil {

@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""The lake writer — a DESTINATION ADAPTER that ships with ULPF, like any other destination on the far side of egress:
+ULPF delivers normalized OCSF events to it over plain HTTP (NDJSON), and it writes them as Parquet, one path per OCSF
+class, partitioned by day, following Amazon Security Lake's layout convention:
+
+    <lake>/ext/ulpf_<class_name>/region=<region>/accountId=<account>/eventDay=<YYYYMMDD>/part-<spool>-<first>-<last>.parquet
+
+We claim this FOLLOWS Security Lake's layout conventions; it has not been tested against Security Lake. Local disk only.
+
+    python adapters/lake/lakewriter.py --lake DIR [--listen 127.0.0.1:8792] [--rotate-bytes 8MiB] [--rotate-seconds 30]
+    ulpf-runtime run ... --spool SPOOL --forward http://127.0.0.1:8792/ingest
+
+Why each event lands exactly once, through outages and crashes of either side:
+  * ULPF sends every batch with its place in its spool (X-ULPF-Spool-Id / -Start / -End). The writer keeps a DURABLE
+    high-water mark per spool: a batch (or the part of one) below it was already staged and is acknowledged without
+    being staged again. A request without the headers is refused (400): run ULPF with --spool.
+  * A batch is acknowledged only after it is appended to the staging file and fsynced AND the state (high-water mark,
+    staging length) is replaced atomically. On start, the staging file is cut back to the length the state names, so a
+    batch staged but not committed is simply staged again when ULPF redelivers it.
+  * Rotation (by size or by age) groups the staged events by (spool, class, day), writes each group to a hidden
+    temporary file, fsyncs it and RENAMES it into place — a crash never leaves a half-written Parquet file visible —
+    and names it by the spool range of its rows, so a flush repeated after a crash replaces the same file with the same
+    rows. Only then is the staging file emptied.
+  * The schema of every file of a class comes from the pinned OCSF table (schema.py), never from inference.
+A conversion failure is loud: the rows stay staged (never dropped), /status carries the error, and the next rotation
+tries again.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import http.server
+import json
+import os
+import sys
+import threading
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import schema  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def parse_bytes(s: str) -> int:
+    for suf, mul in (("KiB", 1 << 10), ("MiB", 1 << 20), ("GiB", 1 << 30), ("B", 1)):
+        if s.endswith(suf):
+            return int(float(s[:-len(suf)]) * mul)
+    return int(s)
+
+
+def fsync_dir(d: Path):
+    fd = os.open(str(d), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+class Lake:
+    def __init__(self, lake: Path, pinned: Path, rotate_bytes: int, rotate_seconds: float, region: str, account: str):
+        import duckdb  # noqa: F401  (fail at start, not at the first rotation, when the wheel is missing)
+        self.lake, self.pinned = Path(lake), str(pinned)
+        self.rotate_bytes, self.rotate_seconds, self.region, self.account = rotate_bytes, rotate_seconds, region, account
+        self.wdir = self.lake / "_writer"
+        self.wdir.mkdir(parents=True, exist_ok=True)
+        self.staging, self.state_path = self.wdir / "staging.jsonl", self.wdir / "state.json"
+        self.lock = threading.Lock()
+        self.st = {"marks": {}, "staging_bytes": 0, "staged_rows": 0, "oldest_staged_at": None}
+        if self.state_path.exists():
+            self.st.update(json.loads(self.state_path.read_text(encoding="utf-8")))
+        size = self.staging.stat().st_size if self.staging.exists() else 0
+        if size > self.st["staging_bytes"]:
+            with open(self.staging, "r+b") as f:   # a batch staged but never committed: ULPF will send it again
+                f.truncate(self.st["staging_bytes"])
+                f.flush()
+                os.fsync(f.fileno())
+        self.stats = {"received_batches": 0, "received_rows": 0, "duplicate_rows_ignored": 0, "rows_written": 0, "files_written": 0,
+                      "last_flush": None, "last_error": None, "started": time.time()}
+
+    # ------------------------------------------------------------------ ingest
+    def _commit_state(self):
+        tmp = self.state_path.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self.st, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, self.state_path)
+
+    def ingest(self, body: bytes, spool: str, start: int, end: int) -> int:
+        """Stage the lines of [start, end) that lie at or above the spool's high-water mark; returns rows staged."""
+        with self.lock:
+            mark = int(self.st["marks"].get(spool, 0))
+            self.stats["received_batches"] += 1
+            if end <= mark:
+                self.stats["duplicate_rows_ignored"] += body.count(b"\n")
+                return 0
+            out, off = [], start
+            for line in body.split(b"\n"):
+                if not line.strip():
+                    continue
+                if off >= mark:
+                    out.append(f"{spool} {off} ".encode() + line + b"\n")
+                else:
+                    self.stats["duplicate_rows_ignored"] += 1
+                off += len(line) + 1   # the spool line and its newline, exactly as ULPF counted it
+            if off != end:
+                raise ValueError(f"the batch's lines cover spool bytes {start}–{off}, the headers say {start}–{end}")
+            data = b"".join(out)
+            with open(self.staging, "ab") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            self.st["marks"][spool] = end
+            self.st["staging_bytes"] += len(data)
+            self.st["staged_rows"] += len(out)
+            if out and not self.st["oldest_staged_at"]:
+                self.st["oldest_staged_at"] = time.time()
+            self._commit_state()   # the acknowledgement's commit point
+            self.stats["received_rows"] += len(out)
+            return len(out)
+
+    # ------------------------------------------------------------------ rotation
+    def due(self) -> bool:
+        return self.st["staging_bytes"] > 0 and (self.st["staging_bytes"] >= self.rotate_bytes or time.time() - (self.st["oldest_staged_at"] or time.time()) >= self.rotate_seconds)
+
+    def flush(self, force: bool = False) -> int:
+        import duckdb
+        with self.lock:
+            if not self.st["staging_bytes"] or not (force or self.due()):
+                return 0
+            groups: dict[tuple, list] = {}
+            with open(self.staging, "rb") as f:
+                for line in f:
+                    spool, off, ev = line.split(b" ", 2)
+                    e = json.loads(ev)
+                    cu = e.get("class_uid")
+                    ms = e.get("time") or (e.get("_lineage") or {}).get("ingest_time") or 0
+                    day = dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%Y%m%d")
+                    groups.setdefault((spool.decode(), cu, day), []).append((int(off), ev))
+            classes = schema.pinned_classes(self.pinned)
+            written = 0
+            try:
+                con = duckdb.connect()
+                for (spool, cu, day), rows in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]), kv[0][2])):
+                    name = f"ulpf_{classes[cu]['name']}" if cu in classes else f"ulpf_class_{cu}"
+                    d = self.lake / "ext" / name / f"region={self.region}" / f"accountId={self.account}" / f"eventDay={day}"
+                    d.mkdir(parents=True, exist_ok=True)
+                    final = d / f"part-{spool[:12]}-{rows[0][0]:020d}-{rows[-1][0]:020d}.parquet"
+                    src, tmp = self.wdir / "group.jsonl", d / ("." + final.name + ".tmp")
+                    src.write_bytes(b"".join(ev.rstrip(b"\n") + b"\n" for _, ev in rows))
+                    reader = (f"read_json('{src}', format='newline_delimited', columns={schema.read_columns(self.pinned, cu)})" if cu in classes
+                              else f"read_json_objects('{src}', format='newline_delimited')")
+                    con.execute(f"COPY (SELECT {schema.select_list(self.pinned, cu if cu in classes else None)} FROM {reader}) TO '{tmp}' (FORMAT parquet, COMPRESSION zstd)")
+                    with open(tmp, "rb") as fh:
+                        os.fsync(fh.fileno())
+                    os.replace(tmp, final)
+                    fsync_dir(d)
+                    written += len(rows)
+                    self.stats["files_written"] += 1
+                con.close()
+            except Exception as ex:   # loud, and nothing is lost: the rows stay staged and the next rotation tries again
+                self.stats["last_error"] = f"{type(ex).__name__}: {str(ex)[:400]}"
+                return 0
+            with open(self.staging, "r+b") as f:
+                f.truncate(0)
+                f.flush()
+                os.fsync(f.fileno())
+            self.st.update(staging_bytes=0, staged_rows=0, oldest_staged_at=None)
+            self._commit_state()
+            self.stats.update(rows_written=self.stats["rows_written"] + written, last_flush=time.time(), last_error=None)
+            return written
+
+    def status(self) -> dict:
+        with self.lock:
+            return {"app": "ulpf lake writer", "lake": str(self.lake), **self.stats, "staged_rows": self.st["staged_rows"], "staging_bytes": self.st["staging_bytes"],
+                    "high_water_marks": dict(self.st["marks"]), "at": time.time()}
+
+
+def handler(lake: Lake):
+    class H(http.server.BaseHTTPRequestHandler):
+        def _send(self, code, body=b"", ctype="application/json"):
+            self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body)
+
+        def do_POST(self):
+            if not self.path.startswith("/ingest"):
+                return self._send(404, b"not found", "text/plain")
+            body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            spool, start, end = self.headers.get("X-ULPF-Spool-Id"), self.headers.get("X-ULPF-Spool-Start"), self.headers.get("X-ULPF-Spool-End")
+            if not (spool and start and end):
+                return self._send(400, b"the lake writer needs X-ULPF-Spool-Id/-Start/-End: run ULPF with --spool DIR", "text/plain")
+            try:
+                lake.ingest(body, spool, int(start), int(end))
+            except (ValueError, OSError) as ex:
+                return self._send(400 if isinstance(ex, ValueError) else 503, str(ex).encode(), "text/plain")
+            self._send(204)   # after the fsync and the state commit: ULPF may advance its cursor
+
+        def do_GET(self):
+            if self.path.startswith("/status"):
+                return self._send(200, json.dumps(lake.status()).encode())
+            if self.path.startswith("/flush"):
+                n = lake.flush(force=True)
+                return self._send(200, json.dumps({"rows_written": n, **lake.status()}).encode())
+            self._send(404, b"not found", "text/plain")
+
+        def log_message(self, *a):
+            pass
+    return H
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="ULPF lake writer: OCSF Parquet in Security Lake's layout convention")
+    ap.add_argument("--lake", required=True); ap.add_argument("--listen", default="127.0.0.1:8792")
+    ap.add_argument("--pinned", default=str(ROOT / "ocsf" / "pinned")); ap.add_argument("--rotate-bytes", default="8MiB"); ap.add_argument("--rotate-seconds", type=float, default=30)
+    ap.add_argument("--region", default="local"); ap.add_argument("--account-id", default="000000000000"); ap.add_argument("--status")
+    a = ap.parse_args()
+    lake = Lake(Path(a.lake), Path(a.pinned), parse_bytes(a.rotate_bytes), a.rotate_seconds, a.region, a.account_id)
+    stop = threading.Event()
+
+    def rotator():
+        while not stop.is_set():
+            lake.flush()
+            if a.status:
+                tmp = a.status + ".tmp"
+                Path(tmp).write_text(json.dumps(lake.status()), encoding="utf-8")
+                os.replace(tmp, a.status)
+            stop.wait(1.0)
+    threading.Thread(target=rotator, daemon=True).start()
+    host, port = a.listen.rsplit(":", 1)
+    srv = http.server.ThreadingHTTPServer((host, int(port)), handler(lake))
+    print(f"lake writer: http://{a.listen}/ingest -> {a.lake}", flush=True)
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        lake.flush(force=True)   # a clean stop leaves nothing staged
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -88,6 +89,10 @@ func main() {
 		var forwards packList
 		fs.Var(&forwards, "forward", "P8 egress (repeatable): syslog+tcp://host:port (RFC 5424 over RFC 6587 octet counting) | http(s)://collector/path (NDJSON POST) | stdout: — needs --out FILE (the delivery spool); a sink that stops accepting costs no event: delivery resumes from a persisted cursor and the interruption is a gap record in the evidence log")
 		fwdStall := fs.Duration("forward-stall-after", 3*time.Second, "egress: report a sink as stalled (egress_stalled gap record) after this long without an accepted batch")
+		spoolDir := fs.String("spool", "", "laptop branch: a BOUNDED, segmented delivery spool directory for --forward (instead of the --out file): every destination has its own cursor there, the slowest governs retention, and the run RESUMES the spool and the cursors; with --spool, --out is optional")
+		spoolCap := fs.String("spool-cap", "1GiB", "with --spool: bytes retained for the slowest destination (demo: 256MiB). Past it, that destination skips the oldest segment and each skip is an egress_skipped evidence record. Size it as rate x tolerated outage: 1 h at 11,600 events/s of ~1.3 KB is ~54 GB")
+		spoolSeg := fs.String("spool-segment", "16MiB", "with --spool: segment size (the unit of retention and of skipping)")
+		spoolFresh := fs.Bool("spool-fresh", false, "with --spool: discard the previous spool and every cursor and start over (the default is to resume)")
 		fwdDrain := fs.Duration("forward-drain", 10*time.Second, "egress: at the end of input, wait this long for sinks to catch up; what is left stays spooled (exit 3)")
 		mlPath := fs.String("ml-out", "", "ML feature records JSONL (requirement h): (template_id, parameter_vector, timestamp, entity_ids)")
 		input := fs.String("input", "", "input file (use - for stdin)")
@@ -177,6 +182,11 @@ func main() {
 			in = f
 		}
 		out := os.Stdout
+		outSet := false
+		fs.Visit(func(fl *flag.Flag) { outSet = outSet || fl.Name == "out" })
+		if *spoolDir != "" && !outSet { // with a segmented spool the normalized copy on stdout would collide with a stdout: destination
+			out = nil
+		}
 		if *outPath != "-" {
 			f, err := os.Create(*outPath)
 			die(err)
@@ -200,7 +210,10 @@ func main() {
 			defer f.Close()
 			mlw = f
 		}
-		var outW io.Writer = out
+		var outW io.Writer = io.Discard
+		if out != nil {
+			outW = out
+		}
 		var lakeW *lake.Writer
 		if *lakeDir != "" {
 			// invariant 8: the live path seals normalization@v1; it can never reopen it (lake.Create is exclusive)
@@ -209,7 +222,7 @@ func main() {
 			for _, p := range packs {
 				lw.AddPack(p.PackID + "@" + p.PackVersion)
 			}
-			lakeW, outW = lw, io.MultiWriter(out, lw)
+			lakeW, outW = lw, io.MultiWriter(outW, lw)
 		}
 		o := pipeline.Options{Packs: packs, SourceID: *sourceID, ML: mlw, EvidenceDir: *evDir, Collector: *collector, Channel: *channel, Out: outW, Quarantine: q, FailAfterRawWrite: *failAfter,
 			MaxEventBytes: *maxEvent, NoDebatch: *noDebatch, SilenceAfter: *silence}
@@ -227,9 +240,20 @@ func main() {
 			n := 0
 			o.NewID = func(time.Time) string { n++; return fmt.Sprintf("ev_%026d", n) }
 		}
-		if len(forwards) > 0 {
+		if len(forwards) > 0 && *spoolDir != "" {
+			capB, err1 := parseBytes(*spoolCap)
+			segB, err2 := parseBytes(*spoolSeg)
+			die(errors.Join(err1, err2))
+			if capB < 2*segB {
+				die(fmt.Errorf("--spool-cap (%d bytes) must be at least two segments (--spool-segment %d bytes)", capB, segB))
+			}
+			o.SpoolDir, o.SpoolCap, o.SpoolSegment, o.SpoolFresh, o.EgressStallAfter, o.EgressDrain = *spoolDir, capB, segB, *spoolFresh, *fwdStall, *fwdDrain
+			for _, u := range forwards {
+				o.Egress = append(o.Egress, pipeline.EgressSink{URL: u})
+			}
+		} else if len(forwards) > 0 {
 			if *outPath == "-" {
-				die(fmt.Errorf("--forward needs --out FILE: the file is the delivery spool the cursor points into"))
+				die(fmt.Errorf("--forward needs --out FILE (the delivery spool the cursor points into) or --spool DIR"))
 			}
 			o.SpoolPath, o.EgressStallAfter, o.EgressDrain = *outPath, *fwdStall, *fwdDrain
 			for i, u := range forwards {
@@ -490,6 +514,28 @@ func main() {
 	default:
 		usage()
 	}
+}
+
+// parseBytes reads 256MiB, 1GiB, 16MB, 4096.
+func parseBytes(s string) (int64, error) {
+	units := []struct {
+		suf string
+		mul int64
+	}{{"KiB", 1 << 10}, {"MiB", 1 << 20}, {"GiB", 1 << 30}, {"TiB", 1 << 40}, {"KB", 1e3}, {"MB", 1e6}, {"GB", 1e9}, {"TB", 1e12}, {"B", 1}}
+	for _, u := range units {
+		if strings.HasSuffix(s, u.suf) {
+			var n float64
+			if _, err := fmt.Sscanf(strings.TrimSuffix(s, u.suf), "%g", &n); err != nil || n <= 0 {
+				return 0, fmt.Errorf("bad size %q", s)
+			}
+			return int64(n * float64(u.mul)), nil
+		}
+	}
+	var n int64
+	if _, err := fmt.Sscanf(s, "%d", &n); err != nil || n <= 0 {
+		return 0, fmt.Errorf("bad size %q", s)
+	}
+	return n, nil
 }
 
 // packList is a repeatable --pack flag.

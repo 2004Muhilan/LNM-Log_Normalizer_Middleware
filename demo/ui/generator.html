@@ -1,12 +1,12 @@
 <!doctype html><meta charset=utf-8><title>Generator — ULPF demo</title><link rel=stylesheet href=theme.css>
 <header><span class=brand>Generator<small>a log-producing application, outside ULPF</small></span>
-<a class="pill here" href="http://127.0.0.1:8780/">1 Generator</a><a class=pill href="http://127.0.0.1:8765/">2 System</a><a class=pill href="http://127.0.0.1:8790/">3 Database</a></header>
+<a class="pill here" href="http://127.0.0.1:8780/">1 Generator</a><a class="pill" href="http://127.0.0.1:8765/">2 System</a><a class="pill" href="http://127.0.0.1:8765/lake">3 Data lake</a><a class=pill href="http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview" target=_blank>4 SIEM ↗</a></header>
 <main>
 <div class=row>
  <div class=panel><h2>1 · Connect to ULPF through an ingress connector</h2><div class=btns id=conn></div><p class=lab id=connstate></p></div>
  <div class=panel><h2>2 · Log format</h2><div class=btns id=shape></div></div>
- <div class=panel><h2>3 · Generate</h2><div class=btns><button id=run class=go></button><button id=drift class=warn></button></div>
-  <p class=lab>Drift = "firmware 2.0": the protocol becomes a number and a zone field appears, in whatever format is on.</p></div>
+ <div class=panel><h2>3 · Generate</h2><div class=btns><button id=run class=go></button><button id=drift class=warn></button><button id=burst onclick="set({burst:true})">Attack burst</button></div>
+  <p class=lab>Drift = "firmware 2.0": the protocol becomes a number and a zone field appears, in whatever format is on.<br>Attack burst = 12 denied flows from one source (198.18.7.7) at once: the SIEM's deny-spike rule fires within a minute.</p></div>
 </div>
 <div class=row>
  <div class=panel style="flex:0 0 260px;min-width:220px"><div class=lab>generated</div><div class=big id=gen>0</div><div class=lab>sent <b id=sent>0</b> · waiting to be sent <b id=back>0</b></div><table id=by style="margin-top:12px"></table></div>

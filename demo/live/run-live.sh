@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # The LIVE sequence (parallel to the six rehearsed steps; everything it writes is under $STATE/live):
 #
-#   flowgen x2 (generator apps) --syslog/TCP + HTTP POST--> ONE ULPF runtime --HTTP POST + stdout--> database.py (consumer app, SQLite, its own page)
+#   flowgen x2 (generator apps) --syslog/TCP + HTTP POST--> ONE ULPF runtime --bounded spool--> THREE destinations, each with its own cursor:
+#        SIEM (bulk encoding over HTTP; here demo/siem/fake_bulk.py, the contract-checked stand-in for OpenSearch),
+#        data lake (adapters/lake/lakewriter.py: OCSF Parquet, Security Lake layout) and stdout -> a file
 #
 #   A  an unrecognised source arrives: quarantined, bytes kept, nothing parsed or guessed — UNTIL A HUMAN SAYS "onboard this" (Tier 1)
 #   B  onboarding, automatic from there except for ambiguity: samples out of the evidence log, the model, certificates, the
 #      operator's assertions, a signed pack, HOT-LOADED (SIGHUP; the activation is an evidence-log record) — no restart, no pause
 #   C  flowing: two ingress connectors, two egress connectors, typed OCSF values in somebody else's database
-#   D  EGRESS OUTAGE: the consumer is killed; ingestion continues; the outage is an evidence leaf; on restart the backlog is
-#      delivered from the cursor and the row count catches up
+#   D  EGRESS OUTAGE: the SIEM is killed; ingestion continues AND THE LAKE KEEPS FLOWING (its own cursor); the SIEM falls
+#      behind, the outage is an evidence leaf; on restart its backlog is delivered from its cursor, no document twice (_id)
 #   E  DRIFT on both generators: the monitor fires; the source HEALS ITSELF (tools/autoheal.py) — 8 of 10 columns on the operator's
 #      earlier evidence, pack 1.1, an alert; the 2 columns nobody has evidence for are WITHHELD and asked, never guessed
 #   F  the operator answers those two: pack 1.2
@@ -18,14 +20,14 @@
 # repeatable gate (twice-live.sh). The interactive demo, driven by buttons on three pages, is demo/start-demo.sh.
 source "$(dirname "$(readlink -f "$0")")/../lib.sh"
 cd "$ROOT"
-LIVE="$STATE/live"; IN_PORT="${ULPF_LIVE_TCP_PORT:-6515}"; SINK_ADDR="${ULPF_LIVE_SINK:-127.0.0.1:8790}"; RATE="${ULPF_LIVE_RATE:-8}"
+LIVE="$STATE/live"; IN_PORT="${ULPF_LIVE_TCP_PORT:-6515}"; SINK_ADDR="${ULPF_LIVE_SINK:-127.0.0.1:8790}"; LAKE_ADDR="${ULPF_LIVE_LAKE:-127.0.0.1:8792}"; RATE="${ULPF_LIVE_RATE:-8}"
 SRC="flowtap-01"; INTERACTIVE=0   # scripted only: the interactive demo is demo/start-demo.sh (three apps, three pages)
 T_START=$(date +%s.%N)
 
 stop_all() {
   [ -f "$LIVE/gen.control" ] && echo stop > "$LIVE/gen.control"
   touch "$LIVE/watch.stop" 2>/dev/null
-  for f in runtime sink gen gen2 watch; do [ -f "$LIVE/$f.pid" ] && kill "$(cat "$LIVE/$f.pid")" 2>/dev/null; rm -f "$LIVE/$f.pid"; done
+  for f in runtime sink lake gen gen2 watch; do [ -f "$LIVE/$f.pid" ] && kill "$(cat "$LIVE/$f.pid")" 2>/dev/null; rm -f "$LIVE/$f.pid"; done
 }
 fail() { phase_set "$PHASE" failed "$1"; echo "---- live phase $PHASE FAILED: $1"; stop_all; exit 1; }
 phase_set() { # id state [note]
@@ -65,20 +67,21 @@ start_runtime() { # ONE runtime for the whole sequence: two ingress connectors, 
   local d="$LIVE/run-1"; mkdir -p "$d"; : > "$LIVE/packs.txt"
   freeport_check "$IN_PORT" || fail "port $IN_PORT busy"; freeport_check "$HTTP_PORT" || fail "port $HTTP_PORT busy"
   "$RT" run --pack "$GOLDEN" --packs-file "$LIVE/packs.txt" --source-id live-ingress-01 --listen "tcp:127.0.0.1:$IN_PORT" --listen "http:127.0.0.1:$HTTP_PORT" --idle-timeout 600s \
-     --evidence "$LIVE/ev" --out "$d/out.jsonl" --quarantine "$d/q.jsonl" --forward "http://$SINK_ADDR/ingest" --forward "stdout:" --forward-stall-after 2s --forward-drain 15s \
+     --evidence "$LIVE/ev" --out "$d/out.jsonl" --quarantine "$d/q.jsonl" --spool "$LIVE/spool" --spool-cap 256MiB --spool-segment 16MiB \
+     --forward "bulk+http://$SINK_ADDR" --forward "http://$LAKE_ADDR/ingest" --forward "stdout:" --forward-stall-after 2s --forward-drain 15s \
      > "$d/egress-stdout.ndjson" 2> "$d/runtime.err" &
   echo $! > "$LIVE/runtime.pid"
   wait_for 10 "the runtime to listen" bash -c "! kill -0 \$(cat '$LIVE/runtime.pid') 2>/dev/null || { ss -ltn | grep -q ':$IN_PORT ' && ss -ltn | grep -q ':$HTTP_PORT '; }"
   kill -0 "$(cat "$LIVE/runtime.pid")" 2>/dev/null || { cat "$d/runtime.err"; fail "runtime did not start"; }
   packs_status
-  echo "runtime up: ingress syslog/TCP :$IN_PORT + HTTP :$HTTP_PORT  ->  egress HTTP POST $SINK_ADDR + stdout (run-1/egress-stdout.ndjson)"
+  echo "runtime up: ingress syslog/TCP :$IN_PORT + HTTP :$HTTP_PORT  ->  bounded spool -> SIEM (bulk $SINK_ADDR) + lake (HTTP $LAKE_ADDR) + stdout (run-1/egress-stdout.ndjson)"
 }
 packs_status() { python3 - "$LIVE" "$GOLDEN" <<'EOF'
 import json, os, sys
 L, golden = sys.argv[1:3]
 dirs = [golden] + [l.strip() for l in open(f"{L}/packs.txt") if l.strip()]
 st = json.load(open(f"{L}/status.json")); docs = [json.load(open(d + "/pack.json")) for d in dirs]
-st["runtime"] = {"run": 1, "packs": [f"{p['pack_id']} v{p['pack_version']}" for p in docs], "ingress": ["syslog/TCP", "HTTP POST"], "egress": ["HTTP POST -> sink", "stdout -> file"]}
+st["runtime"] = {"run": 1, "packs": [f"{p['pack_id']} v{p['pack_version']}" for p in docs], "ingress": ["syslog/TCP", "HTTP POST"], "egress": ["SIEM: bulk over HTTP", "data lake: HTTP -> Parquet", "stdout -> file"]}
 json.dump(st, open(f"{L}/status.json.tmp", "w"), indent=1); os.replace(f"{L}/status.json.tmp", f"{L}/status.json")
 EOF
 }
@@ -93,7 +96,10 @@ reload_packs() { # pack dirs... -> packs.txt, SIGHUP; the runtime swaps between 
 wait_reloads() { wait_for 15 "the runtime to reload" bash -c "[ \$(grep -ac '^reloaded:' '$LIVE/run-1/runtime.err') -ge $1 ]"; packs_status; }
 gaps_json() { local t="$LIVE/gaps.json.$BASHPID.tmp"; "$VF" gaps --evidence "$LIVE/ev" --trust keys/trust --json 2>/dev/null > "$t" && mv "$t" "$LIVE/gaps.json"; }
 gap_count() { gaps_json; python3 -c 'import json,sys; print(sum(1 for l in open(sys.argv[1]) if l.strip() and json.loads(l)["record"]["kind"] == sys.argv[2]))' "$LIVE/gaps.json" "$1" 2>/dev/null || echo 0; }
-start_sink() { python3 "$ROOT/demo/apps/database.py" --listen "$SINK_ADDR" --tcp "${ULPF_LIVE_SINK_TCP:-127.0.0.1:8791}" --connector http --db "$LIVE/events.sqlite" --status "$LIVE/consumer.json" & echo $! > "$LIVE/sink.pid"; }
+start_sink() { python3 "$ROOT/demo/siem/fake_bulk.py" --listen "$SINK_ADDR" --state "$LIVE/siem-state.json" --status "$LIVE/siem.json" & echo $! > "$LIVE/sink.pid"; }
+start_lake() { python "$ROOT/adapters/lake/lakewriter.py" --lake "$LIVE/lake" --listen "$LAKE_ADDR" --rotate-seconds 5 --status "$LIVE/lake.json" > "$LIVE/lake.log" 2>&1 & echo $! > "$LIVE/lake.pid"; }
+siem_docs() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["unique_documents"])' "$LIVE/siem.json"; }
+lake_rows() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["received_rows"])' "$LIVE/lake.json"; }
 provider_args() {
   if [ "$DEMO_PROVIDER" = "model" ]; then
     curl -s -m 3 "http://127.0.0.1:$LLAMA_PORT/health" | grep -q ok || fail "llama-server not up on $LLAMA_PORT (fallback: ULPF_DEMO_PROVIDER=fixture)"
@@ -141,10 +147,11 @@ EOF
 }
 
 # ------------------------------------------------------------------------------------------------ set-up
-stop_all 2>/dev/null; pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/apps/[d]atabase.py" 2>/dev/null; pkill -f "tools/drift.py --watch" 2>/dev/null
+stop_all 2>/dev/null; pkill -f "demo/live/flowgen.py" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py" 2>/dev/null; pkill -f "tools/drift.py --watch" 2>/dev/null
 chmod -R u+w "$LIVE" 2>/dev/null; rm -rf "$LIVE"; mkdir -p "$LIVE"
 [ -f "$GOLDEN/pack.json.sig" ] || fail "golden pack unsigned (demo/reset.sh)"
-start_sink
+start_sink; start_lake
+wait_for 20 "the SIEM stand-in and the lake writer" bash -c "[ -s '$LIVE/siem.json' ] && [ -s '$LIVE/lake.json' ]"
 (cd learning && exec python tools/drift.py --watch "$LIVE/run-*" --json "$LIVE/watch.json" --window 40 --threshold 0.8 --min-frames 20 --interval 0.5 --stop-file "$LIVE/watch.stop") > "$LIVE/watch.log" 2>&1 & echo $! > "$LIVE/watch.pid"
 ( while [ ! -f "$LIVE/watch.stop" ]; do gaps_json; sleep 1; done ) &   # the UI lists outages and pack changes as they become evidence records
 
@@ -190,7 +197,8 @@ phase_done "promoted and HOT-LOADED (no restart, the generators never paused): $
 
 phase C "Flowing: two ingress connectors in, two egress connectors out"
 wait_for 40 "parse success to recover" cond "$LIVE/watch.json" 'd["state"] == "ok" and d["by_family"].get("positional-9", 0) >= 60'
-wait_for 20 "rows in the consumer's database" cond "$LIVE/consumer.json" 'd["rows"] >= 60'
+wait_for 20 "documents in the SIEM" cond "$LIVE/siem.json" 'd["unique_documents"] >= 60'
+wait_for 20 "rows at the lake writer" cond "$LIVE/lake.json" 'd["received_rows"] >= 60'
 python3 - "$LIVE" <<'EOF' || fail "both ingress connectors and both egress connectors must have carried events"
 import json, sys
 L = sys.argv[1]
@@ -200,27 +208,41 @@ for l in open(f"{L}/ev/seg_00000.idx.jsonl"):
 e = [json.loads(l) for l in open(f"{L}/run-1/out.jsonl")][-1]
 std = sum(1 for _ in open(f"{L}/run-1/egress-stdout.ndjson"))
 print("evidence records by ingress connector:", {k: v for k, v in ch.items() if not k.startswith(("egress", "control"))}, "| stdout egress lines:", std)
-print("an event as the consumer stores it:", json.dumps({k: e[k] for k in ("time", "action_id", "src_endpoint", "dst_endpoint", "traffic", "metadata")}), "| event_time", e["_lineage"]["event_time"])
+print("an event as the destinations receive it:", json.dumps({k: e[k] for k in ("time", "action_id", "src_endpoint", "dst_endpoint", "traffic", "metadata")}), "| event_time", e["_lineage"]["event_time"])
 ok = (sum(1 for k in ch if k.startswith("tcp:")) == 1 and sum(1 for k in ch if k.startswith("http:")) == 1 and std > 0 and isinstance(e["time"], int) and e["_lineage"]["event_time"] == e["time"] > 10**12
       and isinstance(e["action_id"], int) and isinstance(e["src_endpoint"]["port"], int) and e["metadata"]["product"]["vendor_name"] == "flowtap")
 sys.exit(0 if ok else 1)
 EOF
-phase_done "parse success $(watch_field parse_success); $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["rows"])' "$LIVE/consumer.json") rows in SQLite; typed values, the pack names flowtap"
+phase_done "parse success $(watch_field parse_success); SIEM $(siem_docs) documents, lake $(lake_rows) rows; typed values, the pack names flowtap"
 
-phase D "Egress outage: the consumer dies, ingestion does not; the outage is an evidence leaf; the backlog arrives from the cursor"
-ROWS0=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["rows"])' "$LIVE/consumer.json"); USABLE0=$(watch_field usable_total)
-kill "$(cat "$LIVE/sink.pid")"; rm -f "$LIVE/sink.pid"; echo "consumer KILLED at $ROWS0 rows"
+phase D "Egress outage: the SIEM dies, ingestion does not, the LAKE KEEPS FLOWING; the outage is an evidence leaf; the SIEM's backlog arrives from its cursor"
+DOCS0=$(siem_docs); LAKE0=$(lake_rows); USABLE0=$(watch_field usable_total)
+kill "$(cat "$LIVE/sink.pid")"; wait "$(cat "$LIVE/sink.pid")" 2>/dev/null; rm -f "$LIVE/sink.pid"; echo "SIEM KILLED at $DOCS0 documents (its state is kept, as OpenSearch's container keeps its data)"
+sleep 0.5
+cursors() { python3 -c 'import glob,json,sys; c={json.load(open(p))["sink"]: json.load(open(p))["delivered_events"] for p in glob.glob(sys.argv[1]+"/spool/cursor-*.json")}; print(next(v for k,v in c.items() if k.startswith("bulk+")), next(v for k,v in c.items() if "/ingest" in k))' "$LIVE"; }
+read SIEMCUR0 LAKECUR0 < <(cursors)
 for _ in $(seq 1 150); do [ "$(gap_count egress_stalled)" -ge 1 ] && break; sleep 0.2; done
 [ "$(gap_count egress_stalled)" -ge 1 ] || fail "no egress_stalled record in the evidence log"
-wait_for 30 "ingestion to continue while the consumer is down" cond "$LIVE/watch.json" "d['usable_total'] >= $USABLE0 + 40 and d['state'] == 'ok'"
+wait_for 30 "ingestion to continue while the SIEM is down" cond "$LIVE/watch.json" "d['usable_total'] >= $USABLE0 + 40 and d['state'] == 'ok'"
+wait_for 20 "the lake to keep flowing while the SIEM is down" cond "$LIVE/lake.json" "d['received_rows'] >= $LAKE0 + 40"
 "$VF" gaps --evidence "$LIVE/ev" --trust keys/trust 2>/dev/null | grep -a "egress_stalled" | head -1 | cut -c1-220
-echo "consumer down: ULPF ingested $(( $(watch_field usable_total) - USABLE0 )) more events; the database still has $ROWS0 rows. Restarting the consumer…"
+python3 - "$LIVE" "$DOCS0" "$SIEMCUR0" "$LAKECUR0" <<'EOF' || fail "during the outage the SIEM's cursor must not move while the lake's keeps up with ingestion"
+import glob, json, sys
+L, docs0, siem0, lake0 = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+w = json.load(open(f"{L}/watch.json")); usable = w["usable_total"]
+cur = {json.load(open(p))["sink"]: json.load(open(p))["delivered_events"] for p in glob.glob(f"{L}/spool/cursor-*.json")}
+siem = next(v for k, v in cur.items() if k.startswith("bulk+")); lake = next(v for k, v in cur.items() if "/ingest" in k)
+print(f"during the outage: SIEM ahead-by {max(0, usable - siem)}, lake ahead-by {max(0, usable - lake)} (usable {usable}; the SIEM still holds {docs0} documents)")
+print(f"  SIEM cursor {siem0} -> {siem} (must not move while it is down); lake cursor {lake0} -> {lake} (must advance and stay current)")
+sys.exit(0 if siem == siem0 and lake > lake0 and usable - lake <= 20 else 1)   # the 40 more events ingested meanwhile are the wait_for above
+EOF
+echo "SIEM down: ULPF ingested $(( $(watch_field usable_total) - USABLE0 )) more events; the lake got $(( $(lake_rows) - LAKE0 )) of them meanwhile. Restarting the SIEM…"
 start_sink
-wait_for 60 "the backlog to be delivered from the cursor" cond "$LIVE/consumer.json" "d['rows'] >= $(watch_field usable_total) - 12 and d['rows'] > $ROWS0 + 40"
+wait_for 60 "the SIEM's backlog to be delivered from its cursor" cond "$LIVE/siem.json" "d['unique_documents'] >= $(watch_field usable_total) - 12 and d['unique_documents'] > $DOCS0 + 40"
 for _ in $(seq 1 100); do [ "$(gap_count egress_resumed)" -ge 1 ] && break; sleep 0.2; done
 [ "$(gap_count egress_resumed)" -ge 1 ] || fail "no egress_resumed record"
 "$VF" gaps --evidence "$LIVE/ev" --trust keys/trust 2>/dev/null | grep -a "egress_resumed" | head -1 | cut -c1-220
-phase_done "outage recorded as an evidence leaf; rows $ROWS0 -> $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["rows"])' "$LIVE/consumer.json") after the catch-up; nothing dropped"
+phase_done "SIEM outage recorded as an evidence leaf; the lake kept flowing; SIEM documents $DOCS0 -> $(siem_docs) after the catch-up; nothing dropped, nothing stored twice"
 
 phase E "Drift across the fleet: the monitor fires and the source HEALS ITSELF — with an alert, not a prompt"
 gen_ctl drift
@@ -280,29 +302,43 @@ for sig in "$SIG1" "$SIG2"; do
 done
 rm -f "$LIVE/backfill.part"; mkdir -p "$LIVE/backfill"
 "$RT" run --pack "$GOLDEN" --pack "$LIVE/packs/flowtap-source-1.2" --source-id live-backfill-01 --input "$LIVE/backfill.log" --evidence "$LIVE/ev-backfill" \
-   --out "$LIVE/backfill/out.jsonl" --quarantine "$LIVE/backfill/q.jsonl" --forward "http://$SINK_ADDR/ingest" --forward-drain 20s 2> "$LIVE/backfill/runtime.err" || { tail -3 "$LIVE/backfill/runtime.err"; fail "backfill run"; }
+   --out "$LIVE/backfill/out.jsonl" --quarantine "$LIVE/backfill/q.jsonl" --spool "$LIVE/backfill/spool" --forward "bulk+http://$SINK_ADDR" --forward "http://$LAKE_ADDR/ingest" --forward-drain 20s 2> "$LIVE/backfill/runtime.err" || { tail -3 "$LIVE/backfill/runtime.err"; fail "backfill run"; }
 grep -E '^\{' "$LIVE/backfill/runtime.err" | tail -1 > "$LIVE/backfill/stats.json"
 phase_done "$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s["frames"], "quarantined lines replayed from the evidence log:", s["usable"], "usable,", s["quarantined"], "still quarantined")' "$LIVE/backfill/stats.json")"
 
 phase H "The accounting"
 gaps_json
+curl -s -m 30 "http://$LAKE_ADDR/flush" > /dev/null   # everything staged becomes Parquet before it is counted
+python - "$LIVE" > "$LIVE/lake-count.json" <<'EOF' || fail "the lake could not be read"
+import duckdb, glob, json, sys
+L = sys.argv[1]
+fs = sorted(glob.glob(f"{L}/lake/ext/*/*/*/*/*.parquet"))
+con = duckdb.connect()
+rows = con.execute(f"SELECT count(*), count(DISTINCT event_id) FROM read_parquet({fs!r})").fetchone() if fs else (0, 0)
+fam = dict(con.execute(f"SELECT family_id, count(*) FROM read_parquet({fs!r}) GROUP BY 1").fetchall()) if fs else {}
+schemas = {json.dumps(con.execute(f"DESCRIBE SELECT * FROM read_parquet('{f}')").fetchall()) for f in fs}
+print(json.dumps({"files": len(fs), "rows": rows[0], "distinct_event_ids": rows[1], "by_family": fam, "distinct_schemas": len(schemas)}))
+EOF
 python3 - "$LIVE" "$GEN" <<'EOF' | tee "$LIVE/summary.txt"
-import json, sqlite3, sys
+import json, sys
 L, gen = sys.argv[1], int(sys.argv[2])
 r = json.load(open(f"{L}/run-1/stats.json")); bf = json.load(open(f"{L}/backfill/stats.json"))
 qhash = {json.loads(l)["raw_hash"] for l in open(f"{L}/run-1/q.jsonl")}
 linked = all(json.loads(l)["_lineage"]["raw_hash"] in qhash for l in open(f"{L}/backfill/out.jsonl"))
-con = sqlite3.connect(f"{L}/events.sqlite"); rows = con.execute("SELECT COUNT(*) FROM events").fetchone()[0]; fam = dict(con.execute("SELECT family, COUNT(*) FROM events GROUP BY family").fetchall())
+siem = json.load(open(f"{L}/siem.json")); rows = siem["unique_documents"]
+lk = json.load(open(f"{L}/lake-count.json")); fam = lk["by_family"]
 kinds = {}
 for l in open(f"{L}/gaps.json"):
     if l.strip(): k = json.loads(l)["record"]["kind"]; kinds[k] = kinds.get(k, 0) + 1
 std = sum(1 for _ in open(f"{L}/run-1/egress-stdout.ndjson"))
 w = json.load(open(f"{L}/watch.json")); fired = [e for e in w["events"] if e["state"] == "fired"]; rec = [e for e in w["events"] if e["state"] == "ok"]
-print(f"generators sent {gen}  |  evidence records {r['frames']} = live usable {r['usable']} + quarantined-and-retained {r['quarantined']}  |  backfilled {bf['usable']} of {bf['frames']} (raw_hash linked: {linked})  |  SQLite rows {rows} {fam}  |  stdout egress {std}")
+print(f"generators sent {gen}  |  evidence records {r['frames']} = live usable {r['usable']} + quarantined-and-retained {r['quarantined']}  |  backfilled {bf['usable']} of {bf['frames']} (raw_hash linked: {linked})  |  SIEM documents {rows} (overwritten on redelivery: {siem['overwritten_documents']})  |  lake rows {lk['rows']} in {lk['files']} Parquet files, {lk['distinct_schemas']} schema(s) {fam}  |  stdout egress {std}")
 print(f"evidence-log records that are not events: {kinds}  |  monitor fired {len(fired)}x, recovered {len(rec)}x  |  runtime restarts 0")
 ok = (gen == r["frames"] == r["usable"] + r["quarantined"] and bf["frames"] == r["quarantined"] and bf["quarantined"] == 0 and linked and rows == gen and std == r["usable"]
+      and lk["rows"] == lk["distinct_event_ids"] == gen and lk["distinct_schemas"] == 1 and siem["rejected"] == 0
       and kinds.get("egress_stalled", 0) >= 1 and kinds.get("egress_resumed", 0) >= 1 and kinds.get("pack_activated", 0) == 5 and len(fired) == 2 and len(rec) == 2 and set(fam) == {"positional-9", "positional-10"})
 json.dump({"generated": gen, "frames": r["frames"], "usable": r["usable"], "quarantined": r["quarantined"], "backfilled": bf["usable"], "backfill_linked_by_raw_hash": linked, "rows": rows, "stdout_egress": std,
+           "lake_rows": lk["rows"], "lake_files": lk["files"], "lake_distinct_schemas": lk["distinct_schemas"], "siem_overwritten": siem["overwritten_documents"],
            "by_family": fam, "evidence_record_kinds": kinds, "monitor_fired": len(fired), "monitor_recovered": len(rec), "ok": ok}, open(f"{L}/summary.json", "w"), indent=1)
 sys.exit(0 if ok else 1)
 EOF

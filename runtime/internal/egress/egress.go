@@ -37,6 +37,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -63,10 +64,17 @@ func Open(raw string, timeout time.Duration) (Sink, error) {
 		return &SyslogTCP{Addr: u.Host, Timeout: timeout, Hostname: host}, nil
 	case "http", "https":
 		return &HTTPPost{URL: raw, Client: &http.Client{Timeout: timeout}}, nil
+	case "bulk+http", "bulk+https":
+		return newBulk(u, timeout)
+	case "hec+http", "hec+https":
+		return newHEC(u, timeout)
+	case "cef+tcp":
+		host, _ := os.Hostname()
+		return &SyslogTCP{Addr: u.Host, Timeout: timeout, Hostname: host, Encode: frameCEF, Scheme: "cef+tcp"}, nil
 	case "syslog+udp", "udp":
 		return nil, errors.New("egress: syslog over UDP is not offered — it cannot tell a sink that stopped accepting from one that is fine, and silent loss is what this package exists to prevent")
 	}
-	return nil, fmt.Errorf("egress: unknown sink %q (syslog+tcp://host:port | http(s)://url | stdout:)", raw)
+	return nil, fmt.Errorf("egress: unknown sink %q (syslog+tcp://host:port | http(s)://url | bulk+http(s)://host:port[?index=…] | hec+http(s)://host:port | cef+tcp://host:port | stdout:)", raw)
 }
 
 // ---------------------------------------------------------------- sinks
@@ -92,9 +100,14 @@ type HTTPPost struct {
 	Client *http.Client
 }
 
-func (h *HTTPPost) Name() string { return h.URL }
-func (h *HTTPPost) Close() error { return nil }
-func (h *HTTPPost) Send(batch [][]byte) error {
+func (h *HTTPPost) Name() string              { return h.URL }
+func (h *HTTPPost) Close() error              { return nil }
+func (h *HTTPPost) Send(batch [][]byte) error { return h.SendRange(batch, SpoolRange{}) }
+
+// SendRange is Send with the batch's place in the spool: X-ULPF-Spool-Id / -Start / -End (global byte offsets, the
+// batch is exactly the complete lines of [Start, End)). A receiver that must not store a redelivered event twice (the
+// lake writer) keeps a durable high-water mark on it. Sent only when the forwarder reads a segmented spool.
+func (h *HTTPPost) SendRange(batch [][]byte, r SpoolRange) error {
 	body := append(bytes.Join(batch, []byte{'\n'}), '\n')
 	req, err := http.NewRequest(http.MethodPost, h.URL, bytes.NewReader(body))
 	if err != nil {
@@ -102,6 +115,11 @@ func (h *HTTPPost) Send(batch [][]byte) error {
 	}
 	req.Header.Set("Content-Type", "application/x-ndjson")
 	req.Header.Set("X-ULPF-Events", fmt.Sprint(len(batch)))
+	if r.SpoolID != "" {
+		req.Header.Set("X-ULPF-Spool-Id", r.SpoolID)
+		req.Header.Set("X-ULPF-Spool-Start", fmt.Sprint(r.Start))
+		req.Header.Set("X-ULPF-Spool-End", fmt.Sprint(r.End))
+	}
 	resp, err := h.Client.Do(req)
 	if err != nil {
 		return err
@@ -124,9 +142,17 @@ type SyslogTCP struct {
 	conn     net.Conn
 	// Reconnected is set when Send had to dial again after a failure: the forwarder re-sends the previous batch.
 	Reconnected bool
+	// Encode frames one event (default Frame5424: the OCSF JSON as MSG); frameCEF projects it onto CEF instead.
+	Encode func(event []byte, hostname string) []byte
+	Scheme string // default syslog+tcp
 }
 
-func (s *SyslogTCP) Name() string { return "syslog+tcp://" + s.Addr }
+func (s *SyslogTCP) Name() string {
+	if s.Scheme != "" {
+		return s.Scheme + "://" + s.Addr
+	}
+	return "syslog+tcp://" + s.Addr
+}
 func (s *SyslogTCP) Close() error {
 	if s.conn != nil {
 		err := s.conn.Close()
@@ -162,7 +188,11 @@ func (s *SyslogTCP) Send(batch [][]byte) error {
 	}
 	var b bytes.Buffer
 	for _, l := range batch {
-		msg := Frame5424(l, s.Hostname)
+		enc := s.Encode
+		if enc == nil {
+			enc = Frame5424
+		}
+		msg := enc(l, s.Hostname)
 		fmt.Fprintf(&b, "%d ", len(msg))
 		b.Write(msg)
 	}
@@ -206,7 +236,44 @@ type Cursor struct {
 	Delivered   int64  `json:"delivered_events"`
 	LastEventID string `json:"last_event_id,omitempty"`
 	Sink        string `json:"sink"`
+	// segmented spool only
+	SpoolID    string `json:"spool_id,omitempty"`
+	PrevOffset int64  `json:"prev_offset,omitempty"` // where the last acknowledged batch began: a sink without acknowledgement gets it again after a restart
+	Skipped    int64  `json:"skipped_events,omitempty"`
+	Rejected   int64  `json:"rejected_events,omitempty"`
 }
+
+// SpoolRange locates a batch in a segmented spool.
+type SpoolRange struct {
+	SpoolID    string
+	Start, End int64
+}
+
+// RangedSink receives each batch with its place in the spool.
+type RangedSink interface {
+	SendRange(batch [][]byte, r SpoolRange) error
+}
+
+// Skip is a range of the spool a destination will never receive from it: the spool cap was reached while the
+// destination was the slowest. The pipeline commits it as an `egress_skipped` evidence record.
+type Skip struct {
+	Sink            string
+	From, To        int64 // global spool offsets
+	FirstID, LastID string
+	Count           int64 // -1: the range had already been removed (the cursor was older than the retained spool)
+}
+
+// Reject is one event a destination refused permanently (a document-level mapping or parse error, or a single event
+// larger than the destination accepts). The forwarder moves past it; the pipeline commits an `egress_rejected` record.
+type Reject struct {
+	Sink    string
+	EventID string
+	Type    string
+	Reason  string
+}
+
+// rejecter is implemented by sinks that can refuse single events inside an accepted batch.
+type rejecter interface{ setReject(func(Reject)) }
 
 // Stall describes an interruption of delivery (OnStall) or its end (OnResume).
 type Stall struct {
@@ -227,11 +294,14 @@ type Stats struct {
 	Resent      int64  `json:"resent_events"` // at-least-once: events sent again after a connection failure
 	Stalls      int64  `json:"stalls"`
 	Undelivered int64  `json:"undelivered_bytes"`
+	Skipped     int64  `json:"skipped_events,omitempty"`
+	Rejected    int64  `json:"rejected_events,omitempty"`
 	LastError   string `json:"last_error,omitempty"`
 }
 
 type Forwarder struct {
-	Spool      string
+	Spool      string // the single-file spool (--out), or empty with Seg
+	Seg        *Spool // the segmented spool (--spool DIR); CursorPath defaults to Seg.CursorPath(sink name)
 	CursorPath string
 	Sink       Sink
 	BatchLines int           // default 100
@@ -242,14 +312,18 @@ type Forwarder struct {
 	MaxLagByte int64         // 0 = no alarm
 	OnStall    func(Stall)
 	OnResume   func(Stall)
+	OnSkip     func(Skip)
+	OnReject   func(Reject)
 
-	mu    sync.Mutex
-	cur   Cursor
-	st    Stats
-	prev  [][]byte // the last batch believed delivered (re-sent after a reconnect on sinks without an acknowledgement)
-	stop  chan struct{}
-	done  chan struct{}
-	drain bool
+	skipTo atomic.Int64  // set by the retention manager: move the cursor to at least this offset
+	wake   chan struct{} // a skip request interrupts a backoff sleep
+	mu     sync.Mutex
+	cur    Cursor
+	st     Stats
+	prev   [][]byte // the last batch believed delivered (re-sent after a reconnect on sinks without an acknowledgement)
+	stop   chan struct{}
+	done   chan struct{}
+	drain  bool
 }
 
 func (f *Forwarder) defaults() {
@@ -273,6 +347,22 @@ func (f *Forwarder) defaults() {
 // Start loads the cursor (Reset discards it: the caller has just truncated the spool) and begins forwarding.
 func (f *Forwarder) Start(reset bool) error {
 	f.defaults()
+	if r, ok := f.Sink.(rejecter); ok {
+		r.setReject(func(x Reject) {
+			x.Sink = f.Sink.Name()
+			f.mu.Lock()
+			f.st.Rejected++
+			f.cur.Rejected++
+			f.mu.Unlock()
+			if f.OnReject != nil {
+				f.OnReject(x)
+			}
+		})
+	}
+	f.wake = make(chan struct{}, 1)
+	if f.Seg != nil {
+		return f.startSegmented(reset)
+	}
 	f.cur = Cursor{Spool: f.Spool, Sink: f.Sink.Name()}
 	if !reset {
 		if b, err := os.ReadFile(f.CursorPath); err == nil {
@@ -292,6 +382,101 @@ func (f *Forwarder) Start(reset bool) error {
 	return nil
 }
 
+// startSegmented resumes from the destination's cursor in a segmented spool (reset only with a fresh spool). A cursor
+// from another spool, or none, starts at the oldest retained segment: a new destination receives what is retained.
+func (f *Forwarder) startSegmented(reset bool) error {
+	if f.CursorPath == "" {
+		f.CursorPath = f.Seg.CursorPath(f.Sink.Name())
+	}
+	segs := ListSegments(f.Seg.Dir)
+	oldest := int64(0)
+	if len(segs) > 0 {
+		oldest = segs[0].Base
+	}
+	f.cur = Cursor{Spool: f.Seg.Dir, Sink: f.Sink.Name(), SpoolID: f.Seg.ID, Offset: oldest, PrevOffset: oldest}
+	if !reset {
+		if b, err := os.ReadFile(f.CursorPath); err == nil {
+			var c Cursor
+			if json.Unmarshal(b, &c) == nil && c.Sink == f.Sink.Name() && c.SpoolID == f.Seg.ID {
+				f.cur = c
+				f.cur.Spool = f.Seg.Dir
+			}
+		}
+	}
+	if head := f.Seg.Head(); f.cur.Offset > head {
+		return fmt.Errorf("egress: cursor for %s is at %d but the spool ends at %d — refusing to guess what was delivered", f.Sink.Name(), f.cur.Offset, head)
+	}
+	if f.cur.Offset < oldest { // the range this destination still needed is already gone: say so, then continue from what is retained
+		f.skipTo.Store(oldest)
+	}
+	if _, noAck := f.Sink.(*SyslogTCP); noAck && f.cur.PrevOffset < f.cur.Offset && f.cur.PrevOffset >= oldest {
+		// syslog has no acknowledgement: the last batch the previous run believed delivered may never have been
+		// processed. Load it; the first send after the (re)connect carries it again (at most a redelivery, never a loss).
+		if prev, _, _, err := readSpool(f.Seg.Dir, f.cur.PrevOffset, 1<<30, int(f.cur.Offset-f.cur.PrevOffset)); err == nil {
+			f.prev = prev
+		}
+	}
+	f.st.Sink, f.st.Delivered, f.st.Skipped, f.st.Rejected = f.Sink.Name(), f.cur.Delivered, f.cur.Skipped, f.cur.Rejected
+	f.stop, f.done = make(chan struct{}), make(chan struct{})
+	go f.loop()
+	return nil
+}
+
+// Offset is the destination's acknowledged position (for the retention manager and the UI).
+func (f *Forwarder) Offset() int64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cur.Offset
+}
+
+// Cursor returns a copy of the destination's cursor.
+func (f *Forwarder) Cursor() Cursor {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cur
+}
+
+// RequestSkip asks the forwarder to move past everything before `to` (the spool cap was reached). The forwarder does
+// it between two batches, reports it through OnSkip, and never skips what it has already been acknowledged for.
+func (f *Forwarder) RequestSkip(to int64) {
+	for {
+		cur := f.skipTo.Load()
+		if to <= cur {
+			return
+		}
+		if f.skipTo.CompareAndSwap(cur, to) {
+			select {
+			case f.wake <- struct{}{}:
+			default:
+			}
+			return
+		}
+	}
+}
+
+func (f *Forwarder) applySkip() {
+	to := f.skipTo.Load()
+	if f.Seg == nil || to <= f.cur.Offset {
+		return
+	}
+	sk := Skip{Sink: f.Sink.Name(), From: f.cur.Offset, To: to, Count: -1}
+	if segs := ListSegments(f.Seg.Dir); len(segs) > 0 && f.cur.Offset >= segs[0].Base {
+		sk.FirstID, sk.LastID, sk.Count = rangeIDs(f.Seg.Dir, f.cur.Offset, to)
+	}
+	f.mu.Lock()
+	f.cur.Offset, f.cur.PrevOffset = to, to
+	if sk.Count > 0 {
+		f.cur.Skipped += sk.Count
+		f.st.Skipped += sk.Count
+	}
+	f.saveCursor()
+	f.mu.Unlock()
+	f.prev = nil
+	if f.OnSkip != nil {
+		f.OnSkip(sk)
+	}
+}
+
 // Drain asks the forwarder to stop once the spool is fully delivered, or after timeout; it returns the stats.
 func (f *Forwarder) Drain(timeout time.Duration) Stats {
 	f.mu.Lock()
@@ -306,7 +491,9 @@ func (f *Forwarder) Drain(timeout time.Duration) Stats {
 	f.Sink.Close()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if st, err := os.Stat(f.Spool); err == nil {
+	if f.Seg != nil {
+		f.st.Undelivered = f.Seg.Head() - f.cur.Offset
+	} else if st, err := os.Stat(f.Spool); err == nil {
 		f.st.Undelivered = st.Size() - f.cur.Offset
 	}
 	return f.st
@@ -322,6 +509,10 @@ func (f *Forwarder) saveCursor() {
 
 // next reads up to one batch of COMPLETE lines from the cursor; a partial last line is left for later.
 func (f *Forwarder) next() (batch [][]byte, n int64, lag int64, err error) {
+	if f.Seg != nil {
+		batch, n, head, err := readSpool(f.Seg.Dir, f.cur.Offset, f.BatchLines, f.BatchBytes)
+		return batch, n, head - f.cur.Offset, err
+	}
 	fh, err := os.Open(f.Spool)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -371,11 +562,15 @@ func (f *Forwarder) loop() {
 		select {
 		case <-f.stop:
 			return false
+		case <-f.wake:
+			return true
 		case <-time.After(d):
 			return true
 		}
 	}
 	for {
+		f.applySkip()
+		start := f.cur.Offset
 		batch, n, lag, err := f.next()
 		if err != nil {
 			f.mu.Lock()
@@ -403,7 +598,13 @@ func (f *Forwarder) loop() {
 			// no acknowledgement in RFC 6587: what the dead connection had accepted may never have been processed
 			send = append(append([][]byte{}, f.prev...), batch...)
 		}
-		if err := f.Sink.Send(send); err != nil {
+		var serr error
+		if rs, ok := f.Sink.(RangedSink); ok && f.Seg != nil && len(send) == len(batch) {
+			serr = rs.SendRange(send, SpoolRange{SpoolID: f.Seg.ID, Start: start, End: start + n})
+		} else {
+			serr = f.Sink.Send(send)
+		}
+		if err := serr; err != nil {
 			f.mu.Lock()
 			f.st.Retries++
 			f.st.LastError = err.Error()
@@ -432,6 +633,7 @@ func (f *Forwarder) loop() {
 		if len(send) > len(batch) {
 			f.st.Resent += int64(len(send) - len(batch))
 		}
+		f.cur.PrevOffset = start
 		f.cur.Offset += n
 		f.cur.Delivered += int64(len(batch))
 		f.cur.LastEventID = lastEventID(batch)

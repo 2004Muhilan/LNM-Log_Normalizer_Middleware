@@ -27,7 +27,8 @@ was tried and rejected, and what the next phase inherits.
 
 ```bash
 bash demo/llama-server.sh start       # the 4B on the GPU (skip it with ULPF_DEMO_PROVIDER=fixture — the page then says "fallback, not the model")
-bash demo/start-demo.sh               # 1 Generator :8780 · 2 System :8765 · 3 Database :8790   (stop: bash demo/start-demo.sh stop)
+bash demo/start-demo.sh               # 1 Generator :8780 · 2 System :8765 · 3 Data lake :8765/lake · 4 SIEM (OpenSearch Dashboards) :5601
+                                      # stop: bash demo/start-demo.sh stop · fallbacks: ULPF_SIEM_DASHBOARDS=0, ULPF_SIEM=fake
 ```
 
 What to press and what each page shows: [docs/laptop-branch.md](docs/laptop-branch.md) §5. The six-step page, the earlier

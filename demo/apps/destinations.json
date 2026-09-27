@@ -1,0 +1,7 @@
+[
+  {"name": "SIEM — OpenSearch", "kind": "siem", "url": "bulk+http://127.0.0.1:9200",
+   "health": "http://127.0.0.1:9200/_cluster/health", "metrics": "http://127.0.0.1:9200/ulpf-metrics/_doc", "findings": "http://127.0.0.1:9200",
+   "ui": "http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview"},
+  {"name": "Data lake — OCSF Parquet", "kind": "lake", "url": "http://127.0.0.1:8792/ingest",
+   "health": "http://127.0.0.1:8792/status", "ui": "/lake"}
+]

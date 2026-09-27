@@ -30,7 +30,7 @@ from flowgen import SHAPES, Flowtap  # noqa: E402
 UI = Path(__file__).resolve().parents[1] / "ui"
 LOCK = threading.Lock()
 S = {"app": "flowtap generator", "connector": "none", "shape": "positional", "running": False, "drift": False, "rate": 6.0, "generated": 0, "sent": 0, "backlog": 0,
-     "connected": False, "dropped_queue_full": 0, "recent": [], "shapes": SHAPES, "connectors": {}, "by_shape": {}}
+     "connected": False, "dropped_queue_full": 0, "burst": 0, "recent": [], "shapes": SHAPES, "connectors": {}, "by_shape": {}}
 MAX_QUEUE = 5000
 
 
@@ -54,6 +54,13 @@ def worker(targets):
         now = time.time()
         if not running:
             next_t = now
+        with LOCK:
+            burst, S["burst"] = S["burst"], 0
+        for _ in range(burst):   # the attack burst: denied flows from one source, all at once
+            line = gen.line(2 if drift else 1, now, shape, burst=True)
+            backlog.append(line); recent.append({"shape": shape + " burst", "line": line})
+            with LOCK:
+                S["generated"] += 1
         while running and now >= next_t:
             line = gen.line(2 if drift else 1, next_t, shape)
             if len(backlog) >= MAX_QUEUE:
@@ -122,6 +129,8 @@ class H(http.server.BaseHTTPRequestHandler):
                     S["connector"] = d["connector"]
                 if d.get("shape") in SHAPES:
                     S["shape"] = d["shape"]
+                if d.get("burst") is True:
+                    S["burst"] += 12
                 for k in ("running", "drift"):
                     if isinstance(d.get(k), bool):
                         S[k] = d[k]

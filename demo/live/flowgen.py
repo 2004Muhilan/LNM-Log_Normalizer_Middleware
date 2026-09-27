@@ -50,15 +50,17 @@ class Flowtap:
         self.rng = random.Random(seed)
         self.n = 0
 
-    def line(self, fmt: int, now: float, shape: str = "positional") -> str:
+    def line(self, fmt: int, now: float, shape: str = "positional", burst: bool = False) -> str:
         r = self.rng
         self.n += 1
         inside = f"10.4.{r.randint(1, 9)}.{r.randint(2, 250)}"
         outside = f"203.0.113.{r.randint(1, 250)}"
         a, b = (outside, inside) if self.n % 3 == 1 else (inside, outside)   # both directions: no column is "the private one"
+        if burst:   # demo "attack burst": one source hammering, every flow denied (what the SIEM's deny-spike rule looks for)
+            a = BURST_SOURCE
         ts = f"{now:.3f}"
         proto = r.choice(["tcp", "tcp", "udp"])
-        cols = [ts, r.choice(["1", "1", "1", "2"]), {"tcp": "6", "udp": "17"}[proto] if fmt == 2 else proto, a, str(r.randint(32768, 60999)), b, str(r.choice([443, 80, 53, 22, 8443])),
+        cols = [ts, "2" if burst else r.choice(["1", "1", "1", "2"]), {"tcp": "6", "udp": "17"}[proto] if fmt == 2 else proto, a, str(r.randint(32768, 60999)), b, str(r.choice([443, 80, 53, 22, 8443])),
                 str(r.randint(100000, 9000000)), str(r.randint(100000, 90000000))]
         if fmt == 2:
             cols.append(r.choice(ZONES))
@@ -66,6 +68,7 @@ class Flowtap:
 
 
 SHAPES = ["positional", "csv", "kv", "json", "xml", "leef"]
+BURST_SOURCE = "198.18.7.7"   # RFC 2544 benchmarking range: never a real host
 
 
 def render(shape: str, c: list) -> str:

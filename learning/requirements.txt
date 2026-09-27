@@ -2,3 +2,4 @@ jsonschema>=4.23
 google-re2>=1.1
 pyyaml>=6
 cryptography>=42
+duckdb>=1.1   # the lake writer and the lake page (adapters/lake): install before going offline

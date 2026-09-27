@@ -1,0 +1,24 @@
+<!doctype html><meta charset=utf-8><title>Data lake — ULPF demo</title><link rel=stylesheet href=theme.css>
+<header><span class=brand>Data lake<small>OCSF Parquet in Security Lake's layout — read-only, DuckDB</small></span>
+<a class="pill" href="http://127.0.0.1:8780/">1 Generator</a><a class="pill" href="http://127.0.0.1:8765/">2 System</a><a class="pill here" href="http://127.0.0.1:8765/lake">3 Data lake</a><a class=pill href="http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview" target=_blank>4 SIEM ↗</a></header>
+<main>
+<div class=row>
+ <div class=panel><h2>What is in the lake</h2><div id=sources></div><p class=lab id=writer></p></div>
+ <div class=panel style="flex:0 0 420px"><h2>Find one event</h2><div class=btns><input id=q placeholder="ev_… (event_id)" style="flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit"><button onclick="look()">Find</button></div><div id=hit style="margin-top:10px"></div></div>
+</div>
+<h1>Latest rows — lineage columns first</h1>
+<div class=panel><div class=scroll><table><thead><tr><th>event_id</th><th>raw_hash</th><th>segment + offset</th><th>time (ms)</th><th>source</th><th>destination</th><th>action</th><th>family</th><th>file</th></tr></thead><tbody id=rows></tbody></table></div></div>
+<p class=lab>Fixed queries only (DuckDB, read-only). DuckDB's own UI is not used: it loads its assets from ui.duckdb.org at request time and answers HTTP 500 without a network. Layout: <span class=mono>ext/{source}/region=/accountId=/eventDay=</span> — this follows Amazon Security Lake's layout convention; it has not been tested against Security Lake.</p>
+</main>
+<script>
+Object.defineProperty(HTMLElement.prototype,'html',{set(h){if(this._h!==h){this.innerHTML=h;this._h=h}}});
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function tick(){let d;try{d=await (await fetch('/api/lake')).json()}catch(e){return}
+ $('sources').html=d.error?`<div class="alert bad">${esc(d.error)}</div>`:(d.sources.map(s=>`<div style="margin-bottom:10px"><b class=mono>${esc(s.path)}</b><br><span class=lab>${s.files} file(s), ${(s.bytes/1048576).toFixed(1)} MiB · ${s.columns} top-level columns · <span class="${s.distinct_schemas==1?'ok':'bad'}">${s.distinct_schemas==1?'one identical schema in every file (from the pinned OCSF table)':s.distinct_schemas+' DIFFERENT schemas'}</span></span>
+   <table style="margin-top:4px">${s.days.map(x=>`<tr><td class=m>eventDay=${x.day}</td><td class=m>${x.rows} rows</td><td class=m>${x.files} files</td></tr>`).join('')}</table></div>`).join('')||'<span class=dim>nothing written yet — the lake writer rotates every few seconds</span>');
+ const w=d.writer;$('writer').html=w?`lake writer: ${w.received_rows} rows received, ${w.rows_written} written to Parquet in ${w.files_written} files, ${w.staged_rows} staged (not yet rotated) · redeliveries ignored: ${w.duplicate_rows_ignored}${w.last_error?' · <span class=bad>ERROR '+esc(w.last_error)+'</span>':''}`:'<span class=bad>lake writer not answering</span>';
+ $('rows').html=d.latest.map(r=>`<tr class=click onpointerdown="$('q').value='${r.event_id}';look()"><td class=m>${esc(r.event_id)}</td><td class=m>${esc(r.raw_hash.slice(0,19))}…</td><td class=m>${esc(r.segment_id)} + ${r.offset}</td><td class=m>${r.time}</td><td class=m>${esc(r.src)}</td><td class=m>${esc(r.dst)}</td><td class=m>${r.action_id}</td><td class=m>${esc(r.family_id)}</td><td class="m dim">${esc(r.file.split('/').slice(-2).join('/'))}</td></tr>`).join('');}
+async function look(){const id=$('q').value.trim();if(!id)return;const d=await (await fetch('/api/lake?event_id='+encodeURIComponent(id))).json();
+ $('hit').html=d.lookup?`<pre class=json>${esc(JSON.stringify(d.lookup,null,2))}</pre>`:'<span class=amber>not in the lake (yet)</span>'}
+tick();setInterval(tick,3000);
+</script>
