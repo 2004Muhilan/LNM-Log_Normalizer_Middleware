@@ -567,3 +567,40 @@ Result: 1,660 → 4,448 events/s on the same 152,914 rows. The full schema is ke
 - Lane D runs the demo with a **real evidence archive** (not the development override), two processes, the witness, the
   unlogged-pack refusal, Proof of Derivation and the certificate.
 - The WSL2 virtual disk grew 0.16 GB over the whole batch (75.884 → 76.04 GB); Docker's did not grow (84.65 GB).
+
+## 14. What ULPF itself can handle — measured with pinned cores (2026-09-28)
+
+The scale-out matrix of §13 shared 8 cores between everything. It was re-measured with each component pinned to its own
+cores, replay senders from 8–32 loopback addresses, and the evidence log and archive on in every run. The full report is in
+`docs/throughput.md`, "What ULPF itself can handle"; harness `scripts/bench/capacity.py`; results
+`docs/metrics/capacity.json`.
+
+**Changed by it:**
+- **`?batch=N` now means N events.** The forwarder also cut every batch at its default 256 KiB, about 134 normalized
+  events, so `?batch=1000` to the lake never sent 1,000. `egress.BatchBytesFor(n)`: N × 4 KiB, between 256 KiB and
+  32 MiB, tested (`TestBatchOfNIsNEventsNotTheDefaultByteBound`).
+- **The fake bulk receiver:**
+  - `disable_nagle_algorithm`: its header and body writes stalled ~40 ms per request on the client's delayed ACK;
+  - `--ids FILE`, a measurement mode that counts and records ids instead of holding millions of documents.
+
+**Results, on the desktop:**
+- One process: 5,310 events/s for 10 minutes on 1.44 CPUs.
+- 2, 4 and 6 processes: 9.5k, 13.9k and 15.8k/s (88 %, 64 %, 49 % per process). The losses are CPU sharing between two
+  threads of a core and disk waits (~25–33 %, measured on tmpfs); with few senders, idle processes.
+- ULPF alone held one billion a day (11,574/s) for the full 3-minute windows with four or six processes, on ~5.5 logical
+  CPUs.
+- End to end, with OpenSearch and the lake on the same machine: 7.0k/s for 10 minutes. ULPF's two cores were saturated,
+  OpenSearch kept pace, and the lake writers fell about 40 s behind.
+- Exactly-once and affinity held in all 42 recorded runs.
+
+**Gate after these changes, both configurations, on the desktop:**
+- `bash scripts/gate.sh`: **PASS in 687 s**. Lanes: A (Go suite 129 tests, 0 skipped; Python 100), D (apps-check, a real
+  evidence archive and real OpenSearch: 3,395 parsed = SIEM = lake), G20 and G33.
+  - The first run of it failed in lane D. The learning plane's `python -m ulpf_learn` (working directory on the Windows
+    drive, `/mnt/c`) reported `No module named ulpf_learn` for one onboarding job while the other three lanes were
+    running. It did not recur in the `--laptop` run or in the re-run, and nothing in this change touches the learning
+    plane. Recorded as a transient; not explained.
+- `bash scripts/gate.sh --laptop`: **PASS in 757 s** (A, D, G20). This is the laptop's configuration run on the desktop, not
+  the laptop.
+- The virtual disks did not grow during the gates. Over the whole batch, WSL2's grew 3.69 GB (81.645 → 85.336 GB);
+  Docker's did not (90.893 GB).

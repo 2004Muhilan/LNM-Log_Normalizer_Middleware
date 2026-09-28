@@ -28,7 +28,7 @@ LOCK = threading.Lock()
 DOCS = {}        # index -> {_id: [version, doc]}
 TYPES = {}       # index -> {path: type}
 STATS = {"requests": 0, "documents": 0, "created": 0, "updated": 0, "rejected": 0, "throttled_requests": 0, "throttled_docs": 0, "too_large": 0}
-CFG = {"throttle_every": 0, "throttle_doc_every": 0, "max_body": 0}
+CFG = {"throttle_every": 0, "throttle_doc_every": 0, "max_body": 0, "ids": None}
 THROTTLED_ONCE = set()
 
 
@@ -89,6 +89,9 @@ def _numeric(s):
 
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    # the headers and the body leave in two writes: with Nagle on, the second waits for the client's delayed ACK (~40 ms
+    # per request) — found by scripts/bench/capacity.py, where it capped a forwarder at ~20 requests per second
+    disable_nagle_algorithm = True
 
     def _send(self, code, obj=None):
         b = json.dumps(obj).encode() if obj is not None else b""
@@ -133,6 +136,8 @@ class H(http.server.BaseHTTPRequestHandler):
             if CFG["throttle_every"] and STATS["requests"] % CFG["throttle_every"] == 0:
                 STATS["throttled_requests"] += 1
                 return self._send(429, {"error": {"type": "rejected_execution_exception", "reason": "rejected execution (fake)"}, "status": 429})
+            if CFG["ids"]:
+                return self._measure(body)
             lines = body.split(b"\n")
             items, errors, i = [], False, 0
             try:
@@ -172,6 +177,25 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(400, {"error": {"type": "illegal_argument_exception", "reason": "malformed bulk request (fake)"}, "status": 400})
         self._send(200, {"took": 1, "errors": errors, "items": items})
 
+    def _measure(self, body):
+        """Measurement mode (called under LOCK): count, append the ids, answer as OpenSearch does for new documents."""
+        lines, items, ids, i = body.split(b"\n"), [], [], 0
+        try:
+            while i < len(lines):
+                if not lines[i].strip():
+                    i += 1
+                    continue
+                (act, meta), = json.loads(lines[i]).items()
+                i += 2
+                ids.append(meta["_id"])
+                items.append({act: {"_index": meta["_index"], "_id": meta["_id"], "_version": 1, "result": "created", "status": 201}})
+        except (ValueError, KeyError, IndexError):
+            return self._send(400, {"error": {"type": "illegal_argument_exception", "reason": "malformed bulk request (fake)"}, "status": 400})
+        CFG["ids"].write("\n".join(ids) + "\n")
+        STATS["documents"] += len(ids)
+        STATS["created"] += len(ids)
+        self._send(200, {"took": 1, "errors": False, "items": items})
+
     def log_message(self, *a):
         pass
 
@@ -181,8 +205,10 @@ def main():
     ap.add_argument("--listen", default="127.0.0.1:9201"); ap.add_argument("--status")
     ap.add_argument("--state", help="load the documents from this file at start, save them there at exit")
     ap.add_argument("--throttle-every", type=int, default=0); ap.add_argument("--throttle-doc-every", type=int, default=0); ap.add_argument("--max-body", type=int, default=0)
+    ap.add_argument("--ids", help="measurement mode (scripts/bench/capacity.py): documents are neither kept nor type-checked; each _id is appended to this file, "
+                                  "for the exactly-once count afterwards (millions of documents; the checks are the SIEM's cost, not the sender's)")
     a = ap.parse_args()
-    CFG.update(throttle_every=a.throttle_every, throttle_doc_every=a.throttle_doc_every, max_body=a.max_body)
+    CFG.update(throttle_every=a.throttle_every, throttle_doc_every=a.throttle_doc_every, max_body=a.max_body, ids=open(a.ids, "a", buffering=1 << 20) if a.ids else None)
     if a.state and os.path.exists(a.state):
         saved = json.load(open(a.state))
         DOCS.update({i: {k: v for k, v in d.items()} for i, d in saved["docs"].items()}); TYPES.update(saved["types"]); STATS.update(saved["stats"])
@@ -207,6 +233,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        if CFG["ids"]:
+            with LOCK:
+                CFG["ids"].close()
         if a.state:
             with LOCK:
                 tmp = a.state + ".tmp"

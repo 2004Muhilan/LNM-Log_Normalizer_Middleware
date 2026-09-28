@@ -236,3 +236,33 @@ func TestRequestSkipNamesTheExactRangeForThatDestinationOnly(t *testing.T) {
 		t.Fatalf("skips %+v stats %+v after %v", skips, st, time.Since(t0))
 	}
 }
+
+// `batch=N` is N events per batch, not the 256 KiB default byte bound: with ~1.9 KB normalized events, 1,000 lines fit
+// one batch (before 2026-09-28 the byte bound cut every batch at ~134). The byte bound stays: at most 32 MiB.
+func TestBatchOfNIsNEventsNotTheDefaultByteBound(t *testing.T) {
+	dir := t.TempDir()
+	s, _, err := OpenSpool(dir, 64<<20, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad := strings.Repeat("x", 1900)
+	for i := 0; i < 1500; i++ {
+		if err := s.Append([]byte(fmt.Sprintf(`{"class_uid":4001,"_lineage":{"event_id":"ev_%05d"},"p":"%s"}`+"\n", i, pad))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	url, n := SplitBatch("http://127.0.0.1:1/ingest?batch=1000")
+	if url != "http://127.0.0.1:1/ingest" || n != 1000 {
+		t.Fatalf("SplitBatch: %s %d", url, n)
+	}
+	if batch, _, _, _ := readSpool(dir, 0, n, BatchBytesFor(n)); len(batch) != 1000 {
+		t.Fatalf("batch=1000 must send 1,000 events of ~1.9 KB, got %d", len(batch))
+	}
+	if batch, _, _, _ := readSpool(dir, 0, 100, 256<<10); len(batch) != 100 {
+		t.Fatalf("the default (100 events, 256 KiB) is unchanged, got %d", len(batch))
+	}
+	if BatchBytesFor(0) != 0 || BatchBytesFor(10) != 256<<10 || BatchBytesFor(100000) != 32<<20 {
+		t.Fatal("the byte bound: at least the default, at most 32 MiB, and 0 without batch=")
+	}
+}

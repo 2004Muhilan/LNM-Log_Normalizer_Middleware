@@ -619,7 +619,7 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 				return st, err
 			}
 			name := sink.Name()
-			f := &egress.Forwarder{Spool: o.SpoolPath, Seg: spool, CursorPath: e.CursorPath, Sink: sink, StallAfter: o.EgressStallAfter, BatchLines: batch,
+			f := &egress.Forwarder{Spool: o.SpoolPath, Seg: spool, CursorPath: e.CursorPath, Sink: sink, StallAfter: o.EgressStallAfter, BatchLines: batch, BatchBytes: egress.BatchBytesFor(batch),
 				OnSkip: func(s egress.Skip) {
 					p.mu.Lock()
 					defer p.mu.Unlock()

@@ -685,3 +685,20 @@ func SplitBatch(raw string) (string, int) {
 	}
 	return base, n
 }
+
+// BatchBytesFor is the byte bound that goes with `batch=N` (2026-09-28): N events of up to 4 KiB each, at least the
+// default 256 KiB and at most 32 MiB. Before it, the 256 KiB default capped every batch at ~134 normalized events of
+// ~1.9 KB, so `batch=1000` never sent more than that. 0 (no batch= given) keeps the default.
+func BatchBytesFor(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	b := n * 4 << 10
+	if b < 256<<10 {
+		b = 256 << 10
+	}
+	if b > 32<<20 {
+		b = 32 << 20
+	}
+	return b
+}
