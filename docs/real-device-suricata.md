@@ -103,7 +103,9 @@ The parser-spec contract can already express this timestamp. The `pattern` kind 
 both Go and Python. So the fix would be in the learning plane only: `coercion_for` would recognise the ISO 8601 basic
 offset. The acceptance engine should also refuse a mandatory timestamp attribute that has no timestamp coercion.
 
-**Raised, not changed:** this changes ULPF's code for what a real device sent. Until it is decided:
+**Fixed 2026-09-30, by the user's decision** (`docs/laptop-branch.md` §18): the basic offset is recognised, and a pack
+whose mandatory `time` is not a real timestamp is refused at promotion and at load. The rest of this finding is the
+record of the first run. Before the fix:
 - the cross-vendor OpenSearch search returns FortiGate only;
 - Suricata's events reach neither OpenSearch nor the lake as normalized rows. Their raw bytes are in the evidence store
   and the archive, provably.
@@ -151,3 +153,19 @@ and the IDS action semantics.
 3. The dropped SIGHUP again, and the lake writer read as DOWN.
 
 Each cause is fixed above; none by loosening a check.
+
+## Redone with the fix (2026-09-30) — `docs/metrics/suricata-live-2.json`
+
+Suricata was re-onboarded with the same answers, still as Network Activity. `time` now has the pattern coercion.
+- **(a) OpenSearch and the lake:** Suricata's documents are in `ulpf-ocsf-4001`, and the lake holds 54 Suricata rows
+  from 10.10.1.10. Real epoch-millisecond times; 0 rejected at either destination.
+- **(b) The cross-vendor search:** `src_endpoint.ip: 10.10.1.10` over `ulpf-ocsf-*` returned Fortinet 6,023 and OISF 22
+  in this run.
+- **(c) "Prove it" on `ev_06GEX0NY1WNE97TGN16EH0PYG4`:** every step passes. The SIEM document, raw bytes from the
+  evidence log, the commit, the export, the Merkle proof, Proof of Derivation, and the same event in the lake.
+- **Events quarantined before the pack:** 2,595 (rsyslog's backlog from the hours nothing listened on 6515). They stay
+  quarantined with their bytes; no tool re-derives never-normalized events.
+
+**The rehearsal found a routing collision** (`docs/laptop-branch.md` §18). A drafted Suricata JSON family and a drafted
+FortiGate JSON family share one routing key, so both quarantine as `routing_ambiguous`. The workaround is to roll back
+the FortiGate JSON heal. Raised.

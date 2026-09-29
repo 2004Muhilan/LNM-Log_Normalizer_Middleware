@@ -81,7 +81,12 @@ echo "destinations: $(st "' | '.join(f\"{e['name']}: {'UP' if e['up'] else 'DOWN
 curl -s -X POST $S/api/siem -d '{"action":"outage"}'
 until_true 60 "not next(e for e in d['egress'] if e['kind']=='siem')['up']" "the SIEM to go down"
 sleep 15
-SIEM_AHEAD=$(dest siem "['ahead_by']"); LAKE_AHEAD=$(dest lake "['ahead_by']")
+# one instant under the gate's load once read the lake 39 behind while it was UP and flowing (2026-09-30): the check is
+# the same — the SIEM >= 40 behind AND the lake <= 25 at the same moment — looked for over 20 s; a stalled lake never passes
+for _ in $(seq 1 20); do
+  SIEM_AHEAD=$(dest siem "['ahead_by']"); LAKE_AHEAD=$(dest lake "['ahead_by']")
+  [ "$SIEM_AHEAD" -ge 40 ] && [ "$LAKE_AHEAD" -le 25 ] && break; sleep 1
+done
 echo "outage: SIEM DOWN, ahead by $SIEM_AHEAD ($(dest siem "['delivery']")); lake $(dest lake "['up']" | sed 's/True/UP/;s/False/DOWN/'), ahead by $LAKE_AHEAD"
 [ "$SIEM_AHEAD" -ge 40 ] && [ "$LAKE_AHEAD" -le 25 ] || fail "during the outage the SIEM must fall behind (>= 40) while the lake stays current (<= 25)"
 curl -s -X POST $S/api/siem -d '{"action":"recover"}'

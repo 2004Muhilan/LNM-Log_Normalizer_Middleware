@@ -437,10 +437,33 @@ once, while online. The ruleset is local only.
 - At ULPF's output, each Suricata alert matches the FortiGate's log of the same connection (same source and destination
   port).
 
-**What not to say, until the time finding is decided:**
-- that Suricata's alerts are in OpenSearch or the lake. Its `+0000` timestamp stays text, so OpenSearch rejects them and
-  the lake refuses them with the reason;
-- that the cross-vendor OpenSearch search returns Suricata. It returns the FortiGate only, for now.
+**Order matters (found in the 2026-09-30 rehearsal):**
+- Do not leave the FortiGate's JSON heal loaded while showing Suricata. Two drafted JSON families from two devices share
+  one routing key, and both then quarantine as `routing_ambiguous`: ULPF refuses to guess.
+- After the FortiGate `json` moment, switch it back to `default` and press **Roll back** on that heal's alert. Suricata
+  parses again within about a minute.
+- Suricata's onboarding job waits for the operator from the moment the demo starts; answer it when you reach this
+  section.
 
-"Prove it" on a Suricata alert proves the evidence (archive bytes, checkpoint, Merkle proof) and reports the SIEM
-document and the lake row missing.
+**Show, after it is onboarded (2026-09-30):**
+- Its alerts are in OpenSearch (`ulpf-ocsf-4001`) and the lake.
+- **One search, two devices:** `src_endpoint.ip: 10.10.1.10` over `ulpf-ocsf-*` returns the FortiGate's denies and
+  Suricata's alerts for the same connections.
+- "Prove it" on a Suricata alert passes every step: the SIEM document, archived bytes, checkpoint, Merkle proof, Proof of
+  Derivation, and the lake row.
+
+**"allowed" on Suricata and "deny" on the FortiGate, for the same connection:**
+- **Why:** Suricata runs as an IDS. It watches a copy of the traffic and blocks nothing, so every alert says
+  `action: allowed`, meaning "the sensor let it pass", not "the connection succeeded". The FortiGate is the device that
+  blocked it.
+- **How ULPF maps it:** Suricata is kept as Network Activity (4001), and the operator's value map sends `allowed` to
+  `action_id` 1.
+- **What to say:** "The IDS saw the attempt and alerted; the firewall stopped it. Each device reports its own verdict."
+- **What not to say:** that Suricata's "allowed" means the attack got through.
+
+**What not to say:**
+- that Suricata's class was chosen by evidence. The model proposed Network Activity and the operator kept it.
+  OCSF 1.3's Detection Finding keeps the addresses in an array ULPF cannot write, and the page has no class override
+  (not built, by decision);
+- that alerts quarantined before the pack existed were re-derived. They stay quarantined, bytes kept. `renormalize`
+  corrects events that were already normalized; it has no path for events that never were.

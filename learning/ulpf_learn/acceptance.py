@@ -108,5 +108,34 @@ def evaluate(plan: Plan, spec: dict, samples: list[bytes]) -> Verdict:
         else:
             report.append({"attribute": attr, "path": None, "category": cat, "sufficient": False, "reason": f"{cat} alone is not sufficient"})
         blockers.append(f"mandatory attribute {attr} rests on a {cat} only (invariant 4)")
+    if not any(b.startswith("mandatory attribute time ") for b in blockers):   # one blocker per cause: an unanswered time is asked first
+        blockers += _time_is_a_timestamp(plan, spec, samples, mapped, mandatory)
     critical = sufficient_count / len(mandatory) if mandatory else 1.0
     return Verdict(not blockers, cov, critical, blockers, report, determinations)
+
+
+def _time_is_a_timestamp(plan: Plan, spec: dict, samples: list[bytes], mapped: dict, mandatory: list[str]) -> list[str]:
+    """A mandatory `time` must come out of the parser as a REAL timestamp (epoch milliseconds) on every sample — judged on
+    what the spec produces, not on what the plan claims. Found live (2026-09-30): a Suricata pack promoted with `time`
+    left as text; every document it produced was rejected by the SIEM, and a lake writer stopped. A pack whose events a
+    SIEM must reject never goes live. `time` from the transport envelope (1.3.0) is coerced by the runtime from the
+    envelope's own timestamp and is not a span here."""
+    if "time" not in mandatory or "time" not in mapped:
+        return []
+    slot, part, _ = mapped["time"]
+    if part is None:
+        return []
+    prog = dslexec.compile_spec(json.dumps(spec).encode("utf-8"))
+    bad = 0
+    for line in samples:
+        m = prog.parse(line)
+        if m["status"] != "ok":
+            continue   # counted by coverage already
+        mine = [s for s in m["spans"] if s["kind"] == "semantic" and (s.get("path") == part.field or s.get("path", "").startswith(part.field + "["))]
+        spans = [s for s in mine if not s.get("declared_null")]
+        if not mine or not all((s.get("coerced") or {}).get("to") == "timestamp" for s in spans):
+            bad += 1
+    if bad:
+        return [f"mandatory attribute time ({part.field}) is not coerced to a timestamp on {bad} of {len(samples)} samples: "
+                "its events would carry text where the SIEM and the lake require epoch milliseconds"]
+    return []

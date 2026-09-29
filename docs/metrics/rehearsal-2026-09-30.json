@@ -1,0 +1,902 @@
+{
+ "started": "2026-09-29T18:56:15",
+ "steps": [
+  {
+   "step": "0. pages up; both real devices connected",
+   "ok": true,
+   "nudges": [
+    "FortiGate not connected: syslog-format.sh default (re-commits its syslog; FortiOS backs off while nobody listens)"
+   ],
+   "apps": {
+    "172.20.20.11": {
+     "name": "Suricata IDS (real sensor, Docker)",
+     "events": 18,
+     "usable": 0,
+     "quarantined": 12,
+     "connected": true
+    },
+    "127.0.0.2": {
+     "name": "vendor relay \u2014 Cisco ASA, Palo Alto PAN-OS, FortiGate, Squid (recorded capture)",
+     "events": 11,
+     "usable": 10,
+     "quarantined": 0,
+     "connected": true
+    },
+    "172.20.20.2": {
+     "name": "FortiGate firewall (real device, Containerlab)",
+     "events": 41,
+     "usable": 39,
+     "quarantined": 0,
+     "connected": true
+    }
+   },
+   "egress": [
+    [
+     "SIEM \u2014 OpenSearch",
+     true
+    ],
+    [
+     "Data lake \u2014 OCSF Parquet",
+     true
+    ]
+   ],
+   "policy": {
+    "auto_onboard": true,
+    "prepared_answers": true,
+    "operator": "op-014",
+    "heal_policy": "autoheal-1.1",
+    "vendor_relay": true
+   },
+   "seconds": 2.5
+  },
+  {
+   "step": "2. generator: kv over tcp -> onboarding by policy (model, prepared sheet) -> both destinations UP, SIEM and lake fill",
+   "ok": true,
+   "nudges": [
+    "generator job job-2 waited for answers (answering): Promote pressed"
+   ],
+   "job": {
+    "id": "job-2",
+    "kind": "onboard",
+    "state": "done"
+   },
+   "job_seconds": 87,
+   "steps": [
+    "operator op-014 asserts rcvd \u2192 traffic.bytes_in  (prepared sheet)",
+    "promoting: acceptance policy, signed pack",
+    "pack flowtap-01-kv-9 v1.0 verified by the Go engine and HOT-LOADED \u2014 no restart; the activation is an evidence-log record",
+    "done: events of this format are normalized from here on"
+   ],
+   "egress": [
+    [
+     "SIEM \u2014 OpenSearch",
+     true,
+     0
+    ],
+    [
+     "Data lake \u2014 OCSF Parquet",
+     true,
+     0
+    ]
+   ],
+   "parse_success_100": true,
+   "dashboard": "ULPF \u2014 normalized events",
+   "lake": {
+    "sources": [
+     {
+      "source": "ulpf_http_activity",
+      "path": "ext/ulpf_http_activity/region=\u2026/accountId=\u2026/eventDay=\u2026/",
+      "files": 6,
+      "bytes": 2552837,
+      "distinct_schemas": 1,
+      "columns": 78,
+      "days": [
+       {
+        "day": "20241219",
+        "rows": 42,
+        "files": 6
+       }
+      ]
+     },
+     {
+      "source": "ulpf_network_activity",
+      "path": "ext/ulpf_network_activity/region=\u2026/accountId=\u2026/eventDay=\u2026/",
+      "files": 54,
+      "bytes": 20553229,
+      "distinct_schemas": 1,
+      "columns": 74,
+      "days": [
+       {
+        "day": "20181010",
+        "rows": 342,
+        "files": 6
+       },
+       {
+        "day": "20181130",
+        "rows": 132,
+        "files": 6
+       },
+       {
+        "day": "20190331",
+        "rows": 7,
+        "files": 6
+       },
+       {
+        "day": "20190510",
+        "rows": 7,
+        "files": 6
+       },
+       {
+        "day": "20190513",
+        "rows": 14,
+        "files": 6
+       },
+       {
+        "day": "20190516",
+        "rows": 12,
+        "files": 6
+       },
+       {
+        "day": "20200418",
+        "rows": 42,
+        "files": 6
+       },
+       {
+        "day": "20200624",
+        "rows": 7,
+        "files": 6
+       },
+       {
+        "day": "20260929",
+        "rows": 138,
+        "files": 6
+       }
+      ]
+     }
+    ],
+    "latest": [
+     {
+      "event_id": "ev_06GEX1WT6NMP8CKEJ0EGWBPPS8",
+      "raw_hash": "sha256:8a8748c5f0aebe57d42da5916a4a9cf5802c17303c0d4806ce3f34b88a2cb32c",
+      "segment_id": "seg_00040",
+      "offset": 2828,
+      "time": 1790708259348,
+      "src": "10.4.2.175",
+      "dst": "203.0.113.173",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WSKYMTQ93N2NM5BS9MPW",
+      "raw_hash": "sha256:9bd97d80f9ff8834b8c38bd38ee4ebb9ea27a64249b0a9d800d510d990ee7405",
+      "segment_id": "seg_00040",
+      "offset": 2523,
+      "time": 1790708259181,
+      "src": "10.4.1.89",
+      "dst": "203.0.113.109",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WRTTEHZD32PG1DMFTYJM",
+      "raw_hash": "sha256:2689f9af070cc6ad2e1db82249763aa17b042132abe043fb7cce596c7e428713",
+      "segment_id": "seg_00040",
+      "offset": 1033,
+      "time": 1790708259014,
+      "src": "203.0.113.132",
+      "dst": "10.4.8.108",
+      "action_id": 2,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WR818140XJ2NDD492M4W",
+      "raw_hash": "sha256:95fcc4b12cb2575d75fba81923a7ab6cc52146bfad47e91ea5438c3680b7ac82",
+      "segment_id": "seg_00040",
+      "offset": 729,
+      "time": 1790708258848,
+      "src": "10.4.6.92",
+      "dst": "203.0.113.62",
+      "action_id": 2,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WQN4TEAA3FH3K5JP6ETG",
+      "raw_hash": "sha256:911b5b2da2a61005456cae3dbd8d97405565042a328af17d8ac810d459313fcd",
+      "segment_id": "seg_00040",
+      "offset": 465,
+      "time": 1790708258681,
+      "src": "10.4.8.30",
+      "dst": "203.0.113.225",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WPX3Z11Z85M5T19STP54",
+      "raw_hash": "sha256:307ae009610799249025e995df6e3a9afd0de2c1d13451df9349c505801e3e2e",
+      "segment_id": "seg_00040",
+      "offset": 0,
+      "time": 1790708258514,
+      "src": "203.0.113.8",
+      "dst": "10.4.6.126",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WP9A1G5VSXQAYQ9100G8",
+      "raw_hash": "sha256:317716a020228598c751bf22004b285272a8e92de8ef6b3ad3a4d19b38bfd071",
+      "segment_id": "seg_00039",
+      "offset": 6810,
+      "time": 1790708258348,
+      "src": "10.4.4.137",
+      "dst": "203.0.113.39",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WNPKCGK7TEK7M7FXQCRM",
+      "raw_hash": "sha256:86ab6d505d46e15638e5d642f16b29c9f88e9c5d42dbb64b0946b438233f946b",
+      "segment_id": "seg_00039",
+      "offset": 6240,
+      "time": 1790708258181,
+      "src": "10.4.2.141",
+      "dst": "203.0.113.98",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WMXERHGFA655Y0WARYAC",
+      "raw_hash": "sha256:cc37df6c8ea23c18caef6670b0baa56f1736d20d1666f6b063161212352b04bc",
+      "segment_id": "seg_00039",
+      "offset": 5785,
+      "time": 1790708258014,
+      "src": "203.0.113.108",
+      "dst": "10.4.8.222",
+      "action_id": 2,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WMAHTMPE5S9XQZXEE1NR",
+      "raw_hash": "sha256:d6e52ca5643e632da7d163f614e1095e0912e4c168941c5994f9a9283a8094da",
+      "segment_id": "seg_00039",
+      "offset": 5508,
+      "time": 1790708257848,
+      "src": "10.4.1.144",
+      "dst": "203.0.113.45",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WKQTKJS3T89JNAE47T30",
+      "raw_hash": "sha256:1c026219e81f60edca045b6d54910881dec778a89a8e31622e23a14eda145d1b",
+      "segment_id": "seg_00039",
+      "offset": 5206,
+      "time": 1790708257681,
+      "src": "10.4.6.124",
+      "dst": "203.0.113.92",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WJYQW8V6A9E0Z75S6TCR",
+      "raw_hash": "sha256:f361ece155b5a05c53ad79c1b0536ec902832f7dd15a55f5c3b94f678291a1fb",
+      "segment_id": "seg_00039",
+      "offset": 3999,
+      "time": 1790708257514,
+      "src": "203.0.113.18",
+      "dst": "10.4.6.100",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WJBZYGWM6BVS9VRV29G8",
+      "raw_hash": "sha256:b1567d95ff1b3fa85eee9ea3c2a63936f9f9dd21944a947fac670254ee1a8ecc",
+      "segment_id": "seg_00039",
+      "offset": 3694,
+      "time": 1790708257348,
+      "src": "10.10.10.10",
+      "dst": "203.0.113.171",
+      "action_id": 2,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WHS2Z846R912213QFDJC",
+      "raw_hash": "sha256:edbcb8dd8cdcc718bbdb5c0d881bf9dc65c3d041f253e0cde3f63168a021a6ee",
+      "segment_id": "seg_00039",
+      "offset": 3429,
+      "time": 1790708257181,
+      "src": "10.4.6.185",
+      "dst": "203.0.113.132",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WH03963TETFYHA06CG48",
+      "raw_hash": "sha256:5ab4cc0680f7c2d24170ae7bb6f323dac0b38e1e9c33f57483d27ab988a9f006",
+      "segment_id": "seg_00039",
+      "offset": 2964,
+      "time": 1790708257014,
+      "src": "203.0.113.179",
+      "dst": "10.4.7.135",
+      "action_id": 1,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WGD5YYSZQFXXVD4BF0Z8",
+      "raw_hash": "sha256:e1aa7140531def7879b612a968d227e9f5b5a62a05fa8b3995decaa968ceb171",
+      "segment_id": "seg_00039",
+      "offset": 2334,
+      "time": 1790708256848,
+      "src": "10.4.4.97",
+      "dst": "203.0.113.234",
+      "action_id": 2,
+      "family_id": "kv-9",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WFRVHDH78FSA59XRN3BW",
+      "raw_hash": "sha256:a399c7fb22b362688e46a206a98fb8de54bee08ba6b898c3466e0eadc84f5013",
+      "segment_id": "seg_00039",
+      "offset": 617,
+      "time": 1790708256333,
+      "src": "10.10.1.10",
+      "dst": "8.8.8.8",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1WEEGHTBH5E289TTQKWAG",
+      "raw_hash": "sha256:5988e39e70468f893ce84539b8af391cd32fea43c58f14ae1e2a9953882dbe40",
+      "segment_id": "seg_00038",
+      "offset": 7658,
+      "time": 1790708256333,
+      "src": "10.10.1.10",
+      "dst": "8.8.8.8",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1W7ZBVYJK2Q4VQ89MZPPW",
+      "raw_hash": "sha256:fbddc8dcb8ec858b2ed86abecdcc5b4301a5687878d6dbe59173253b700fc275",
+      "segment_id": "seg_00038",
+      "offset": 1492,
+      "time": 1790708253812,
+      "src": "10.10.1.10",
+      "dst": "8.8.8.8",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1W6QGV441P5F92H1N2V3W",
+      "raw_hash": "sha256:45efadd436d6963b3a42d8e8dc007b1a96fd38a4e8194c80758b5e8455d1ffdf",
+      "segment_id": "seg_00038",
+      "offset": 114,
+      "time": 1790708253812,
+      "src": "10.10.1.10",
+      "dst": "8.8.8.8",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1W42CWKF2F6RZJQY1PXV4",
+      "raw_hash": "sha256:ba9805401a9a331dd71b647614f85e5f14778c1477db7fe177d88522f20f37c7",
+      "segment_id": "seg_00037",
+      "offset": 5244,
+      "time": 1790708252827,
+      "src": "10.10.1.10",
+      "dst": "172.20.20.10",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1W2SCRTZAKV6A7736DVCW",
+      "raw_hash": "sha256:31663beb1d3882af943353dbd18360481ba430b9c345b5f4b9568b2ead5e211a",
+      "segment_id": "seg_00037",
+      "offset": 3747,
+      "time": 1790708252626,
+      "src": "10.10.1.10",
+      "dst": "172.20.20.10",
+      "action_id": 1,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1VYX85WDF5374F2JH7D70",
+      "raw_hash": "sha256:dd31b40c37c44836ffaf0ce47dc01a89ab345a0fa1d4e0fa8a4cc7a54983fe16",
+      "segment_id": "seg_00037",
+      "offset": 279,
+      "time": 1790708251797,
+      "src": "10.10.1.10",
+      "dst": "172.20.20.10",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1VWA8KE9S17DXQ11MT1JG",
+      "raw_hash": "sha256:fe37fa1bdf97c9e974891db42a91d8b04ea6bbdfd318a947dc782d4109890665",
+      "segment_id": "seg_00036",
+      "offset": 4630,
+      "time": 1790708250798,
+      "src": "10.10.1.10",
+      "dst": "172.20.20.10",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     },
+     {
+      "event_id": "ev_06GEX1VQ58WQ2769DZQH49CRMM",
+      "raw_hash": "sha256:cd97e1cd881e74add856bd62c3e076aefe1d58993010cdedc77f7c6a6dd498b1",
+      "segment_id": "seg_00036",
+      "offset": 560,
+      "time": 1790708249785,
+      "src": "10.10.1.10",
+      "dst": "172.20.20.10",
+      "action_id": 2,
+      "family_id": "fortigate-traffic",
+      "file": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260929/part-78d693bdc471-00000000000001250076-00000000000001511953.parquet"
+     }
+    ],
+    "lookup": null,
+    "writer": {
+     "app": "ulpf lake writer",
+     "lake": "/home/g2con/ulpf-demo/app/lake",
+     "received_batches": 0,
+     "received_rows": 834,
+     "duplicate_rows_ignored": 0,
+     "rows_written": 743,
+     "files_written": 60,
+     "rows_rejected": 0,
+     "last_flush": null,
+     "last_error": null,
+     "started": 1790708174.6438625,
+     "staged_rows": 91,
+     "staging_bytes": 0,
+     "high_water_marks": {},
+     "at": 1790708266.1399918,
+     "writers": 2
+    }
+   },
+   "seconds": 90.3
+  },
+  {
+   "step": "3. SIEM outage: SIEM ahead-by climbs, lake stays current; recovery drains the backlog",
+   "ok": true,
+   "nudges": [],
+   "during": {
+    "siem_ahead": 243,
+    "lake_ahead": 0,
+    "lake_up": true
+   },
+   "recovered": true,
+   "seconds": 38.5
+  },
+  {
+   "step": "4. attack burst -> a Security Analytics finding on the System page",
+   "ok": true,
+   "nudges": [],
+   "finding": {
+    "rule": "ULPF deny spike",
+    "event_ids": [
+     "ev_06GEX1RQX5JGJ2PAWS10KSD5MM",
+     "ev_06GEX1RNYJSKA6S7ASG1S0SWRC",
+     "ev_06GEX1RAVQWHAGTKTCS09HTAVR",
+     "ev_06GEX1R9RHQF841Q0MXRCM0TY4",
+     "ev_06GEX1R78RMRA2S5RGVDM1EEF4",
+     "ev_06GEX1R4AZR6AVTHPV2N7VQ6GR",
+     "ev_06GEX1R1ZJH4S8YEN6TEB61V58",
+     "ev_06GEX1R1CTMQ9DTR3R8K0VFZEM",
+     "ev_06GEX1QZ64EEFZZR41E8GNE610",
+     "ev_06GEX1QYEH8YH7Q02A24BJJ2JR"
+    ]
+   },
+   "seconds": 0.0
+  },
+  {
+   "step": "5. Prove it on the finding: evidence, Merkle proof, Proof of Derivation, lake; bundle verified offline; certificate draft",
+   "ok": true,
+   "nudges": [],
+   "event_id": "ev_06GEX1RQX5JGJ2PAWS10KSD5MM",
+   "trace": [
+    [
+     "SIEM document",
+     true
+    ],
+    [
+     "raw bytes in the evidence log",
+     true
+    ],
+    [
+     "commit",
+     true
+    ],
+    [
+     "export",
+     true
+    ],
+    [
+     "Merkle proof verified",
+     true
+    ],
+    [
+     "Proof of Derivation",
+     true
+    ],
+    [
+     "the same event in the lake",
+     true
+    ]
+   ],
+   "verify_offline": [
+    "DERIVATION: OK \u2014 event ev_06GEX1RQX5JGJ2PAWS10KSD5MM: the logged pack, re-run on the committed raw bytes, reproduces the SIEM's event (excluded: _lineage.processing_time)"
+   ],
+   "certificate_marked_not_complete": true,
+   "seconds": 15.3
+  },
+  {
+   "step": "6. drift on the generator -> alert, healed in part, the withheld fields answered on the page",
+   "ok": true,
+   "nudges": [],
+   "alert": "healed automatically in part: 8 field(s) carried over on earlier evidence, 2 withheld (carried unmapped) \u2014 the operator is asked for those: proto, zone \u2192 answered by op-014, pack 1.1 loaded",
+   "seconds": 45.8
+  },
+  {
+   "step": "7-9. scale-out, evidence archive, transparency log; an UNLOGGED pack pushed to process 1 is refused",
+   "ok": true,
+   "nudges": [],
+   "processes": [
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ]
+   ],
+   "archive": {
+    "configured": true,
+    "archive": "/home/g2con/ulpf-demo/app/evidence-archive",
+    "store_id": "st_06GEX1JJJGSKFG62SDDQHKVX4G",
+    "grace": "60s",
+    "cap": 134217728
+   },
+   "produced_by": [
+    "auto-healed",
+    "onboarded",
+    "vendor-onboarded"
+   ],
+   "seconds": 13.0
+  },
+  {
+   "step": "F1. FortiGate: REAL DEVICE, default format parsed by the vendor pack; Prove it on one of its events",
+   "ok": false,
+   "nudges": [],
+   "outcomes": {
+    "fortigate-traffic": 39,
+    "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 1
+   },
+   "event_id": "ev_06GEX2AM3WQ3230XEXHMXE1AZW",
+   "trace": [
+    [
+     "SIEM document",
+     true
+    ],
+    [
+     "raw bytes in the evidence log",
+     true
+    ],
+    [
+     "commit",
+     true
+    ],
+    [
+     "export",
+     true
+    ],
+    [
+     "Merkle proof verified",
+     true
+    ],
+    [
+     "Proof of Derivation",
+     true
+    ],
+    [
+     "the same event in the lake",
+     false
+    ]
+   ],
+   "seconds": 3.1
+  },
+  {
+   "step": "F2. FortiGate: admin logins -> NEW EVENT FAMILY of a known source -> operator answers -> parsed",
+   "ok": true,
+   "nudges": [],
+   "answered_by_this_script_as_operator": {
+    "eventtime": "time",
+    "logdesc": "message",
+    "user": "user.name",
+    "srcip": "src_endpoint.ip",
+    "dstip": "dst_endpoint.ip",
+    "action": "activity_id",
+    "status": "status_id"
+   },
+   "pack": "fortigate-lab-01-rfc3164-kv-24-event",
+   "outcomes": {
+    "fortigate-traffic": 28,
+    "rfc3164-kv-24": 12
+   },
+   "seconds": 130.3
+  },
+  {
+   "step": "F3. FortiGate: syslog format -> json: healed automatically (by name); then back to default",
+   "ok": true,
+   "nudges": [],
+   "job": {
+    "id": "job-5",
+    "kind": "drift",
+    "state": "asking",
+    "family": "type=traffic"
+   },
+   "alert": "healed automatically in part: 47 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 6 withheld (carried unmapped) \u2014 the operator is asked for those: app, sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta",
+   "json_outcomes": {
+    "rfc3164-json-53": 40
+   },
+   "back_to_default": {
+    "fortigate-traffic": 39,
+    "in flight": 1
+   },
+   "seconds": 210.3
+  },
+  {
+   "step": "S1. Suricata: unknown source -> onboarded (model; operator answers) -> OpenSearch and the lake",
+   "ok": false,
+   "nudges": [],
+   "answered_by_this_script_as_operator": {
+    "timestamp": "time",
+    "src_ip": "src_endpoint.ip",
+    "src_port": "src_endpoint.port",
+    "dest_ip": "dst_endpoint.ip",
+    "dest_port": "dst_endpoint.port",
+    "proto": "connection_info.protocol_name",
+    "action": "action_id",
+    "signature": "message"
+   },
+   "suricata_docs_in_opensearch": 0,
+   "rejected": {
+    "siem": 0,
+    "lake": 0
+   },
+   "outcomes": {
+    "in flight": 1,
+    "quarantined: routing_ambiguous": 15,
+    "quarantined: parse": 24
+   },
+   "seconds": 50.5
+  },
+  {
+   "step": "S2. cross-vendor search in OpenSearch: the attacker's address, FortiGate and Suricata",
+   "ok": false,
+   "nudges": [],
+   "query": {
+    "size": 0,
+    "query": {
+     "term": {
+      "src_endpoint.ip": "10.10.1.10"
+     }
+    },
+    "aggs": {
+     "v": {
+      "terms": {
+       "field": "metadata.product.vendor_name",
+       "size": 10
+      }
+     }
+    }
+   },
+   "by_vendor": {
+    "Fortinet": 507
+   },
+   "seconds": 0.0
+  },
+  {
+   "step": "S3. Prove it on a real Suricata alert",
+   "ok": false,
+   "nudges": [],
+   "error": "IndexError: list index out of range",
+   "seconds": 0.0
+  }
+ ],
+ "finished": "2026-09-29T19:06:14",
+ "jobs": [
+  {
+   "id": "job-1",
+   "host": "172.20.20.11",
+   "kind": "onboard",
+   "state": "done",
+   "signature": "rfc3164|json||0",
+   "family": "event_type=alert",
+   "seconds_to_last_step": null
+  },
+  {
+   "id": "job-2",
+   "host": "127.0.0.1",
+   "kind": "onboard",
+   "state": "done",
+   "signature": "raw|kv||9",
+   "family": "",
+   "seconds_to_last_step": null
+  },
+  {
+   "id": "job-3",
+   "host": "127.0.0.1",
+   "kind": "heal",
+   "state": "done",
+   "signature": "raw|kv||10",
+   "family": "",
+   "seconds_to_last_step": null
+  },
+  {
+   "id": "job-4",
+   "host": "172.20.20.2",
+   "kind": "discovery",
+   "state": "done",
+   "signature": "rfc3164|kv||23",
+   "family": "type=event",
+   "seconds_to_last_step": null
+  },
+  {
+   "id": "job-5",
+   "host": "172.20.20.2",
+   "kind": "drift",
+   "state": "asking",
+   "signature": "rfc3164|json||0",
+   "family": "type=traffic",
+   "seconds_to_last_step": null
+  },
+  {
+   "id": "job-6",
+   "host": "172.20.20.11",
+   "kind": "onboard",
+   "state": "answering",
+   "signature": "rfc3164|json||0",
+   "family": "event_type=alert",
+   "seconds_to_last_step": null
+  }
+ ],
+ "after_the_rollback_nudge": {
+  "nudge": "System page: roll back alert-3 (the FortiGate JSON pack fortigate-lab-01-rfc3164-json-53-traffic), after F3 had switched the FortiGate back to default",
+  "why": "routing_ambiguous: two candidates [fortigate-lab-01-rfc3164-json-53-traffic, suricata-lab-01-rfc3164-json-20-alert] share the L1\u2013L4 key (rfc3164|json||0); ULPF quarantined, did not guess",
+  "rerun_steps": [
+   {
+    "step": "F1. FortiGate: REAL DEVICE, default format parsed by the vendor pack; Prove it on one of its events",
+    "ok": true,
+    "nudges": [],
+    "outcomes": {
+     "fortigate-traffic": 40
+    },
+    "event_id": "ev_06GEX4769G3XCNSR27V9S0ZT3C",
+    "trace": [
+     [
+      "SIEM document",
+      true
+     ],
+     [
+      "raw bytes in the evidence log",
+      true
+     ],
+     [
+      "commit",
+      true
+     ],
+     [
+      "export",
+      true
+     ],
+     [
+      "Merkle proof verified",
+      true
+     ],
+     [
+      "Proof of Derivation",
+      true
+     ],
+     [
+      "the same event in the lake",
+      true
+     ]
+    ],
+    "seconds": 10.2
+   },
+   {
+    "step": "S2. cross-vendor search in OpenSearch: the attacker's address, FortiGate and Suricata",
+    "ok": true,
+    "nudges": [],
+    "query": {
+     "size": 0,
+     "query": {
+      "term": {
+       "src_endpoint.ip": "10.10.1.10"
+      }
+     },
+     "aggs": {
+      "v": {
+       "terms": {
+        "field": "metadata.product.vendor_name",
+        "size": 10
+       }
+      }
+     }
+    },
+    "by_vendor": {
+     "Fortinet": 656,
+     "OISF": 30
+    },
+    "seconds": 0.0
+   },
+   {
+    "step": "S3. Prove it on a real Suricata alert",
+    "ok": true,
+    "nudges": [],
+    "event_id": "ev_06GEX45W7AB975GG5T4T91ZMZC",
+    "preview": "<174>Sep 29 19:07:37 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-29T19:07:37.910085+0000\",\"flow_id\":524843259781046,\"in_iface\"",
+    "trace": [
+     [
+      "SIEM document",
+      true
+     ],
+     [
+      "raw bytes in the evidence log",
+      true
+     ],
+     [
+      "commit",
+      true
+     ],
+     [
+      "export",
+      true
+     ],
+     [
+      "Merkle proof verified",
+      true
+     ],
+     [
+      "Proof of Derivation",
+      true
+     ],
+     [
+      "the same event in the lake",
+      true
+     ]
+    ],
+    "seconds": 9.1
+   }
+  ]
+ },
+ "not_nudges": [
+  "step 2's 'Promote pressed' was the script catching the job while the prepared sheet was being applied; the sheet path promotes on its own",
+  "step 4's finding was already there: the FortiGate's real denies trip the 'ULPF deny spike' rule before the burst is needed",
+  "F1's first failure was the script proving a 3-s-old event before the lake's 10-s rotation; with an older event it passes (the runbook already says so)"
+ ]
+}

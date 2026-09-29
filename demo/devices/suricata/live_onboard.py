@@ -128,7 +128,7 @@ def main():
         if len(rows) > 3:
             eid = rows[3]["event_id"]   # not the newest: the SIEM and the lake must already have it
             post(B + "/api/prove", {"event_id": eid})
-            t = wait(lambda: (lambda x: x if x and (x.get("done") or x.get("state") in ("done", "failed", "error")) else None)(get(B + "/api/trace?id=" + eid)), 180, 1)
+            t = wait(lambda: get(B + "/api/trace?id=" + eid), 300, 1)   # the console stores the trace when the round trip has finished
             rep["prove_it"] = {"event_id": eid, "preview": rows[3].get("preview"), "trace": t}
             print("prove it:", eid, (t or {}).get("ok"), [(s["step"], s["ok"]) for s in (t or {}).get("steps", [])])
         rep["result"] = "onboarded live" if j["state"] == "done" else f"job ended in state {j['state']}"

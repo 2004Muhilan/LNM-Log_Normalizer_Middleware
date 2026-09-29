@@ -768,3 +768,76 @@ documented answers, the pack was hot-loaded with nobody asked, and 5 interim-upd
 3. The dropped SIGHUP again, and the lake writer read as DOWN.
 
 Each cause is fixed above; none by loosening a check.
+
+## 18. The time fix, Suricata redone, and one full rehearsal with both real devices (2026-09-30)
+
+**1. Time must be a real timestamp — the user's decision.** Three changes:
+- **The learning plane** (`coercion_for`) now also recognises ISO 8601 with a basic offset (`+0000`, `+0530`) and
+  derives the existing `pattern` coercion `%Y-%m-%dT%H:%M:%S[.%f]%z`, `timezone: in_value`. Go and Python read the same
+  instant (`iso_basic_offset_test.go`, `test_time_is_a_timestamp.py`).
+- **The acceptance engine** refuses a pack whose mandatory `time` is not coerced to a timestamp on every sample. It judges
+  what the spec actually produces, not what the plan says. The blocker is reported once `time` rests on evidence; an
+  unanswered `time` is asked first.
+- **The runtime also refuses to LOAD such a family** (`pack.checkTimeIsTimestamp`, fail closed). So a pack promoted
+  before the rule, or built by hand, never goes live either. Accepted sources of `time`: a timestamp coercion, an
+  `epoch_ms`/`compose_datetime`/`timestamp` transform, or the envelope's own time. Every existing pack still loads.
+
+**2. Suricata redone live** (`docs/metrics/suricata-live-2.json`):
+- It was re-onboarded as Network Activity with the same operator answers, and `time` is now a real timestamp.
+- **(a)** OpenSearch holds its documents and the lake 54 rows; rejected 0 on both destinations.
+- **(b)** `src_endpoint.ip: 10.10.1.10` returns FortiGate and Suricata.
+- **(c)** "Prove it" passes every step on a real Suricata alert.
+
+**Events already quarantined or rejected:**
+- The 2,595 alerts quarantined before the pack were rsyslog's backlog, delivered on connect. They stay quarantined,
+  bytes kept. `renormalize` re-derives corrections of events that were already normalized (invariant 8); it has no path
+  for events that never were, so they were not re-derived.
+- The 110 documents rejected on 2026-09-29 lived in that demo state, which the gate runs reset.
+
+**3. Suricata stays Network Activity;** no class override. The runbook explains "allowed" (Suricata) against "deny"
+(FortiGate) for the same connection.
+
+**The rehearsal** (`demo/rehearse.py`, `docs/metrics/rehearsal-2026-09-30.json`): a fresh start with the model, the
+FortiGate and Suricata running, the runbook's order, and every step through the pages' own APIs. Operator answers were
+given by the script on the operator's behalf.
+
+| Step | Result |
+|---|---|
+| 0 pages up | OK. **Nudge:** the FortiGate was not yet connected 2.5 s after the start, so `syslog-format.sh default` was run at once. The check did not wait to see whether FortiOS would reconnect by itself. |
+| 2 generator onboarding | OK, 90 s (model, prepared sheet). Both destinations UP, dashboard present, the lake has one schema. |
+| 3 SIEM outage and recovery | OK, 38 s. The SIEM fell behind, the lake stayed current, and the backlog drained. |
+| 4 attack burst → finding | OK. The finding was already there: the FortiGate's real denies trip "ULPF deny spike" before the burst is needed. |
+| 5 Prove it on the finding | OK: every step, the bundle verified offline, and the certificate draft marked NOT COMPLETE. |
+| 6 generator drift → heal | OK, 46 s: healed in part, and the withheld fields answered. |
+| 7–9 scale-out, archive, transparency log | OK: the unlogged pack was refused and recorded. |
+| F1 FortiGate REAL DEVICE + Prove it | OK. At first the script proved a 3-second-old event, before the lake's 10-second rotation; it passes on an older one, as the runbook already says. |
+| F2 FortiGate new event family | OK, 130 s. |
+| F3 FortiGate `json` | OK, 210 s: healed automatically in part (by name), then back to default. |
+| S1 Suricata onboarding | **FAILED (a finding).** Its job had waited for answers since the start. When answered and loaded, its lines were quarantined `routing_ambiguous`. |
+| S2 cross-vendor search | Failed at first, for the same reason (no Suricata documents). |
+| S3 Prove it on Suricata | Failed at first, for the same reason. |
+
+**The finding: two devices' drafted JSON families collide in routing.** The reason:
+`2 candidates [fortigate-lab-01-rfc3164-json-53-traffic, suricata-lab-01-rfc3164-json-20-alert] share the L1–L4 key`.
+- **Why:** routing is by structure (L1–L4). A drafted JSON family has no L3 anchors, and a JSON signature carries no
+  arity, so any two sources sending JSON behind RFC 3164 share one key. ULPF quarantined, correctly, rather than guess.
+- **Effect:** while the FortiGate's JSON pack was loaded, neither JSON source could parse.
+- **Nudge:** System page → roll back the FortiGate JSON heal (alert-3). 46 s later Suricata's lines parsed again, and
+  S1–S3 then passed:
+  - OpenSearch: Fortinet 656 and OISF 30 documents for 10.10.1.10;
+  - "Prove it" passed every step on a Suricata alert and on a FortiGate event.
+- **The pile-up:** the ambiguous quarantine triggered a second Suricata onboarding job (job-6), left unanswered.
+  Promoting it would only add a third family with the same key.
+- **Raised, not built** (it changes the settled routing rule):
+  - route a line only among the families bound to its peer (the runtime-level peer binding raised earlier);
+  - or give a drafted self-describing family an L3 anchor on its declared family key (FortiGate `type`, Suricata
+    `event_type`), so the two keys differ.
+
+**Gate, on the desktop, with the FortiGate and Suricata running:**
+- `bash scripts/gate.sh`: **PASS in 816 s** (Go 134 tests, 0 skipped; Python 116).
+- `bash scripts/gate.sh --laptop`: **PASS in 806 s**. This is the laptop's configuration on the desktop, not the laptop.
+
+The run before failed once, in apps-check's outage step. At one instant under load the lake was UP and flowing but 39
+behind (limit 25). The step now looks, over 20 s, for a moment where the SIEM is at least 40 behind and the lake at most
+25 behind at the same time. The thresholds are unchanged, and a stalled lake never passes.
+

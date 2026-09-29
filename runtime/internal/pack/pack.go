@@ -264,9 +264,56 @@ func Load(dir string, opts LoadOptions) (*Pack, error) {
 		if prog.ParserHash() != f.Parser.ParserHash {
 			return nil, fmt.Errorf("family %s: parser_hash %s does not match the compiled representation %s (fail closed)", f.FamilyID, f.Parser.ParserHash, prog.ParserHash())
 		}
+		if err := checkTimeIsTimestamp(f, specBytes); err != nil {
+			return nil, fmt.Errorf("pack rejected: family %s: %w (fail closed)", f.FamilyID, err)
+		}
 		f.Program = prog
 	}
 	return &p, nil
+}
+
+// checkTimeIsTimestamp: `time` must reach the event as a real timestamp (epoch milliseconds). A family that maps it from a
+// cell with no timestamp coercion and no timestamp transform would emit text there — every such event rejected by the
+// SIEM, and a lake writer once stopped on one (Suricata, 2026-09-30). The learning plane's acceptance refuses to promote
+// such a pack; this refuses to LOAD one that was promoted before that rule (or built by hand): it never goes live.
+func checkTimeIsTimestamp(f *Family, specBytes []byte) error {
+	var doc any
+	if err := json.Unmarshal(specBytes, &doc); err != nil {
+		return err
+	}
+	for _, m := range f.Mapping.Fields {
+		if m.OCSFAttribute != "time" || m.Path == "" {
+			continue // a constant, or the envelope's own timestamp (1.3.0; its transform carries the format)
+		}
+		if m.Transform != nil && (m.Transform.Kind == "epoch_ms" || m.Transform.Kind == "compose_datetime" || m.Transform.Kind == "timestamp") {
+			continue
+		}
+		found, coerced := false, false
+		var walk func(v any)
+		walk = func(v any) {
+			switch x := v.(type) {
+			case map[string]any:
+				if x["field"] == m.Path {
+					found = true
+					if c, ok := x["coerce"].(map[string]any); ok && c["to"] == "timestamp" {
+						coerced = true
+					}
+				}
+				for _, y := range x {
+					walk(y)
+				}
+			case []any:
+				for _, y := range x {
+					walk(y)
+				}
+			}
+		}
+		walk(doc)
+		if found && !coerced {
+			return fmt.Errorf("time is mapped from %q, whose cell has no timestamp coercion and the mapping no timestamp transform: its events would carry text where a timestamp is required", m.Path)
+		}
+	}
+	return nil
 }
 
 // checkAnchors enforces what the contract cannot express across objects: every family anchor value

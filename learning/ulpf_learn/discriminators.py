@@ -140,6 +140,10 @@ def apply_logformat(plan: Plan, directive: str, vendor: str, mandatory: set[str]
 
 
 _RFC3339 = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2})$")
+# ISO 8601 with a BASIC offset (+0000, +0530) — not RFC 3339, which needs the colon. Suricata's EVE writes it
+# (2026-09-30: "2026-09-29T17:01:40.291297+0000"). The existing `pattern` kind expresses it on both stacks; %z takes
+# +HHMM and +HH:MM alike.
+_ISO_BASIC = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?[+-][0-9]{4}$")
 
 
 def coercion_for(class_uid: int, attribute: str, token_class: str, samples: list[str]) -> dict | None:
@@ -157,6 +161,10 @@ def coercion_for(class_uid: int, attribute: str, token_class: str, samples: list
             return {"op": "coerce", "to": "timestamp", "format": {"kind": "epoch_auto", "timezone": "utc"}, "on_failure": "reject"}
         if samples and all(_RFC3339.match(s) for s in samples):
             return {"op": "coerce", "to": "timestamp", "format": {"kind": "rfc3339"}, "on_failure": "reject"}
+        if samples and all(_ISO_BASIC.match(s) for s in samples):
+            frac = {bool(_ISO_BASIC.match(s).group(1)) for s in samples}
+            fmts = [{"kind": "pattern", "pattern": "%Y-%m-%dT%H:%M:%S" + (".%f" if f else "") + "%z", "timezone": "in_value"} for f in sorted(frac, reverse=True)]
+            return {"op": "coerce", "to": "timestamp", **({"format": fmts[0]} if len(fmts) == 1 else {"formats": fmts}), "on_failure": "reject"}
         return None
     if t in ("integer_t", "long_t", "port_t") and token_class == "integer":
         return {"op": "coerce", "to": "int", "on_failure": "reject"}
