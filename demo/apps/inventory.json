@@ -8,9 +8,21 @@
   },
   "127.0.0.2": {
     "source_id": "mixed-relay-01",
-    "name": "vendor relay \u2014 Cisco ASA, Palo Alto PAN-OS, FortiGate, Squid (recorded capture)",
+    "name": "vendor relay — Cisco ASA, Palo Alto PAN-OS, FortiGate, Squid (recorded capture)",
     "vendor": "several",
     "product": "syslog relay",
     "learn": false
+  },
+  "172.20.20.2": {
+    "source_id": "fortigate-lab-01",
+    "name": "FortiGate firewall (real device, Containerlab)",
+    "vendor": "Fortinet",
+    "product": "FortiGate-VM64-KVM",
+    "real_device": {
+      "product": "FortiGate-VM64-KVM",
+      "version": "FortiOS 7.4.12 build 2902",
+      "serial": "FGVMEVXFB-07ZH02",
+      "lab": "demo/devices/fortigate (Containerlab, evaluation licence)"
+    }
   }
 }

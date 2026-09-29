@@ -604,3 +604,57 @@ cores, replay senders from 8–32 loopback addresses, and the evidence log and a
   the laptop.
 - The virtual disks did not grow during the gates. Over the whole batch, WSL2's grew 3.69 GB (81.645 → 85.336 GB);
   Docker's did not (90.893 GB).
+
+## 15. A real device: FortiGate 7.4.12 (2026-09-29)
+
+Details, results and findings: `docs/real-device-fortigate.md`.
+
+**The device.** A licensed FortiGate VM (evaluation, serial FGVMEVXFB-07ZH02) under Containerlab/vrnetlab in its own WSL
+distro. It sends syslog over TCP to ULPF.
+- The lab is started by `demo/devices/fortigate/start.sh`: `docker start` only.
+- vrnetlab is patched in the container: the licence's UUID is pinned, and port2 is added for a traffic container.
+- The distros share one network namespace, so ULPF is reachable at the Containerlab bridge, 172.20.20.1.
+- `ULPF_REAL_DEVICES=1` binds the demo's one syslog/TCP listener on all addresses. The runtime takes one `tcp:` listener,
+  so there is no second port.
+
+**Results:**
+- The corpus-built FortiGate pack parses the real device's default-format traffic logs: 254 of 264, time and fields
+  checked. It misses the `type=event` family and the csv, cef and json formats.
+- Real events reach OpenSearch and the lake.
+- "Prove it" and Proof of Derivation pass on a real-device event.
+- Live format drift quarantined every changed format with the bytes kept. Nothing healed and nothing was promoted.
+
+**Raised, not changed:**
+- the learning plane's drafter does not unwrap syslog/CEF envelopes;
+- the prepared answer sheet is not scoped to a source;
+- FortiGate csv is attributed to the PAN-OS pack as drift, and the console ignores `routing_drift`;
+- the console's trigger window is shared by all sources.
+
+**Demo-only changes:**
+- `ULPF_REAL_DEVICES`;
+- the inventory entry for 172.20.20.2;
+- the REAL DEVICE label;
+- the relay kept on loopback.
+
+**Gate, both configurations, on the desktop, with the FortiGate lab running beside it:**
+- `bash scripts/gate.sh`: **PASS in 762 s** (A: Go 129 tests, 0 skipped, Python 100; D; G20; G33).
+- `bash scripts/gate.sh --laptop`: **PASS in 812 s** (A, D, G20). This is the laptop's configuration run on the desktop, not
+  the laptop.
+
+**Before those passes, three runs failed, each on a timing check and each passing in the other runs.** None of them touches
+code changed here: this change has no Go code, and none in apps-check or the gate.
+- **Desktop, first run:** lane D's affinity checker exited with an empty report, meaning the checker itself failed, not a
+  split connection. Its log was overwritten before it could be read.
+- **`--laptop`, first run:** `TestUnloggedPackIsRefusedAtStartupAndOnReload` waits 5 s for the refused reload, and did not
+  see it in time.
+- **`--laptop`, second run:** `start-demo.sh` counted committers and lake writers 2 s after starting them, and one was not
+  up yet. That failed start left its demo running; it was stopped by hand.
+
+These three waits are raised as flaky under load; they were not changed.
+
+**After the gate, a lab fix.** At 13:47 UTC the FortiGate container died about 70 minutes after starting: vrnetlab's
+`launch.py` crashed on a `ScrapliTimeout` and took the VM down with it. Its scripted serial-console login waits for the
+default prompt, then for a `Password:` it has already half-read.
+- `patch-vrnetlab.py` now also patches `/launch.py`: a login prompt means the VM is up, and nothing is typed on the console.
+- The container is `healthy` after the patch, and the licence stayed Valid through the crash and three restarts.
+- Only `demo/devices/fortigate/` changed after the gate runs. The gate does not exercise those files.

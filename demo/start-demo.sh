@@ -12,6 +12,9 @@
 #   ULPF_DEMO_PROVIDER=fixture ...     team-authored proposals instead of the model (the System page says so)
 #   ULPF_SIEM_DASHBOARDS=0 ...         OpenSearch without Dashboards (memory fallback: a screen is lost, not the demo)
 #   ULPF_SIEM=fake ...                 no containers at all: the contract-checked bulk stand-in answers on :9200 (no findings)
+#   ULPF_REAL_DEVICES=1 ...            the syslog/TCP listener binds every local address (0.0.0.0:6515), not only loopback, so a
+#                                      real device reaches it: the FortiGate lab (demo/devices/fortigate) sends to 172.20.20.1:6515,
+#                                      the Containerlab bridge — the runtime takes one tcp: listener, so it is this one, widened
 #   ULPF_PROCESSES=N ...               scale-out: N runtime processes on the same ingress ports (SO_REUSEPORT; default 2), each
 #                                      with its own evidence store, committer and lake writer (ports 8792..), one lake root
 # Destinations are a list, demo/apps/destinations.json: ULPF has no SIEM- or lake-specific code, only transports and encodings.
@@ -73,7 +76,7 @@ for i in $(seq 1 $N); do   # one committer per process's evidence store; all shi
 done
 setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN" --python "$(command -v python)" --lake "$APP/lake" "${VENDOR[@]}" "${PROV[@]}" \
   --archive "$APP/evidence-archive" --commit-dir "$APP/commit" --evidence-grace "${ULPF_EVIDENCE_GRACE:-60s}" --evidence-buffer-cap "${ULPF_EVIDENCE_BUFFER_CAP:-64MiB}" \
-  --processes "$N" --lake-port 8792 > "$APP/system.log" 2>&1
+  --processes "$N" --lake-port 8792 $([ "${ULPF_REAL_DEVICES:-0}" = 1 ] && echo --in-tcp 0.0.0.0:6515) > "$APP/system.log" 2>&1
 setsid -f python3 demo/apps/generator.py --rate "${ULPF_LIVE_RATE:-6}" > "$APP/generator.log" 2>&1
 sleep 2
 pgrep -f "demo/apps/[g]enerator.py" > "$APP/generator.pid"; pgrep -f "demo/apps/[s]ystem.py" > "$APP/system.pid"; pgrep -f "adapters/lake/[l]akewriter.py --lake $APP/" | head -1 > "$APP/lakewriter.pid"

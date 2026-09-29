@@ -1,0 +1,398 @@
+{
+ "frames": 700,
+ "formats": {
+  "cef": {
+   "frames": 182,
+   "fortigate_kinds": {
+    "traffic:forward deny": 136,
+    "traffic:local close": 2,
+    "traffic:local server-rst": 5,
+    "traffic:forward close": 9,
+    "traffic:forward accept": 10,
+    "traffic:local accept": 12,
+    "event:system success": 4,
+    "event:system": 4
+   },
+   "parsed": 0,
+   "quarantined": 182,
+   "parsed_by": {},
+   "quarantine_reasons": {
+    "routing: unknown signature: no onboarded family matches (quarantined, not guessed)": 182
+   },
+   "quarantine_detail": [
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||41",
+     "n": 136
+    },
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||35",
+     "n": 12
+    },
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||39",
+     "n": 10
+    },
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||40",
+     "n": 9
+    },
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||30",
+     "n": 7
+    },
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||20",
+     "n": 2
+    },
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||16",
+     "n": 2
+    },
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "cef|kv||21",
+     "n": 2
+    }
+   ],
+   "ingest_minus_event_time_s": null,
+   "ocsf_fields_filled": {},
+   "first_parsed": null,
+   "first_quarantined": {
+    "event_id": "ev_06GETFSZ5JC8T0A8704CHQ32SG",
+    "raw_hash": "sha256:6e18a303500e3cbe59aee74e307fc4754a23406e855d4c4c8307417ba6af6e81",
+    "segment_id": "seg_00000",
+    "offset": 0,
+    "length": 956,
+    "routing_signature": "cef|kv||41",
+    "stage": "routing",
+    "reason": "unknown signature: no onboarded family matches (quarantined, not guessed)"
+   }
+  },
+  "json": {
+   "frames": 172,
+   "fortigate_kinds": {
+    "traffic:forward": 156,
+    "traffic:local": 7,
+    "event:system": 9
+   },
+   "parsed": 0,
+   "quarantined": 172,
+   "parsed_by": {},
+   "quarantine_reasons": {
+    "routing: unknown signature: no onboarded family matches (quarantined, not guessed)": 172
+   },
+   "quarantine_detail": [
+    {
+     "reason": "routing: unknown signature: no onboarded family matches (quarantined, not guessed)",
+     "routing_signature": "rfc3164|json||0",
+     "n": 172
+    }
+   ],
+   "ingest_minus_event_time_s": null,
+   "ocsf_fields_filled": {},
+   "first_parsed": null,
+   "first_quarantined": {
+    "event_id": "ev_06GETFT9E7QK9HNQ3GV7JAFP78",
+    "raw_hash": "sha256:b625a5a42849520fba01066290b3fb71affa0501068a97ea7a4e19e9635a0bca",
+    "segment_id": "seg_00000",
+    "offset": 0,
+    "length": 880,
+    "routing_signature": "rfc3164|json||0",
+    "stage": "routing",
+    "reason": "unknown signature: no onboarded family matches (quarantined, not guessed)"
+   }
+  },
+  "default": {
+   "frames": 264,
+   "fortigate_kinds": {
+    "traffic:forward": 229,
+    "traffic:local": 25,
+    "event:system": 10
+   },
+   "parsed": 254,
+   "quarantined": 10,
+   "parsed_by": {
+    "fortigate-fw-01 / fortigate-traffic / class 4001": 254
+   },
+   "quarantine_reasons": {
+    "routing: anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input": 10
+   },
+   "quarantine_detail": [
+    {
+     "reason": "routing: anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input",
+     "routing_signature": "rfc3164|kv||23",
+     "n": 4
+    },
+    {
+     "reason": "routing: anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input",
+     "routing_signature": "rfc3164|kv||19",
+     "n": 2
+    },
+    {
+     "reason": "routing: anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input",
+     "routing_signature": "rfc3164|kv||24",
+     "n": 2
+    },
+    {
+     "reason": "routing: anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input",
+     "routing_signature": "rfc3164|kv||15",
+     "n": 2
+    }
+   ],
+   "ingest_minus_event_time_s": {
+    "min": 21.1,
+    "max": 507.8
+   },
+   "ocsf_fields_filled": {
+    "action": 254,
+    "action_id": 254,
+    "activity_id": 254,
+    "activity_name": 254,
+    "category_uid": 254,
+    "class_uid": 254,
+    "connection_info.protocol_num": 254,
+    "connection_info.uid": 254,
+    "device.name": 254,
+    "device.uid": 254,
+    "dst_endpoint.interface_name": 254,
+    "dst_endpoint.ip": 254,
+    "dst_endpoint.location": 254,
+    "duration": 254,
+    "firewall_rule.uid": 254,
+    "metadata.event_code": 254,
+    "metadata.log_name": 254,
+    "metadata.product": 254,
+    "metadata.version": 254,
+    "severity": 254,
+    "severity_id": 254,
+    "src_endpoint.interface_name": 254,
+    "src_endpoint.ip": 254,
+    "src_endpoint.location": 254,
+    "time": 254,
+    "traffic.bytes_in": 254,
+    "traffic.bytes_out": 254,
+    "traffic.packets_in": 254,
+    "traffic.packets_out": 254,
+    "type_uid": 254,
+    "unmapped.date": 254,
+    "unmapped.dstintfrole": 254,
+    "unmapped.service": 254,
+    "unmapped.srcintfrole": 254,
+    "unmapped.time": 254,
+    "unmapped.trandisp": 254,
+    "unmapped.tz": 254,
+    "unmapped.vd": 254,
+    "dst_endpoint.port": 239,
+    "src_endpoint.port": 239
+   },
+   "first_parsed": {
+    "_lineage": {
+     "collector_id": "col-01",
+     "envelope": {
+      "kind": "rfc3164",
+      "level": 1,
+      "payload_offset": 5,
+      "payload_length": 755,
+      "priority": 189,
+      "facility": 23,
+      "severity": 5
+     },
+     "event_id": "ev_06GETFTKR1N0Z3EQRZS4ZT13WC",
+     "event_time": 1790686237712,
+     "family_id": "fortigate-traffic",
+     "framing": {
+      "fragment_count": 1,
+      "framing_confidence": "high",
+      "method": "octet_count",
+      "original_message_length": 760,
+      "raw_prefix": "NzYwIA==",
+      "raw_suffix": "",
+      "truncation_status": "none"
+     },
+     "ingest_channel": "tcp:127.0.0.1:7811",
+     "ingest_time": 1790686745536,
+     "length": 760,
+     "mapping_version": "1.0",
+     "normalization_version": 1,
+     "ocsf_version": "1.3.0",
+     "offset": 0,
+     "parser_id": "fortigate-fw-01",
+     "parser_sha256": "sha256:8e7feca8a0a70b05566c3cb1bb6d136ebc59a8a513d110d207e2a84facfce616",
+     "parser_version": "1.0",
+     "processing_time": 1790686745552,
+     "raw_hash": "sha256:aec464caa8220d388769189ccdb8c65ac078e58364c1692788a3a640838a77c8",
+     "routing_signature": "rfc3164|kv|fortigate-type=traffic|44",
+     "schema_version": "1.6.0",
+     "segment_id": "seg_00000",
+     "source_id": "fortigate-fw-01",
+     "source_timezone": null,
+     "store_id": "st_06GETFTKCKFZ3AD9SBH7NQP34W",
+     "timezone_confidence": "unresolved"
+    },
+    "action": "deny",
+    "action_id": 2,
+    "activity_id": 6,
+    "activity_name": "forward",
+    "category_uid": 4,
+    "class_uid": 4001,
+    "connection_info": {
+     "protocol_num": 6,
+     "uid": 615
+    },
+    "device": {
+     "name": "fgt",
+     "uid": "FGVMEVXFB-07ZH02"
+    },
+    "dst_endpoint": {
+     "interface_name": "port1",
+     "ip": "172.20.20.10",
+     "location": {
+      "country": "Reserved"
+     },
+     "port": 3389
+    },
+    "duration": 0,
+    "firewall_rule": {
+     "name": "deny-rest",
+     "type": "policy",
+     "uid": 2
+    },
+    "metadata": {
+     "event_code": "0000000013",
+     "log_name": "traffic",
+     "product": {
+      "name": "FortiGate",
+      "vendor_name": "Fortinet"
+     },
+     "version": "1.3.0"
+    },
+    "severity": "notice",
+    "severity_id": 1,
+    "src_endpoint": {
+     "interface_name": "port2",
+     "ip": "10.10.1.10",
+     "location": {
+      "country": "Reserved"
+     },
+     "mac": "1a:25:3c:94:2f:05",
+     "os": {
+      "name": "Unknown"
+     },
+     "port": 37331
+    },
+    "time": 1790686237712,
+    "traffic": {
+     "bytes_in": 0,
+     "bytes_out": 0,
+     "packets_in": 0,
+     "packets_out": 0
+    },
+    "type_uid": 400106,
+    "unmapped": {
+     "appcat": "unscanned",
+     "craction": 131072,
+     "crlevel": "high",
+     "crscore": 30,
+     "date": 1790640000000,
+     "devtype": "Unknown",
+     "dstintfrole": "undefined",
+     "mastersrcmac": "1a:25:3c:94:2f:05",
+     "poluuid": "fb4d64aa-bc02-51f1-14c6-0b833772ce50",
+     "service": "RDP",
+     "srcintfrole": "lan",
+     "srcserver": "0",
+     "time": "18:20:37",
+     "trandisp": "noop",
+     "tz": "+0530",
+     "vd": "root"
+    }
+   },
+   "first_quarantined": {
+    "event_id": "ev_06GETFTKR4B856BWR3X6TWDYK4",
+    "raw_hash": "sha256:f000ea8bec0762d9d82254299b7a473ca78eee43b601f6eb1e3d6c51e06ac069",
+    "segment_id": "seg_00000",
+    "offset": 105136,
+    "length": 455,
+    "routing_signature": "rfc3164|kv||23",
+    "stage": "routing",
+    "reason": "anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input"
+   }
+  },
+  "csv": {
+   "frames": 82,
+   "fortigate_kinds": {
+    "traffic:local": 7,
+    "traffic:forward": 70,
+    "event:system": 5
+   },
+   "parsed": 0,
+   "quarantined": 82,
+   "parsed_by": {},
+   "quarantine_reasons": {
+    "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain": 82
+   },
+   "quarantine_detail": [
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||44",
+     "n": 61
+    },
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||33",
+     "n": 5
+    },
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||43",
+     "n": 5
+    },
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||42",
+     "n": 4
+    },
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||38",
+     "n": 2
+    },
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||25",
+     "n": 1
+    },
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||23",
+     "n": 1
+    },
+    {
+     "reason": "routing_drift: drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+     "routing_signature": "rfc3164|csv||19",
+     "n": 1
+    }
+   ],
+   "ingest_minus_event_time_s": null,
+   "ocsf_fields_filled": {},
+   "first_parsed": null,
+   "first_quarantined": {
+    "event_id": "ev_06GETFTXQMQ2S6T3S3XFBNVJS4",
+    "raw_hash": "sha256:ac89dd263546a0c213ae84a41e50f980388fc60cf02042b13cfb1e4f4ea542bf",
+    "segment_id": "seg_00000",
+    "offset": 0,
+    "length": 595,
+    "routing_signature": "rfc3164|csv||38",
+    "stage": "routing_drift",
+    "reason": "drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain"
+   }
+  }
+ }
+}

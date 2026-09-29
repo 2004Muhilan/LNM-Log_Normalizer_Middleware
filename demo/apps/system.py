@@ -346,6 +346,7 @@ class System:
         import socket
         lines = [l for l in Path(self.a.vendor_capture).read_bytes().splitlines() if l.strip()]
         host, port = self.a.in_tcp.rsplit(":", 1)
+        host = "127.0.0.1" if host == "0.0.0.0" else host   # bound on every local address (real devices): the relay stays on loopback
         sock, i = None, 0
         while True:
             if not self.policy["vendor_relay"]:
@@ -771,6 +772,7 @@ class System:
             for h, a in apps.items():
                 inv = self.inventory.get(h, {})
                 a["name"], a["source_id"] = inv.get("name", "unknown application"), inv.get("source_id")
+                a["real_device"] = inv.get("real_device")   # declared by the operator (inventory.json): a physical/virtual appliance, not a generator
                 a["connector"] = {"tcp": "Syslog over TCP", "http": "HTTP POST"}.get((a.get("channel") or "").split(":")[0], a.get("channel"))
                 a["idle_s"] = round((now_ms - a["last_ms"]) / 1000, 1)
                 a["connected"] = a["idle_s"] < 3
@@ -803,7 +805,8 @@ class System:
                               "evidence": str(pr.ev), "lake_port": pr.lake_port, "events": sum(1 for i in self.order if (self.events[i]["rec"].get("_proc") or 1) == pr.i and not self.events[i].get("record")),
                               "applications": sorted(h for h, a in apps.items() if pr.i in a["processes"])})
             return {"policy": self.policy, "processes": procs,
-                    "runtime": {"up": all(x["up"] for x in procs), "processes": len(procs), "ingress": [{"label": "Syslog over TCP", "addr": self.a.in_tcp}, {"label": "HTTP POST", "addr": self.a.in_http}],
+                    "runtime": {"up": all(x["up"] for x in procs), "processes": len(procs), "ingress": [{"label": "Syslog over TCP" + (" — also real devices, on the Containerlab bridge 172.20.20.1" if self.a.in_tcp.startswith("0.0.0.0:") else ""), "addr": self.a.in_tcp},
+                                {"label": "HTTP POST", "addr": self.a.in_http}],
                                                        "packs": [{"pack_id": v["pack_id"], "pack_version": v["pack_version"], "family": v["family"]} for v in self.active.values()], "reloads": self.reloads,
                                                        "provider": self.a.provider, "pack_records": self.pack_records[-6:], "vendor_packs": getattr(self, "vendors_loaded", 0),
                                                        "relay_sent": self.relay_sent, "relay_available": bool(self.a.vendor_capture and Path(self.a.vendor_capture).exists())},

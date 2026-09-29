@@ -385,3 +385,25 @@ If Squid itself must be the subject (a changed `logformat`), the flat result is 
 `--source-id`** or a fresh propagation store — and saying why: propagation is keyed to the source, and a
 source whose format changed is, for evidence purposes, a new structure under the same source, which is what
 versioned corrections (invariant 8) exist to record.
+
+## A real device: the FortiGate lab (optional; `docs/real-device-fortigate.md`)
+
+**Start.**
+1. `wsl -d Containerlab -- bash …/demo/devices/fortigate/start.sh` (docker start only — never containerlab deploy/destroy).
+   It prints the licence status and stops if it is not Valid.
+2. `ULPF_REAL_DEVICES=1 bash demo/start-demo.sh`: the syslog/TCP listener binds all addresses. The FortiGate sends to
+   172.20.20.1:6515.
+3. If the FortiGate does not connect within a minute, `syslog-format.sh default` restarts its syslog.
+
+**Show.**
+- The System page lists **FortiGate firewall (real device, Containerlab)** with a REAL DEVICE tag, next to the relay.
+- Its default-format traffic logs are parsed by the corpus-built FortiGate pack.
+- "Prove it" and Proof of Derivation pass on one of its events.
+- **Live format change:** `syslog-format.sh csv|cef|json` quarantines the new format with the bytes kept.
+
+**Turn the four-vendor relay OFF first** (System page). Otherwise its 8 events/s keep the FortiGate below the console's
+trigger threshold.
+
+**What not to say:**
+- that the FortiGate's format changes heal: today they do not, and the findings are in the doc;
+- that csv is "detected as FortiGate drift": the router attributes it to the PAN-OS pack.
