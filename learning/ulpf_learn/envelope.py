@@ -140,3 +140,104 @@ def unwrap(raw: bytes) -> dict:
 def payload(raw: bytes) -> bytes:
     e = unwrap(raw)
     return raw[e["payload_offset"]:e["payload_offset"] + e["payload_length"]]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The whole chain (2026-09-30): the twin of frame.UnwrapChain — what the router actually routes. A real FortiGate showed
+# why one level is not enough: its JSON arrives as `<189>{…}` and its CEF as `<189>Sep 29 … fgt CEF:0|…|ext`, and a
+# learning plane that drafts from the raw line sees a different surface from the one routing sees (JSON drafted as CSV,
+# CEF as positional text). Onboarding must see the payload routing sees.
+
+MAX_SYSLOG_DEPTH = 2   # frame.MaxSyslogDepth
+_LEEF = re.compile(rb"^LEEF:(\d+)(?:\.\d+)?\|")
+
+
+def _leef(raw: bytes):
+    """Twin of frame.UnwrapLEEF."""
+    m = _LEEF.match(raw)
+    if not m:
+        return None
+    pos = m.end()
+    fields = []
+    for _ in range(4):
+        e = raw.find(b"|", pos)
+        if e < 0:
+            return None
+        fields.append(raw[pos:e])
+        pos = e + 1
+    delim = ""
+    if int(m.group(1)) >= 2:
+        e = raw.find(b"|", pos)
+        if 0 < e - pos <= 4:
+            d = raw[pos:e].decode("latin-1")
+            h = d[2:] if d.startswith("0x") else d[1:] if d.startswith("x") else None
+            if len(d) == 1 or (h is not None and len(h) == 2 and all(c in "0123456789abcdefABCDEF" for c in h)):
+                delim, pos = d, e + 1
+    if pos >= len(raw):
+        return None   # a header with no attributes is not an envelope
+    return {"kind": "leef", "payload_offset": pos, "payload_length": len(raw) - pos, "device_vendor": fields[0].decode(errors="replace"),
+            "device_product": fields[1].decode(errors="replace"), "signature_id": fields[3].decode(errors="replace"), "leef_delimiter": delim}
+
+
+def _cef(raw: bytes):
+    """Twin of frame.UnwrapCEF: CEF:Version|Vendor|Product|Version|Signature ID|Name|Severity|Extension — pipes in the
+    header fields escaped as \\|, a header with no extension is not an envelope, "CEF:" anywhere but at 0 is payload."""
+    if not raw.startswith(b"CEF:"):
+        return None
+    pos = vs = 4
+    while pos < len(raw) and raw[pos:pos + 1].isdigit():
+        pos += 1
+    if pos == vs or pos >= len(raw) or raw[pos:pos + 1] != b"|":
+        return None
+    pos += 1
+    fields = []
+    for _ in range(6):
+        out = bytearray()
+        while True:
+            if pos >= len(raw):
+                return None
+            c = raw[pos:pos + 1]
+            if c == b"\\" and raw[pos + 1:pos + 2] in (b"|", b"\\"):
+                out += raw[pos + 1:pos + 2]
+                pos += 2
+                continue
+            if c == b"|":
+                pos += 1
+                break
+            out += c
+            pos += 1
+        fields.append(bytes(out))
+    if pos >= len(raw):
+        return None
+    return {"kind": "cef", "payload_offset": pos, "payload_length": len(raw) - pos, "device_vendor": fields[0].decode(errors="replace"),
+            "device_product": fields[1].decode(errors="replace"), "device_version": fields[2].decode(errors="replace"),
+            "signature_id": fields[3].decode(errors="replace"), "name": fields[4].decode(errors="replace")}
+
+
+def chain(raw: bytes) -> dict:
+    """Twin of frame.UnwrapChain: up to MAX_SYSLOG_DEPTH syslog envelopes (5424, then 3164, else none), then ONE
+    application envelope — LEEF, else CEF — only when the innermost payload STARTS with a well-formed header. Offsets are
+    absolute in `raw`; `kinds` is outermost first; `l1` is what the router's L1 key names (the innermost kind, or raw)."""
+    envs, off, n = [], 0, len(raw)
+    for depth in range(MAX_SYSLOG_DEPTH):
+        e = unwrap(raw[off:off + n])
+        if e["kind"] == "none":
+            break
+        e = dict(e, level=depth + 1, payload_offset=e["payload_offset"] + off)
+        envs.append(e)
+        off, n = e["payload_offset"], e["payload_length"]
+    for app in (_leef, _cef):
+        e = app(raw[off:off + n])
+        if e:
+            e = dict(e, level=len(envs) + 1, payload_offset=e["payload_offset"] + off)
+            envs.append(e)
+            off, n = e["payload_offset"], e["payload_length"]
+            break
+    kinds = [e["kind"] for e in envs]
+    return {"kinds": kinds, "envelopes": envs, "payload_offset": off, "payload_length": n, "l1": kinds[-1] if kinds else "raw"}
+
+
+def chain_payload(raw: bytes) -> bytes:
+    """The bytes the router routes and the parser parses."""
+    c = chain(raw)
+    return raw[c["payload_offset"]:c["payload_offset"] + c["payload_length"]]

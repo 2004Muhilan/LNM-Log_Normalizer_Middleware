@@ -53,12 +53,14 @@ func TestUnloggedPackIsRefusedAtStartupAndOnReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cmd.Process.Kill()
+	// a deadline, not a count: returns the moment the line appears. It was 100 x 50 ms (5 s), and under the gate's parallel
+	// load a reload — which verifies the pack against the transparency log — once took longer (2026-09-29). The check is
+	// the same; only how long a loaded machine may take to reach it changed.
 	wait := func(s string) bool {
-		for i := 0; i < 100; i++ {
+		for end := time.Now().Add(60 * time.Second); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
 			if strings.Contains(stderr.String(), s) {
 				return true
 			}
-			time.Sleep(50 * time.Millisecond)
 		}
 		return false
 	}

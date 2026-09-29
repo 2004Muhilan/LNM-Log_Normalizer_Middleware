@@ -22,38 +22,22 @@ import json
 import re
 from dataclasses import dataclass
 
+from . import envelope
 from .induce import Structure
 
 _KVTOK = re.compile(rb"^[A-Za-z_][A-Za-z0-9_.\-]*=")
-_LEEF = re.compile(rb"^LEEF:(\d+)(?:\.\d+)?\|")
 BOUNDS = {"max_event_bytes": 16384, "max_fields": 128, "max_nesting": 4, "max_repeat": 16}
 
 
 def leef_split(raw: bytes) -> tuple[int, str] | None:
-    """Twin of frame.UnwrapLEEF: (payload offset, declared delimiter or '') — None when the line is not LEEF."""
-    m = _LEEF.match(raw)
-    if not m:
-        return None
-    pos = m.end()
-    for _ in range(4):
-        e = raw.find(b"|", pos)
-        if e < 0:
-            return None
-        pos = e + 1
-    delim = ""
-    if int(m.group(1)) >= 2:
-        e = raw.find(b"|", pos)
-        if 0 < e - pos <= 4:
-            d = raw[pos:e].decode("latin-1")
-            h = d[2:] if d.startswith("0x") else d[1:] if d.startswith("x") else None
-            if len(d) == 1 or (h is not None and len(h) == 2 and all(c in "0123456789abcdefABCDEF" for c in h)):
-                delim, pos = d, e + 1
-    return (pos, delim) if pos < len(raw) else None
+    """Twin of frame.UnwrapLEEF on a line that STARTS with the header: (payload offset, declared delimiter or '')."""
+    e = envelope._leef(raw)
+    return (e["payload_offset"], e["leef_delimiter"]) if e else None
 
 
 def leef_payload(raw: bytes) -> bytes:
-    s = leef_split(raw)
-    return raw[s[0]:] if s else raw
+    """Kept for callers of the LEEF-only name: the payload after the WHOLE envelope chain, as the router sees it."""
+    return envelope.chain_payload(raw)
 
 
 def _csv_cells(b: bytes) -> int:
@@ -142,7 +126,7 @@ def _field_names(paths: list[str]) -> dict[str, str]:
 
 @dataclass
 class Draft:
-    l1: str                 # raw | leef
+    l1: str                 # raw | rfc3164 | rfc5424 | leef | cef — the innermost envelope, as the router's L1 key names it
     l2: str                 # json | xml | kv | csv
     spec: dict
     structure: Structure
@@ -153,9 +137,15 @@ class Draft:
 def draft(lines: list[bytes], spec_id: str) -> Draft | None:
     """None when the samples are whitespace tokens (positional/template text): that is `induce`'s job."""
     from .model.structure_from_spec import structure_from_spec
-    leef = [leef_split(l) for l in lines]
-    l1 = "leef" if lines and all(leef) else "raw"
-    payloads = [l[s[0]:] for l, s in zip(lines, leef)] if l1 == "leef" else list(lines)
+    # the payload the ROUTER sees: every envelope removed exactly as frame.UnwrapChain removes it (syslog, up to two
+    # levels, then LEEF or CEF); L1 is the innermost envelope, the key routing matches a family against
+    chains = [envelope.chain(l) for l in lines]
+    l1s = {c["l1"] for c in chains}
+    if len(l1s) > 1:
+        raise ValueError(f"the samples do not share one envelope ({sorted(l1s)}): nothing is drafted from a mixed capture")
+    l1 = l1s.pop() if l1s else "raw"
+    payloads = [l[c["payload_offset"]:c["payload_offset"] + c["payload_length"]] for l, c in zip(lines, chains)]
+    leef = [c["envelopes"][-1] if c["kinds"] else None for c in chains]
     kinds = {surface(p) for p in payloads}
     if kinds == {"tokens"} or not payloads:
         return None
@@ -185,7 +175,7 @@ def draft(lines: list[bytes], spec_id: str) -> Draft | None:
             paths += [k for k in ks if k not in paths]
         lo, hi = min(counts), max(counts)
         names = _field_names(paths)
-        delims = {s[1] for s in leef} if l1 == "leef" else set()
+        delims = {s["leef_delimiter"] for s in leef} if l1 == "leef" else set()
         sep = {"char": "\t"} if l1 == "leef" and delims == {""} else {"whitespace_run": True}
         if l1 == "leef" and delims != {""}:
             raise ValueError("LEEF 2.0 with a declared delimiter: the router counts whitespace-separated pairs only; not drafted")
@@ -202,7 +192,9 @@ def draft(lines: list[bytes], spec_id: str) -> Draft | None:
             "regex_dialect": "re2", "bounds": dict(BOUNDS), "root": root}
     structure, kept = structure_from_spec(json.dumps(spec).encode(), payloads)
     if len(kept) != len(payloads):
-        raise ValueError(f"{len(payloads) - len(kept)} sample(s) do not parse under the drafted {l2} spec: not drafted")
+        why = (" — a CEF extension value runs to the next key= and may hold unquoted spaces (FortiGate: dstcountry=United States);"
+               " the kv op splits pairs on whitespace, so a CEF family needs a parser-spec change (raised, not made)") if l1 == "cef" and l2 == "kv" else ""
+        raise ValueError(f"{len(payloads) - len(kept)} sample(s) do not parse under the drafted {l2} spec: not drafted{why}")
     if l2 == "csv":
         for s in structure.slots:
             s.name = None   # a csv column has a position, not a name

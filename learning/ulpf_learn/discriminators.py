@@ -90,6 +90,7 @@ def apply_logformat(plan: Plan, directive: str, vendor: str, mandatory: set[str]
     new.null_values = list(table.get("null_values", []))
     new.source_timezone = table.get("source_timezone")
     new.timezone_confidence = table.get("timezone_confidence", "unresolved")
+    new.timezone_field = table.get("timezone_field")   # vendor schema evidence: the key the device states its offset in
     resolved: list[str] = []
     for slot, parts in zip(new.slots, slots):
         codes = [t for k, t in parts if k == "code"]
@@ -166,14 +167,22 @@ def coercion_for(class_uid: int, attribute: str, token_class: str, samples: list
     return None
 
 
-def apply_operator_assertion(plan: Plan, field: str, attribute: str, operator_id: str, note: str, mandatory: set[str]) -> Plan:
+def apply_operator_assertion(plan: Plan, field: str, attribute: str, operator_id: str, note: str, mandatory: set[str], lookup: dict | None = None) -> Plan:
+    """The operator states what a field is. With `lookup` (2026-09-30) the operator also states how its values map onto an
+    enum attribute — FortiGate's status="success"/"failed" onto status_id 1/2 — as the vendor tables do (transform kind
+    lookup, parser-pack 1.3.0); the map is part of the recorded assertion. Values outside it take `default` (99, Other)."""
     new = copy.deepcopy(plan)
+    transform = None
+    if lookup:
+        table = {str(k): int(v) for k, v in (lookup.get("lookup") or lookup).items() if k != "default"}
+        transform = {"kind": "lookup", "lookup": table, "default": int(lookup.get("default", 99))}
+        note = f"{note} [value map stated by the operator: {', '.join(f'{k}={v}' for k, v in table.items())}; otherwise {transform['default']}]"
     for slot, p in new.parts():
         if p.field == field:
-            p.mappings = [Mapping(attribute, {"category": "operator_assertion", "operator_id": operator_id, "evidence_ref": note}, None, attribute in mandatory)]
+            p.mappings = [Mapping(attribute, {"category": "operator_assertion", "operator_id": operator_id, "evidence_ref": note}, transform, attribute in mandatory)]
             p.candidates = []
             p.unmapped_name = None   # the provider's "carry it unmapped" no longer applies: the operator said what it is
-            if p.coerce is None:
+            if p.coerce is None and transform is None:   # a looked-up value stays text: the lookup makes the enum
                 p.coerce = coercion_for(new.event_class_uid, attribute, p.cls, slot.samples)
             return new
     raise KeyError(field)
@@ -231,6 +240,7 @@ def apply_vendor_schema(plan: Plan, vendor: str, family_id: str, mandatory: set[
     new.null_values = list(table.get("null_values", []))
     new.source_timezone = table.get("source_timezone")
     new.timezone_confidence = table.get("timezone_confidence", "unresolved")
+    new.timezone_field = table.get("timezone_field")   # vendor schema evidence: the key the device states its offset in
     resolved: list[str] = []
     for slot, part in new.parts():
         entry = table["fields"].get(part.field)

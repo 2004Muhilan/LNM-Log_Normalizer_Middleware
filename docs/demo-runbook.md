@@ -401,9 +401,21 @@ versioned corrections (invariant 8) exist to record.
 - "Prove it" and Proof of Derivation pass on one of its events.
 - **Live format change:** `syslog-format.sh csv|cef|json` quarantines the new format with the bytes kept.
 
-**Turn the four-vendor relay OFF first** (System page). Otherwise its 8 events/s keep the FortiGate below the console's
-trigger threshold.
+**A demo moment: a new event family, live.**
+1. Make a few admin logins on the device (`fgt-cli.sh "get system status"`, a handful of times).
+2. The console shows **NEW EVENT FAMILY from FortiGate (bound: … parsed by fortigate-fw-01)**: system events no family owns.
+3. The model proposes OCSF Authentication. There is no prepared sheet for this device, so the operator answers on the page:
+   - eventtime → time, user → user.name;
+   - status → status_id with a value map `success=1, failed=2`.
+4. Press Promote. The next logins are parsed; "Prove it" and Proof of Derivation pass on them.
+
+The trigger window is per source (2026-09-30), so the relay can stay ON.
+
+**Live format change:** `syslog-format.sh csv|cef|json` is shown as **format drift of the FortiGate (bound source)**, never as
+another vendor's drift. The console then onboards the new format and asks the operator.
 
 **What not to say:**
-- that the FortiGate's format changes heal: today they do not, and the findings are in the doc;
-- that csv is "detected as FortiGate drift": the router attributes it to the PAN-OS pack.
+- that the FortiGate's format changes heal automatically: they ask. Earlier answers carry over only within a surface (the
+  §4.4 key), and a cross-surface key is raised;
+- that csv or cef are fully handled: csv is drafted as CSV of `key=value` cells, and CEF values with spaces need a
+  parser-spec change. Both are raised in the doc.

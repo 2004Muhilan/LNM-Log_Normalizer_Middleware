@@ -95,11 +95,12 @@ def emit_pack(plan: Plan, spec: dict, verdict: Verdict, certificates: list[dict]
         "sample_provenance": {"tier": 1, "operator_id": operator_id, "sample_count": sample_count, "corpus_hash": sha(samples)},
     }
     pack = {
-        "schema_version": PACK_SCHEMA_VERSION, "pack_id": pack_id, "pack_version": pack_version, "created_at": created_at,
+        "schema_version": "1.4.0" if getattr(plan, "timezone_field", None) else PACK_SCHEMA_VERSION, "pack_id": pack_id, "pack_version": pack_version, "created_at": created_at,
         "source": {"source_id": plan.source_id, **(source_meta or {"vendor": "Squid", "product": "Squid Cache", "declared_envelope": "raw", "transport_hint": "file"})},
         "ocsf": {"version": "1.3.0", "pinned_classes": [{"uid": cls["uid"], "name": cls["name"], "table_hash": cls["table_hash"]}]},
         "acceptance": {"policy_version": "1.0.0"},
-        "time": {"source_timezone": plan.source_timezone, "timezone_confidence": plan.timezone_confidence},
+        "time": {"source_timezone": plan.source_timezone, "timezone_confidence": plan.timezone_confidence,
+                 **({"timezone_field": plan.timezone_field} if getattr(plan, "timezone_field", None) else {})},
         "anchors": list(anchors or []),
         "families": [family],
         "provenance": {"generator_version": "ulpf-gen-0.6", "validator_version": "ulpf-val-0.6", "model_hash": plan.model_hash, "discriminator_library_version": library_version,

@@ -67,6 +67,7 @@ class Plan:
     family_id: str | None = None
     envelope_mappings: list[EnvelopeMapping] = field(default_factory=list)
     drafted: bool = False                   # laptop branch: given_spec was DRAFTED from the samples (draft.py); its cells are rebuilt from the parts
+    timezone_field: str | None = None       # parser-pack 1.4.0: the field in which the source states its UTC offset per event (last: positional callers)
 
     def parts(self):
         for s in self.slots:

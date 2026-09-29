@@ -51,7 +51,7 @@ def merge(pack_dirs: list[Path], out_dir: Path, pack_id: str, anchors: list[dict
             shutil.copyfile(s, out_dir / "samples" / f"{fam['family_id']}-{s.name}")
     assert base is not None
     pack = dict(base)
-    pack["schema_version"] = PACK_SCHEMA_VERSION
+    pack["schema_version"] = "1.4.0" if (pack.get("time") or {}).get("timezone_field") else PACK_SCHEMA_VERSION
     pack["pack_id"] = pack_id
     if pack_version:
         pack["pack_version"] = pack_version   # a corrected family inside: the source pack's version moves with it

@@ -73,18 +73,23 @@ class Session:
                       "samples_path": str(samples_path), "sample_count": len(lines), "state": "induced", "timeline": [], "certificates": {}, "resolutions": [],
                       "product": product, "transport_hint": transport_hint}
         self.log("session_started", samples=len(lines))
-        from .draft import draft, leef_payload
+        from .draft import draft
+        from .envelope import chain, chain_payload
         d = draft(lines, f"{source_id}-draft")   # None for whitespace-token text: induction, as before
         if d is not None:
             structure = d.structure
             d.spec["spec_id"] = f"{source_id}-{d.l2}-{structure.arity}"
             self.state["app_envelope"] = d.l1 if d.l1 != "raw" else None
             self.state["drafted"] = {"l1": d.l1, "l2": d.l2, "named": d.named}
-            if d.l1 == "leef":
-                lines = [leef_payload(l) for l in lines]
+            if d.l1 != "raw":   # onboarding sees the payload routing sees: every envelope removed, as frame.UnwrapChain removes it
+                lines = [chain_payload(l) for l in lines]
             self.state["structure"] = {"arity": structure.arity, "other_arities": {}, "slots": [asdict(s) for s in structure.slots], "routing_sketch": d.routing}
             self.log("induced", arity=structure.arity, families_seen=1, structure_from=f"drafted_{d.l2}")
         else:
+            l1s = {chain(l)["l1"] for l in lines} - {"raw"}
+            if l1s:   # positional text inside an envelope: induce on the payload, as the router routes it (a raw family owns it)
+                self.state["app_envelope"] = sorted(l1s)[0]
+                lines = [chain_payload(l) for l in lines]
             structure = induce(lines)
             self.state["structure"] = {"arity": structure.arity, "other_arities": dict(structure.other_arities),
                                       "slots": [asdict(s) for s in structure.slots], "routing_sketch": structure.routing_sketch()}
@@ -218,7 +223,7 @@ class Session:
             touched = self._resolve_certificates(set(range(len(self.plan.slots))), discriminator_id, "vendor_schema_or_device_configuration", evidence, "vendor_document")
             self.state["resolutions"].append({"discriminator_id": discriminator_id, "provenance": "vendor_schema_or_device_configuration", "fields": resolved, "certificate_ids": touched})
         elif discriminator_id == "operator_assertion":
-            self.plan = apply_operator_assertion(self.plan, kw["field"], kw["attribute"], op, evidence, mandatory)
+            self.plan = apply_operator_assertion(self.plan, kw["field"], kw["attribute"], op, evidence, mandatory, lookup=kw.get("lookup"))
             slot_idx = {p.field: s.index for s, p in self.plan.parts()}[kw["field"]]
             touched = self._resolve_certificates({slot_idx}, discriminator_id, "operator_assertion", evidence, "operator_input")
             self.state["resolutions"].append({"discriminator_id": discriminator_id, "provenance": "operator_assertion", "fields": [kw["field"]], "certificate_ids": touched})
@@ -348,9 +353,9 @@ class Session:
         lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
         if self.state.get("unwrap_envelope"):
             lines = [envelope_payload(l) for l in lines]   # the parser sees the payload, exactly as the runtime unwraps it
-        if self.state.get("app_envelope") == "leef":
-            from .draft import leef_payload
-            lines = [leef_payload(l) for l in lines]
+        if self.state.get("app_envelope"):
+            from .envelope import chain_payload
+            lines = [chain_payload(l) for l in lines]   # the payload routing sees, every envelope removed
         return lines
 
 
@@ -392,4 +397,5 @@ def _plan_from_json(d: dict) -> Plan:
         slots.append(Slot(s["index"], s["token_class"], parts, s["split"], s["samples"]))
     return Plan(d["source_id"], d["event_class_uid"], d["event_class_name"], slots, d["null_values"],
                 [Mapping(**m) for m in d["constants"]], d["source_timezone"], d["timezone_confidence"], d["proposed_by"], d["model_hash"],
-                d.get("given_spec"), d.get("family_id"), [EnvelopeMapping(**e) for e in d.get("envelope_mappings", [])], d.get("drafted", False))
+                d.get("given_spec"), d.get("family_id"), [EnvelopeMapping(**e) for e in d.get("envelope_mappings", [])], d.get("drafted", False),
+                timezone_field=d.get("timezone_field"))

@@ -158,16 +158,29 @@ echo "accounting: ULPF parsed $USABLE events; SIEM holds $DOCS documents; lake (
 [ "$REJ" = "0" ] || fail "$REJ event(s) rejected by a destination"
 # scale-out: every connection (peer address:port) was handled by exactly one process — read off every store's evidence,
 # local and archived
-AFF=$(python3 - "$STATE/app" <<'PY'
+AFF=$(python3 - "$STATE/app" 2>&1 <<'PY'
 import glob, json, os, sys
 app = sys.argv[1]; seen = {}
 for ev in sorted(glob.glob(f"{app}/ev") + glob.glob(f"{app}/ev-*")):
     proc = 1 if ev.endswith("/ev") else int(ev.rsplit("-", 1)[1])
     sid = json.load(open(f"{ev}/store.json"))["store_id"]
-    idx = {os.path.basename(p): p for p in glob.glob(f"{app}/evidence-archive/{sid}/segments/seg_*.idx.jsonl")}
-    idx.update({os.path.basename(p): p for p in glob.glob(f"{ev}/seg_*.idx.jsonl")})
-    for p in idx.values():
-        for l in open(p, encoding="utf-8"):
+    arch = {os.path.basename(p): p for p in glob.glob(f"{app}/evidence-archive/{sid}/segments/seg_*.idx.jsonl")}
+    local = {os.path.basename(p): p for p in glob.glob(f"{ev}/seg_*.idx.jsonl")}
+    # the demo is still running: a local index can be shipped and deleted between the listing and the read (then its
+    # archived copy, byte-identical, is read), and the live segment's last line can be half-written (it is not a record
+    # yet). Both were read as crashes before (2026-09-29: the checker died, the gate said "split" with an empty list)
+    for name in sorted(set(arch) | set(local)):
+        data = None
+        for p in (local.get(name), arch.get(name)):
+            try:
+                data = open(p, encoding="utf-8").read() if p else None
+            except FileNotFoundError:
+                data = None
+            if data is not None:
+                break
+        if data is None:
+            sys.exit(f"{name}: listed, then neither the local nor the archived copy could be read")
+        for l in data.split("\n")[:-1]:   # complete lines only
             r = json.loads(l)
             if r.get("framing", {}).get("method") != "gap_record" and r.get("peer"):
                 seen.setdefault(r["peer"], set()).add(proc)

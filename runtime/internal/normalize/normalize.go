@@ -184,6 +184,12 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 			eventTime = n
 		}
 	}
+	tzName, tzConf := ctx.Pack.Time.SourceTimezone, ctx.Pack.Time.TimezoneConfidence
+	if f := ctx.Pack.Time.TimezoneField; f != "" {
+		if off, ok := UTCOffset(strs[f]); ok {
+			tzName, tzConf = &off, "declared" // the event itself states the source's offset
+		}
+	}
 	lineage := map[string]any{
 		"schema_version":        lineageVersion(ctx),
 		"event_id":              ctx.Record.EventID,
@@ -203,8 +209,8 @@ func Normalize(m *spanmap.SpanMap, ctx Context) (map[string]any, Result, error) 
 		"event_time":            eventTime,
 		"ingest_time":           ctx.Record.IngestTime,
 		"processing_time":       ctx.ProcessingTime.UnixMilli(),
-		"source_timezone":       ctx.Pack.Time.SourceTimezone,
-		"timezone_confidence":   ctx.Pack.Time.TimezoneConfidence,
+		"source_timezone":       tzName,
+		"timezone_confidence":   tzConf,
 		"normalization_version": normVersion(ctx),
 		"framing": map[string]any{
 			"method":                  ctx.Record.Framing.Method,
@@ -411,4 +417,34 @@ func lineageVersion(ctx Context) string {
 		}
 	}
 	return LineageSchemaVersion
+}
+
+// UTCOffset reads a source-stated UTC offset — "+0530", "+05:30", "-0500", "Z" — as "±HH:MM" (parser-pack 1.4.0,
+// time.timezone_field). Anything else (empty, a zone name, out of range) is not an offset: the pack's defaults stand.
+func UTCOffset(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "Z" || s == "z" {
+		return "+00:00", true
+	}
+	if len(s) != 5 && len(s) != 6 || (s[0] != '+' && s[0] != '-') {
+		return "", false
+	}
+	d := s[1:]
+	if len(d) == 5 {
+		if d[2] != ':' {
+			return "", false
+		}
+		d = d[:2] + d[3:]
+	}
+	for _, c := range d {
+		if c < '0' || c > '9' {
+			return "", false
+		}
+	}
+	h, _ := strconv.Atoi(d[:2])
+	m, _ := strconv.Atoi(d[2:])
+	if h > 14 || m > 59 || h == 14 && m > 0 {
+		return "", false
+	}
+	return fmt.Sprintf("%c%02d:%02d", s[0], h, m), true
 }

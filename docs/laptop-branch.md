@@ -658,3 +658,42 @@ default prompt, then for a `Password:` it has already half-read.
 - `patch-vrnetlab.py` now also patches `/launch.py`: a login prompt means the VM is up, and nothing is typed on the console.
 - The container is `healthy` after the patch, and the licence stayed Valid through the crash and three restarts.
 - Only `demo/devices/fortigate/` changed after the gate runs. The gate does not exercise those files.
+
+## 16. Real-device fixes, and the live drift test again (2026-09-30)
+
+Details: `docs/real-device-fortigate.md`, "Fixed, and the live test again".
+
+**Six fixes, each from a finding on the real FortiGate:**
+1. **Envelope parity.** The learning plane unwraps exactly as the runtime does (`envelope.chain`); Go and Python are held to
+   one shared vectors file.
+2. **Drift attributed by source binding.** A peer is bound by the packs that parsed its lines, vendor packs included.
+   `routing_drift` of a learnable source is a trigger, and a "new family of a known source" is told apart from drift.
+3. **A trigger window per source.**
+4. **Prepared sheets bound to their source.**
+5. **The FortiGate's system events onboarded live** as OCSF Authentication. An operator answer can carry a value map onto
+   an enum (`respond --lookup`).
+6. **parser-pack 1.4.0 `time.timezone_field`:** the FortiGate's `tz=` gives `source_timezone` `+05:30` / declared.
+
+**Live, relay on.** The event family was onboarded and then parsed, and Proof of Derivation passes on one of its events.
+Each of csv, cef and json was **attributed to the FortiGate** and asked the operator; one CEF job was refused, with the
+reason. Nothing healed automatically: the §4.4 key does not cross surfaces (raised).
+
+**The three timing checks behind the flaky gates:**
+- the reload wait in `TestUnloggedPackIsRefusedAtStartupAndOnReload`: from 5 s to a 60 s deadline that returns at once;
+- `start-demo.sh`'s `sleep 2` start count: polls up to 30 s until the counts are exact, with the checks unchanged;
+- the apps-check affinity reader: it reads the archived copy when a local index is shipped mid-read, counts complete lines
+  only, and prints its own error.
+
+None of the three weakens what is checked.
+
+**Raised, not done:**
+- cross-surface propagation;
+- a comma-separated key=value surface;
+- CEF values with spaces (parser-spec);
+- drafting from samples that miss a feature;
+- peer binding in the runtime itself.
+
+**Gate, both configurations, on the desktop, with the FortiGate lab running:**
+- `bash scripts/gate.sh`: **PASS in 738 s**, first run (Go 132 tests, 0 skipped; Python 107).
+- `bash scripts/gate.sh --laptop`: **PASS in 819 s**, first run. This is the laptop's configuration on the desktop, not the
+  laptop.

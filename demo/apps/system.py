@@ -44,13 +44,20 @@ LOCK = threading.RLock()
 ENVELOPES = {"raw": "no envelope", "none": "no envelope", "rfc3164": "syslog RFC 3164", "rfc5424": "syslog RFC 5424", "cef": "CEF header", "leef": "LEEF header"}
 SURFACES = {"tokens": "positional text", "kv": "key=value", "csv": "CSV", "json": "JSON", "xml": "XML"}
 ATTRIBUTES = ["time", "action_id", "src_endpoint.ip", "src_endpoint.port", "src_endpoint.zone", "dst_endpoint.ip", "dst_endpoint.port", "dst_endpoint.zone",
-              "connection_info.protocol_name", "connection_info.protocol_num", "connection_info.direction", "traffic.bytes_out", "traffic.bytes_in", "traffic.packets_out", "traffic.packets_in"]
+              "connection_info.protocol_name", "connection_info.protocol_num", "connection_info.direction", "traffic.bytes_out", "traffic.bytes_in", "traffic.packets_out", "traffic.packets_in",
+              # a device's own events (2026-09-30, the FortiGate's system events: OCSF Authentication and kin); the learning
+              # plane checks every answer against the pinned table of the class being onboarded
+              "user.name", "status_id", "status", "status_detail", "message", "activity_id", "logon_type", "auth_protocol", "service.name", "metadata.event_code"]
 # op-014's prepared answer sheet for THEIR sensor, by column order (the six shapes carry the same columns in the same order)
 SHEET = [("time", "flowtap stamps the line when the flow is logged: it is the event time"), ("action_id", "the verdict code: 1 allowed, 2 denied — the same codes OCSF uses"),
          ("connection_info.protocol_name", "tcp or udp"), ("src_endpoint.ip", "flowtap writes the initiator first"), ("src_endpoint.port", "the initiator's port follows its address"),
          ("dst_endpoint.ip", "the second address is the responder"), ("dst_endpoint.port", "the responder's port follows its address"),
          ("traffic.bytes_out", "first counter: bytes from the initiator"), ("traffic.bytes_in", "second counter: bytes to the initiator")]
 SHEET_V2 = {2: ("connection_info.protocol_num", "firmware 2.0 writes the IANA protocol number"), 9: ("src_endpoint.zone", "the new column is the initiator's zone")}
+# A prepared sheet is BOUND to the source it was prepared for (2026-09-30): it answers that source's fields and no
+# other's. Before, the sheet was applied by column position to whatever was being onboarded — on the real FortiGate it
+# asserted "position 1 is time" on a CEF line; only the acceptance policy kept that pack out.
+PREPARED_SHEETS = {"flowtap-01": {"author": "op-014", "for": "the flowtap sensor's columns", "by_slot": SHEET, "v2": SHEET_V2}}
 
 
 class Tail:
@@ -146,6 +153,14 @@ class System:
         self.traces = {}                          # event id -> the round trip's result
         self.held = set()                         # trigger keys the operator rolled back: no automatic healing until a restart
         self.tlog_refusals = []                   # packs a process refused (pack_refused records in its evidence log)
+        self.bound = {}                           # (ingest channel, peer host) -> {pack_id: events it parsed}: the SOURCE BINDING
+        self.pack_vendor = {}                     # pack_id -> declared vendor (lower case), for the packs loaded at start
+        for d in [a.golden] + [str(Path(a.vendor_packs) / v) for v in ("cisco-asa", "panos", "fortigate") if a.vendor_packs]:
+            try:
+                doc = json.loads((Path(d) / "pack.json").read_text())
+                self.pack_vendor[doc["pack_id"]] = (doc.get("source") or {}).get("vendor", "").lower()
+            except (OSError, ValueError, KeyError):
+                pass
 
     # ------------------------------------------------------------------ runtime
     def start_runtime(self):
@@ -308,32 +323,55 @@ class System:
             if kind == "out":
                 lin = r["_lineage"]
                 e.update(ok=True, pack=lin.get("parser_id"), family=lin.get("family_id"), sig=lin.get("routing_signature", ""), out=(off, len(l)))
+                b = self.bound.setdefault((e["rec"].get("ingest_channel"), self.host_of(e)), {})
+                b[e["pack"]] = b.get(e["pack"], 0) + 1
             else:
                 e.update(ok=False, stage=r.get("stage"), reason=r.get("reason"), sig=r.get("routing_signature", ""))
 
     def host_of(self, e):
         return (e["rec"].get("peer") or "").rsplit(":", 1)[0]
 
+    def trigger_key(self, e):
+        """What would have to be learned to read a quarantined event, PER SOURCE (peer host): `routing` and `routing_drift`
+        both mean no family routes the line (routing_drift only adds the router's surface note about an anchor)."""
+        st = e.get("stage")
+        kind = "unknown_signature" if st in ("routing", "routing_drift") else "parse_drop" if st in ("parse", "tiling", "normalize") else None
+        return None if kind is None else f"{kind} {e.get('sig', '')} @{self.host_of(e)}"
+
+    WINDOW = 60   # events per SOURCE (2026-09-30: it was the last 60 of ALL sources — the relay's 8/s starved the FortiGate's 1/s)
+
     def triggers(self):
-        """Quarantined events of the recent window, grouped by what would have to be learned to read them."""
+        """Quarantined events of each source's recent window, grouped by what would have to be learned to read them."""
         with LOCK:
-            recent = [self.events[i] for i in self.order[-60:]]
+            per, n = {}, 0
+            for i in reversed(self.order):
+                e = self.events[i]
+                n += 1
+                if n > 50000:
+                    break
+                if e.get("record") or e.get("ok") is None:
+                    continue
+                h = self.host_of(e)
+                w = per.setdefault(h, [])
+                if len(w) < self.WINDOW:
+                    w.append(e)
         groups = {}
-        for e in recent:
-            if e.get("ok") is not False or e.get("record") or not self.learnable(e):
-                continue   # the vendor relay is not learnable: its unknown lines stay quarantined
-            kind = "unknown_signature" if e["stage"] == "routing" else "parse_drop" if e["stage"] in ("parse", "tiling", "normalize") else None
-            if kind is None:
-                continue
-            key = kind + " " + e["sig"]
-            if e["rec"]["event_id"] <= self.ignore.get(key, "") or key in self.held:
-                continue
-            groups.setdefault(key, []).append(e)
+        for h, recent in per.items():
+            for e in recent:
+                if e.get("ok") is not False or not self.learnable(e):
+                    continue   # the vendor relay is not learnable: its unknown lines stay quarantined
+                key = self.trigger_key(e)
+                if key is None or e["rec"]["event_id"] <= self.ignore.get(key, "") or key in self.held:
+                    continue
+                groups.setdefault(key, []).append(e)
         for key, evs in groups.items():
             if len(evs) >= 10 and not any(j["key"] == key and (j["state"] not in ("done", "failed") or (j["state"] == "failed" and time.time() - j["started"] < 60)) for j in self.jobs):
-                kind, sig = key.split(" ", 1)
+                kind = key.split(" ", 1)[0]
+                sig = evs[-1].get("sig", "")
                 parts = sig.split("|")
                 job = {"id": f"job-{len(self.jobs) + 1}", "key": key, "trigger": kind, "signature": sig, "l1": parts[0], "l2": parts[1] if len(parts) > 1 else "?", "host": self.host_of(evs[-1]),
+                       "router_note": next((x.get("reason") for x in reversed(evs) if x.get("stage") == "routing_drift"), None),
+                       "router_reason": evs[-1].get("reason"),
                        "state": "starting", "steps": [], "fields": [], "answers": {}, "started": time.time(), "go": threading.Event(), "promote": threading.Event()}
                 self.jobs.append(job)
                 threading.Thread(target=self.run_job, args=(job,), daemon=True).start()
@@ -364,6 +402,22 @@ class System:
                     sock.close()
                 sock = None; time.sleep(1)
             time.sleep(1.0 / self.a.relay_rate)
+
+    def belongs(self, pack_id, inv):
+        """A pack reads this inventory source: one this console onboarded for it (named after its source_id), or a vendor
+        pack of the vendor the operator declared for it."""
+        if not pack_id:
+            return False
+        if pack_id.startswith(inv.get("source_id") or "\0"):
+            return True
+        v = self.pack_vendor.get(pack_id)
+        return bool(v) and v == (inv.get("vendor") or "").lower()
+
+    def bound_to(self, e):
+        """The inventory name of the source this event's (channel, peer) is bound to, or None."""
+        inv = self.inventory.get(self.host_of(e), {})
+        packs = self.bound.get((e["rec"].get("ingest_channel"), self.host_of(e)), {})
+        return inv.get("name") if inv and any(self.belongs(p, inv) for p in packs) else None
 
     def learnable(self, e):
         return self.inventory.get(self.host_of(e), {}).get("learn", True)
@@ -579,10 +633,11 @@ class System:
             job["event_class_uid"], job["provider"] = s["proposal"]["event_class_uid"], s["proposal"]["provider"]
         return s
 
-    def assert_field(self, job, session, field, attribute, note, how):
+    def assert_field(self, job, session, field, attribute, note, how, lookup=None):
+        """With `lookup` the operator also states the value map onto an enum attribute (status="success" -> status_id 1)."""
         self.learn("respond", "--session", str(session), "--discriminator", "operator_assertion", "--field", field, "--attribute", attribute,
-                   "--input", f"operator {self.policy['operator']} asserts {field} is {attribute}: {note} [{how}]")
-        self.step(job, f"operator {self.policy['operator']} asserts {field} → {attribute}  ({how})")
+                   "--input", f"operator {self.policy['operator']} asserts {field} is {attribute}: {note} [{how}]", *(["--lookup", json.dumps(lookup)] if lookup else []))
+        self.step(job, f"operator {self.policy['operator']} asserts {field} → {attribute}" + (" with " + ", ".join(f"{k}={v}" for k, v in lookup.items()) if lookup else "") + f"  ({how})")
 
     def run_job(self, job):
         try:
@@ -597,16 +652,41 @@ class System:
         inv = self.inventory.get(job["host"], {"source_id": "unknown-" + job["host"].replace(".", "-"), "name": "unknown application", "vendor": "unknown", "product": "unknown"})
         src = inv["source_id"]
         same = [k for k, v in self.active.items() if (v["l1"], v["l2"]) == (job["l1"], job["l2"]) and v["source_id"] == src]
-        job["kind"] = "heal" if same else "onboard"
         job["source_id"], job["app"] = src, inv["name"]
         fmt = (ENVELOPES.get(job["l1"], job["l1"]) + " → " if job["l1"] not in ("raw", "") else "") + SURFACES.get(job["l2"], job["l2"])
         job["format"] = fmt
         with LOCK:
-            mine = [e for e in (self.events[i] for i in self.order) if e.get("ok") is False and job["key"] == ("unknown_signature " if e["stage"] == "routing" else "parse_drop ") + e.get("sig", "")
-                    and e["rec"]["event_id"] > self.ignore.get(job["key"], "")]
-            known = {(e["rec"].get("ingest_channel"), self.host_of(e)) for e in self.events.values() if e.get("ok") and (e.get("pack") or "").startswith(src)}
+            mine = [e for e in (self.events[i] for i in self.order) if e.get("ok") is False and self.trigger_key(e) == job["key"] and e["rec"]["event_id"] > self.ignore.get(job["key"], "")]
+            # the SOURCE BINDING: the (channel, peer) pairs whose lines this source's packs have parsed — the packs this
+            # console onboarded for it, and the vendor packs of the vendor the operator's inventory declares for it
+            known = {cp for cp, packs in self.bound.items() if any(self.belongs(p, inv) for p in packs)}
+            by = sorted({p for cp, packs in self.bound.items() if cp in known for p in packs if self.belongs(p, inv)})
         seen = {(e["rec"].get("ingest_channel"), self.host_of(e)) for e in mine}
         bound = bool(seen) and seen <= known
+        # heal: a changed format of a family this console onboarded for the source (autoheal-1.1); drift: the lines of a
+        # BOUND source changed format — that source's drift, whatever another vendor's anchor noticed; onboard: a new source
+        discovery = "family discovery input" in (job.get("router_reason") or "")   # an anchor value in its domain that no family owns: a new FAMILY
+        job["kind"] = "heal" if same else ("discovery" if discovery else "drift") if bound else "onboard"
+        job["binding"] = {"bound": bound, "by_packs": by, "drifted_from": sorted(map(list, seen)), "source_known_from": sorted(map(list, known)),
+                          "router_note": job.get("router_note"), "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"}
+        if job["kind"] == "discovery":
+            self.step(job, f"NEW EVENT FAMILY from {inv['name']} (bound: its lines on this channel and peer were parsed by {', '.join(by)}): {fmt} lines "
+                           f"that no onboarded family owns — {job.get('router_reason')} — {len(mine)} quarantined, bytes kept", "sampling")
+            alert = {"id": f"alert-{len(self.alerts) + 1}", "alert": "new_family_known_source", "policy_version": POLICY_VERSION, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                     "app": inv["name"], "host": job["host"], "source_id": src, "format": fmt, "trigger": {"kind": job["trigger"], "signature": job["signature"], "quarantined_events": len(mine)},
+                     "source_binding": job["binding"], "outcome": "onboarding a new event family of a known source…", "job": job["id"]}
+            with LOCK:
+                self.alerts.append(alert); job["alert"] = alert
+        if job["kind"] == "drift":
+            note = (f" The router's note — {job['router_note']} — is a surface observation about another pack's anchor, not an attribution: this peer is bound to {inv['name']}."
+                    if job.get("router_note") else "")
+            self.step(job, f"DRIFT on {inv['name']} (bound: its lines on this channel and peer were parsed by {', '.join(by)}): the format changed to {fmt} — "
+                           f"{len(mine)} quarantined, bytes kept.{note}", "sampling")
+            alert = {"id": f"alert-{len(self.alerts) + 1}", "alert": "drift_new_format", "policy_version": POLICY_VERSION, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "app": inv["name"],
+                     "host": job["host"], "source_id": src, "format": fmt, "trigger": {"kind": job["trigger"], "signature": job["signature"], "quarantined_events": len(mine)},
+                     "source_binding": job["binding"], "outcome": "onboarding the new format of a known source…", "job": job["id"]}
+            with LOCK:
+                self.alerts.append(alert); job["alert"] = alert
         if job["kind"] == "heal":
             self.step(job, f"DRIFT on {inv['name']}: {fmt} lines no longer {'match any family' if job['trigger'] == 'unknown_signature' else 'parse under their family'} — {len(mine)} quarantined, bytes kept", "sampling")
             alert = {"id": f"alert-{len(self.alerts) + 1}", "alert": "drift_auto_heal", "policy_version": POLICY_VERSION, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "app": inv["name"], "host": job["host"],
@@ -620,7 +700,8 @@ class System:
                 self.step(job, alert["outcome"], "waiting_approval")
                 job["go"].wait()
         else:
-            self.step(job, f"NEW FORMAT from {inv['name']}: {fmt} — every line quarantined, bytes kept, nothing parsed, nothing guessed", "sampling")
+            if job["kind"] == "onboard":
+                self.step(job, f"NEW FORMAT from {inv['name']}: {fmt} — every line quarantined, bytes kept, nothing parsed, nothing guessed", "sampling")
             if self.policy["auto_onboard"]:
                 job["decision"] = {"decision": "onboard", "tier": 1, "by": "policy auto_onboard (set by " + self.policy["operator"] + ")", "at": time.strftime("%H:%M:%S"), "quarantined_when_decided": len(mine)}
                 self.step(job, "onboarding started BY POLICY (auto-onboard is on; set by " + self.policy["operator"] + ")")
@@ -645,7 +726,7 @@ class System:
         self.step(job, ("the local model labels the fields" if a.provider == "model" else "FALLBACK: team-authored proposals stand in for the model") + " — proposals only, never evidence")
         session = work / "session"
         t0 = time.time()
-        self.learn("onboard", "--samples", str(work / "samples.log"), "--source-id", src, "--operator", self.policy["operator"] if job["kind"] == "onboard" else "auto-heal", "--session", str(session),
+        self.learn("onboard", "--samples", str(work / "samples.log"), "--source-id", src, "--operator", self.policy["operator"] if job["kind"] != "heal" else "auto-heal", "--session", str(session),
                    "--vendor", inv["vendor"], "--product", inv["product"], "--transport-hint", "syslog-tcp", "--propagation-store", str(self.dir / "propagation.json"), *prov)
         s = self.publish_fields(job, session)
         arity = s["structure"]["arity"]
@@ -653,15 +734,24 @@ class System:
         self.step(job, f"structure {'drafted from the lines own keys' if drafted else 'induced'}: {arity} fields; proposals in {time.time() - t0:.1f}s; {len(s['certificates'])} ambiguity certificate(s); "
                        f"{len(s.get('propagated', []))} field(s) carried over from earlier answers")
         version = "1.0"
-        if job["kind"] == "onboard":
-            if self.policy["prepared_answers"]:
-                self.step(job, "answers: the operator's PREPARED SHEET (policy prepared_answers is on)", "answering")
+        if job["kind"] in ("onboard", "drift", "discovery"):
+            sheet = PREPARED_SHEETS.get(src) if self.policy["prepared_answers"] else None
+            if sheet:
+                self.step(job, f"answers: {sheet['author']}'s PREPARED SHEET for {src} ({sheet['for']}; policy prepared_answers is on)", "answering")
                 for f in list(job["fields"]):
-                    ans = SHEET_V2.get(f["slot"]) if arity == 10 and f["slot"] in SHEET_V2 else SHEET[f["slot"]] if f["slot"] < len(SHEET) else None
+                    ans = sheet["v2"].get(f["slot"]) if arity == 10 and f["slot"] in sheet["v2"] else sheet["by_slot"][f["slot"]] if f["slot"] < len(sheet["by_slot"]) else None
                     if ans and not f["propagated"]:
                         self.assert_field(job, session, f["field"], ans[0], ans[1], "prepared sheet")
                 self.publish_fields(job, session)
             else:
+                if self.policy["prepared_answers"]:
+                    self.step(job, f"no prepared sheet for {src}: a sheet is bound to the source it was written for "
+                                   f"({', '.join(sorted(PREPARED_SHEETS))}) and is never applied to another device's fields")
+                open_ = [f for f in job["fields"] if not f["propagated"]]
+                if job["kind"] in ("drift", "discovery"):
+                    job["alert"]["outcome"] = (f"asked the operator: the new format's {len(open_)} field(s) have no evidence yet"
+                                               + (f" ({len(job['fields']) - len(open_)} carried over)" if len(open_) < len(job["fields"]) else "")
+                                               + " — earlier answers carry over only under the §4.4 key (same source, same L1–L3), and this is a new surface")
                 self.step(job, "waiting for the operator: say what each field is, then press Promote", "answering")
                 self.wait_answers(job, session)
         else:
@@ -688,6 +778,9 @@ class System:
                 self.promote_and_load(job, session, work, arity, "1.1", replace=job["family_key"])
                 alert["pack"] = job["pack"]
                 alert["answered"] = dict(job["answers"]); alert["outcome"] += f" → answered by {self.policy['operator']}, pack {job['pack']['pack_version']} loaded"
+        if job["kind"] in ("drift", "discovery"):
+            job["alert"]["pack"] = job.get("pack")
+            job["alert"]["outcome"] += f" → answered by {self.policy['operator']}, pack {job['pack']['pack_version']} loaded" if job.get("pack") else ""
         self.step(job, "done: events of this format are normalized from here on", "done")
 
     def wait_answers(self, job, session, only=None):
@@ -697,7 +790,7 @@ class System:
             job["promote"].wait(0.3)
             for f, attr in list(job["answers"].items()):
                 if f not in done and (only is None or f in only):
-                    self.assert_field(job, session, f, attr, "chosen on the System page", "asked on the page")
+                    self.assert_field(job, session, f, attr, "chosen on the System page", "asked on the page", lookup=job.get("lookups", {}).get(f))
                     done.add(f)
                     self.publish_fields(job, session)
             if job["promote"].is_set():
@@ -827,8 +920,13 @@ class System:
                 e = self.events[i]; raw = self.raw(e["rec"]) or b""
                 rows.append({"event_id": i, "at": time.strftime("%H:%M:%S", time.localtime((e["rec"].get("ingest_time") or 0) / 1000)), "connector": (e["rec"].get("ingest_channel") or "").split(":")[0],
                              "bytes": e["rec"]["length"], "format": self.fmt_of(e.get("sig")) if e.get("ok") is not None else "…", "ok": e.get("ok"),
-                             "outcome": e.get("family") if e.get("ok") else ("quarantined: " + e.get("stage", "")) if e.get("ok") is False else "in flight", "preview": raw[:130].decode("utf-8", "replace")})
+                             "outcome": e.get("family") if e.get("ok") else self.quarantine_label(e) if e.get("ok") is False else "in flight", "preview": raw[:130].decode("utf-8", "replace")})
             return rows
+
+    def quarantine_label(self, e):
+        """Attribution by SOURCE BINDING, never by another vendor's anchor: a bound source's unroutable line is that source's drift."""
+        b = self.bound_to(e) if e.get("stage") in ("routing", "routing_drift") else None
+        return f"quarantined: format drift of {b} (bound source)" if b else "quarantined: " + (e.get("stage") or "")
 
     def describe(self, eid):
         with LOCK:
@@ -850,7 +948,9 @@ class System:
                 "format": {"envelope": ENVELOPES.get(p[0], p[0]) if p and p[0] else "no envelope", "envelope_header": env or None, "surface": SURFACES.get(p[1], p[1]) if len(p) > 1 else None,
                            "arity": p[3] if len(p) > 3 else None, "token_classes": p[4].split(",") if len(p) > 4 and p[4] else None, "routing_signature": e.get("sig")},
                 "parsed": ({"status": "normalized", "pack": lin.get("parser_id"), "pack_version": lin.get("parser_version"), "family": lin.get("family_id"), "event": {k: v for k, v in ev.items() if k != "_lineage"}, "lineage": lin}
-                           if ev else {"status": "quarantined", "stage": e.get("stage"), "reason": e.get("reason")} if e.get("ok") is False else {"status": "in flight"})}
+                           if ev else {"status": "quarantined", "stage": e.get("stage"), "reason": e.get("reason"), "attributed_to": self.bound_to(e),
+                                "attribution": "by source binding (ingest channel + peer host); the router's reason is its surface observation" if self.bound_to(e) else None}
+                           if e.get("ok") is False else {"status": "in flight"})}
 
 
 def handler(sysm):
@@ -908,6 +1008,9 @@ def handler(sysm):
                 elif self.path == "/api/approve" and job:
                     job["go"].set()
                 elif self.path == "/api/answer" and job and d.get("attribute") in ATTRIBUTES and any(f["field"] == d.get("field") for f in job["fields"]):
+                    if d.get("lookup"):   # "success=1, failed=2": the operator's value map onto an enum attribute
+                        lk = d["lookup"] if isinstance(d["lookup"], dict) else dict(x.split("=", 1) for x in str(d["lookup"]).replace(";", ",").split(",") if "=" in x)
+                        job.setdefault("lookups", {})[d["field"]] = {str(k).strip(): int(str(v).strip()) for k, v in lk.items()}
                     job["answers"][d["field"]] = d["attribute"]
                 elif self.path == "/api/promote" and job:
                     job["promote"].set()

@@ -1,0 +1,146 @@
+[
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "fortigate default traffic (real device)",
+  "payload_length": 755,
+  "payload_offset": 5,
+  "raw": "\u003c189\u003edate=2026-09-29 time=18:20:37 devname=\"fgt\" devid=\"FGVMEVXFB-07ZH02\" eventtime=1790686237712425325 tz=\"+0530\" logid=\"0000000013\" type=\"traffic\" subtype=\"forward\" level=\"notice\" vd=\"root\" srcip=10.10.1.10 srcport=37331 srcintf=\"port2\" srcintfrole=\"lan\" dstip=172.20.20.10 dstport=3389 dstintf=\"port1\" dstintfrole=\"undefined\" srccountry=\"Reserved\" dstcountry=\"Reserved\" sessionid=615 proto=6 action=\"deny\" policyid=2 policytype=\"policy\" poluuid=\"fb4d64aa-bc02-51f1-14c6-0b833772ce50\" policyname=\"deny-rest\" service=\"RDP\" trandisp=\"noop\" appcat=\"unscanned\" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 crscore=30 craction=131072 crlevel=\"high\" devtype=\"Unknown\" osname=\"Unknown\" mastersrcmac=\"1a:25:3c:94:2f:05\" srcmac=\"1a:25:3c:94:2f:05\" srcserver=0"
+ },
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "fortigate default system event (real device)",
+  "payload_length": 450,
+  "payload_offset": 5,
+  "raw": "\u003c190\u003edate=2026-09-29 time=18:23:02 devname=\"fgt\" devid=\"FGVMEVXFB-07ZH02\" eventtime=1790686383165244434 tz=\"+0530\" logid=\"0100032001\" type=\"event\" subtype=\"system\" level=\"information\" vd=\"root\" logdesc=\"Admin login successful\" sn=\"1790686383\" user=\"admin\" ui=\"ssh(172.20.20.1)\" method=\"ssh\" srcip=172.20.20.1 dstip=10.0.0.15 action=\"login\" status=\"success\" reason=\"none\" profile=\"N/A\" msg=\"Administrator admin logged in successfully from ssh(172.20.20.1)\""
+ },
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "fortigate csv traffic (real device)",
+  "payload_length": 590,
+  "payload_offset": 5,
+  "raw": "\u003c189\u003edate=2026-09-29,time=18:24:38,devname=\"fgt\",devid=\"FGVMEVXFB-07ZH02\",eventtime=1790686478357243245,tz=\"+0530\",logid=\"0001000014\",type=\"traffic\",subtype=\"local\",level=\"notice\",vd=\"root\",srcip=10.0.0.15,srcport=1384,srcintf=\"root\",srcintfrole=\"undefined\",dstip=10.0.0.3,dstport=53,dstintf=\"port1\",dstintfrole=\"undefined\",srccountry=\"Reserved\",dstcountry=\"Reserved\",sessionid=10,proto=17,action=\"accept\",policyid=0,service=\"DNS\",trandisp=\"noop\",app=\"DNS\",duration=873,sentbyte=1128,rcvdbyte=3852,sentpkt=18,rcvdpkt=20,sentdelta=205,rcvddelta=930,durationdelta=289,sentpktdelta=3,rcvdpktdelta=3"
+ },
+ {
+  "kinds": [
+   "rfc3164",
+   "cef"
+  ],
+  "name": "fortigate cef traffic (real device)",
+  "payload_length": 869,
+  "payload_offset": 87,
+  "raw": "\u003c189\u003eSep 29 18:17:29 fgt CEF:0|Fortinet|Fortigate|v7.4.12|00013|traffic:forward deny|3|deviceExternalId=FGVMEVXFB-07ZH02 FTNTFGTeventtime=1790686049007222381 FTNTFGTtz=+0530 FTNTFGTlogid=0000000013 cat=traffic:forward FTNTFGTsubtype=forward FTNTFGTlevel=notice FTNTFGTvd=root src=10.10.1.10 spt=50108 deviceInboundInterface=port2 FTNTFGTsrcintfrole=lan dst=8.8.8.8 dpt=53 deviceOutboundInterface=port1 FTNTFGTdstintfrole=undefined FTNTFGTsrccountry=Reserved FTNTFGTdstcountry=United States externalId=433 proto=17 act=deny FTNTFGTpolicyid=2 FTNTFGTpolicytype=policy FTNTFGTpoluuid=fb4d64aa-bc02-51f1-14c6-0b833772ce50 FTNTFGTpolicyname=deny-rest app=DNS FTNTFGTtrandisp=noop FTNTFGTappcat=unscanned FTNTFGTduration=0 out=0 in=0 FTNTFGTsentpkt=0 FTNTFGTrcvdpkt=0 FTNTFGTcrscore=30 FTNTFGTcraction=131072 FTNTFGTcrlevel=high FTNTFGTdevtype=Unknown FTNTFGTosname=Unknown FTNTFGTmastersrcmac=1a:25:3c:94:2f:05 FTNTFGTsrcmac=1a:25:3c:94:2f:05 FTNTFGTsrcserver=0"
+ },
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "fortigate json traffic (real device)",
+  "payload_length": 875,
+  "payload_offset": 5,
+  "raw": "\u003c189\u003e{\"date\":\"2026-09-29\",\"time\":\"18:19:03\",\"devname\":\"fgt\",\"devid\":\"FGVMEVXFB-07ZH02\",\"eventtime\":\"1790686143647297433\",\"tz\":\"+0530\",\"logid\":\"0000000013\",\"type\":\"traffic\",\"subtype\":\"forward\",\"level\":\"notice\",\"vd\":\"root\",\"srcip\":\"10.10.1.10\",\"srcport\":\"37256\",\"srcintf\":\"port2\",\"srcintfrole\":\"lan\",\"dstip\":\"172.20.20.10\",\"dstport\":\"80\",\"dstintf\":\"port1\",\"dstintfrole\":\"undefined\",\"srccountry\":\"Reserved\",\"dstcountry\":\"Reserved\",\"sessionid\":\"519\",\"proto\":\"6\",\"action\":\"close\",\"policyid\":\"1\",\"policytype\":\"policy\",\"poluuid\":\"fb489c54-bc02-51f1-4056-3dc3e20ad626\",\"policyname\":\"allow-web\",\"service\":\"HTTP\",\"trandisp\":\"snat\",\"transip\":\"10.0.0.15\",\"transport\":\"37256\",\"appcat\":\"unscanned\",\"duration\":\"1\",\"sentbyte\":\"348\",\"rcvdbyte\":\"264\",\"sentpkt\":\"6\",\"rcvdpkt\":\"5\",\"devtype\":\"Unknown\",\"osname\":\"Unknown\",\"mastersrcmac\":\"1a:25:3c:94:2f:05\",\"srcmac\":\"1a:25:3c:94:2f:05\",\"srcserver\":\"0\"}"
+ },
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "asa relay rfc3164",
+  "payload_length": 123,
+  "payload_offset": 51,
+  "raw": "\u003c166\u003eOct 10 2018 12:34:56 localhost CiscoASA[999]: %ASA-6-302013: Built inbound TCP connection 1 for outside:10.0.0.1/1234 (10.0.0.1/1234) to inside:10.0.0.2/80 (10.0.0.2/80)"
+ },
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "panos relay rfc3164",
+  "payload_length": 88,
+  "payload_offset": 27,
+  "raw": "\u003c14\u003eJan 12 12:11:24 PA-220 1,2018/01/12 12:11:24,012801096514,TRAFFIC,end,2049,2018/01/12 12:11:24,10.0.0.1,8.8.8.8"
+ },
+ {
+  "kinds": [
+   "rfc5424",
+   "rfc3164",
+   "cef"
+  ],
+  "name": "rfc5424 relay around rfc3164 (depth 2)",
+  "payload_length": 26,
+  "payload_offset": 137,
+  "raw": "\u003c14\u003e1 2026-09-29T12:00:00Z relay01 rsyslogd - - - \u003c189\u003eSep 29 18:00:00 fgt CEF:0|Fortinet|Fortigate|v7.4.12|00013|traffic:forward deny|3|src=10.10.1.10 dst=8.8.8.8"
+ },
+ {
+  "kinds": [
+   "rfc5424"
+  ],
+  "name": "rfc5424 alone",
+  "payload_length": 43,
+  "payload_offset": 62,
+  "raw": "\u003c34\u003e1 2026-09-29T12:00:00.123Z host app 123 ID47 [ex@1 a=\"b\"] 1734567890.123 345 10.20.14.62 TCP_MISS/200"
+ },
+ {
+  "kinds": [
+   "rfc3164",
+   "leef"
+  ],
+  "name": "leef 1.0 behind rfc3164, no tag",
+  "payload_length": 47,
+  "payload_offset": 60,
+  "raw": "\u003c134\u003eDec 19 00:00:00 gw01 LEEF:1.0|Acme|Gate|4.2|login_fail|devTime=1734567890125\tsrc=10.0.0.5\tdst=10.0.0.6"
+ },
+ {
+  "kinds": [
+   "leef"
+  ],
+  "name": "leef 2.0 with a declared delimiter",
+  "payload_length": 34,
+  "payload_offset": 36,
+  "raw": "LEEF:2.0|Acme|Gate|4.2|login_fail|^|devTime=1734567890125^src=10.0.0.5"
+ },
+ {
+  "kinds": [
+   "cef"
+  ],
+  "name": "cef with an escaped pipe in the header",
+  "payload_length": 25,
+  "payload_offset": 35,
+  "raw": "CEF:0|Ven\\|dor|Prod|1.0|100|name|5|src=10.0.0.1 dst=10.0.0.2"
+ },
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "CEF: inside a payload is payload",
+  "payload_length": 30,
+  "payload_offset": 30,
+  "raw": "\u003c13\u003eSep 29 18:00:00 host app: user typed CEF:0|a|b|c|d|e|f|g"
+ },
+ {
+  "kinds": [],
+  "name": "bare json, no envelope",
+  "payload_length": 40,
+  "payload_offset": 0,
+  "raw": "{\"ts\": 1734567890123, \"src\": \"10.0.0.1\"}"
+ },
+ {
+  "kinds": [
+   "rfc3164"
+  ],
+  "name": "pri-only kv (fortigate style), synthetic",
+  "payload_length": 44,
+  "payload_offset": 5,
+  "raw": "\u003c189\u003edate=2026-09-29 time=18:00:00 type=\"traffic\""
+ },
+ {
+  "kinds": [],
+  "name": "cef header with no extension is not an envelope",
+  "payload_length": 18,
+  "payload_offset": 0,
+  "raw": "CEF:0|a|b|c|d|e|f|"
+ }
+]

@@ -6,6 +6,7 @@ event_class_uid: 4001
 declared_envelope: rfc3164          # FortiGate emits `<PRI>` + KV; the corpus lines carry PRI only (no header) — envelope kind none after PRI
 transport_hint: syslog-udp
 timezone_confidence: unresolved
+timezone_field: tz                  # parser-pack 1.4.0: every FortiOS 6.2+ line states its offset (tz="+0530"); FortiOS Log Reference, common fields
 null_values: ["N/A"]
 document: "FortiOS Log Message Reference — traffic: forward / local"
 

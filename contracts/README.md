@@ -290,3 +290,17 @@ A zero-length span does not exist (start < end). An empty CSV cell, an empty KV 
 optional regex group that did not participate produces **no span**: the declared field is absent
 for that event. Adjacent delimiters remain literal spans, so tiling still holds. `extra.<n>` opaque
 spans therefore appear only for non-empty extra cells.
+
+## parser-pack 1.4.0 (laptop branch, 2026-09-30) — the source's own offset, additive
+
+- **`time.timezone_field`** (optional): the parsed field in which the source states its own UTC offset on each event.
+  FortiGate writes `tz="+0530"` on every line.
+- Where an event carries a valid offset there (`±HHMM`, `±HH:MM` or `Z`, within ±14:00), its normalized event records
+  that offset as `_lineage.source_timezone` (`+05:30`), with `timezone_confidence: declared`: the source itself declared it.
+- Where it does not (the field is absent, holds a zone name, or is out of range), the pack's `source_timezone` and
+  `timezone_confidence` apply, as before.
+- normalized-event is unchanged: the values fall within its existing fields and enum.
+- Found on a real FortiGate: its events said `unresolved` although every line states its offset. The event time was
+  already right, because it comes from the absolute `eventtime`.
+- The FortiGate vendor table declares `timezone_field: tz`. Packs without the field stay at 1.3.0; both validators accept
+  1.0.0–1.4.0.

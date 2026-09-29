@@ -78,7 +78,14 @@ setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN
   --archive "$APP/evidence-archive" --commit-dir "$APP/commit" --evidence-grace "${ULPF_EVIDENCE_GRACE:-60s}" --evidence-buffer-cap "${ULPF_EVIDENCE_BUFFER_CAP:-64MiB}" \
   --processes "$N" --lake-port 8792 $([ "${ULPF_REAL_DEVICES:-0}" = 1 ] && echo --in-tcp 0.0.0.0:6515) > "$APP/system.log" 2>&1
 setsid -f python3 demo/apps/generator.py --rate "${ULPF_LIVE_RATE:-6}" > "$APP/generator.log" 2>&1
-sleep 2
+# everything above was started detached: on a loaded machine a process may take seconds to exec, and a detaching setsid
+# parent is briefly counted beside its child. Wait (at most 30 s) until every one is up and each count is exact; the checks
+# below are unchanged. It was a fixed `sleep 2`, which failed once under the gate's parallel load (2026-09-29).
+for _ in $(seq 1 60); do
+  [ "$(pgrep -fc "[u]lpf-committer commit --evidence $APP/")" = "$N" ] && [ "$(pgrep -fc "adapters/lake/[l]akewriter.py --lake $APP/")" = "$N" ] \
+    && pgrep -f "demo/apps/[g]enerator.py" > /dev/null && pgrep -f "demo/apps/[s]ystem.py" > /dev/null && pgrep -f "[u]lpf-witness .*--listen 127.0.0.1:8796" > /dev/null && break
+  sleep 0.5
+done
 pgrep -f "demo/apps/[g]enerator.py" > "$APP/generator.pid"; pgrep -f "demo/apps/[s]ystem.py" > "$APP/system.pid"; pgrep -f "adapters/lake/[l]akewriter.py --lake $APP/" | head -1 > "$APP/lakewriter.pid"
 pgrep -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" > "$APP/fakesiem.pid" 2>/dev/null
 pgrep -f "[u]lpf-committer commit --evidence $APP/" | head -1 > "$APP/committer.pid"

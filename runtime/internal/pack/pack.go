@@ -121,6 +121,10 @@ type Pack struct {
 	Time struct {
 		SourceTimezone     *string `json:"source_timezone"`
 		TimezoneConfidence string  `json:"timezone_confidence"`
+		// TimezoneField (parser-pack 1.4.0) names the parsed field in which the SOURCE states its own UTC offset on every
+		// event (FortiGate: tz="+0530"). Where the event carries a valid offset there, the normalized event says so —
+		// source_timezone that offset, timezone_confidence declared; elsewhere the pack's defaults above stand.
+		TimezoneField string `json:"timezone_field,omitempty"`
 	} `json:"time"`
 	Anchors  []Anchor `json:"anchors"`
 	Families []Family `json:"families"`

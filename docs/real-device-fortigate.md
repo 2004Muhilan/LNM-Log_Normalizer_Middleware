@@ -220,6 +220,8 @@ devices on the bridge.
 
 ## Findings, and what is raised (not changed)
 
+*As of 2026-09-29. Findings 1–5 were fixed on 2026-09-30, after a decision: see "Fixed, and the live test again" below.*
+
 A real device not matching our code is a finding. **Nothing below was changed. Each is raised for a decision.**
 
 1. **The learning plane does not unwrap the envelope the runtime unwraps** (`learning/ulpf_learn/draft.py`). The runtime's
@@ -246,6 +248,96 @@ A real device not matching our code is a finding. **Nothing below was changed. E
    - *and* resolve the zone from `tz=`.
 6. **The runtime takes one `tcp:` listener.** The demo binds `0.0.0.0:6515` for real devices, rather than a second port.
    - *Possible:* repeatable `tcp:` listeners.
+
+## Fixed, and the live test again (2026-09-30)
+
+### What was fixed
+
+1. **Onboarding sees the payload routing sees.**
+   - `learning/ulpf_learn/envelope.py` has `chain()`, a twin of `frame.UnwrapChain`: up to two syslog envelopes (RFC 5424,
+     then RFC 3164 with FortiGate's bare-`<PRI>` form), then one LEEF or CEF header.
+   - The drafter, induction and the promoted samples all use it. A drafted family's L1 is the innermost envelope, the key
+     the router matches.
+   - **One vectors file holds both sides:** `learning/tests/envelope_vectors.json`, 16 vectors, including real FortiGate
+     lines in every format, a two-deep relay chain, LEEF 1.0/2.0 and CEF. Go (`TestChainVectorsSharedWithTheLearningPlane`)
+     and Python (`test_envelope_chain.py`) agree on all 16.
+   - Tested with the captured FortiGate lines (`learning/tests/fixtures/fortigate/`):
+     - JSON drafts as **JSON behind `rfc3164`**, not CSV;
+     - CEF drafts from its **extension, behind `cef`**, not positional;
+     - a CEF sample whose value holds unquoted spaces is **refused, with that reason**.
+2. **Drift is attributed by source binding.**
+   - A peer (ingest channel + host) is **bound** to a source once its lines were parsed by that source's packs. Those
+     include vendor packs of the vendor the operator's inventory declares: `fortigate-fw-01` binds the FortiGate at
+     172.20.20.2.
+   - Unroutable lines of a bound peer are that source's drift: "format drift of FortiGate firewall (bound source)" on the
+     page, with a drift alert.
+   - The router's note ("anchor panos-log-type located … outside its declared domain") is shown only as a surface
+     observation, "not an attribution: this peer is bound to FortiGate".
+   - `routing_drift` of a learnable source is now a trigger, like `routing`. Where the router says an anchor value is in
+     its domain but no family owns it, the job is a **new family of a known source**.
+3. **The trigger window is per source:** the last 60 events **of each source**, keyed by source. With the relay sending 8/s,
+   the FortiGate's 1/s now triggers.
+4. **A prepared answer sheet is bound to its source** (`PREPARED_SHEETS["flowtap-01"]`). Any other source gets "no prepared
+   sheet for fortigate-lab-01 … never applied to another device's fields", and the operator is asked.
+5. **The FortiGate's system events were onboarded live** (below).
+   - To make that possible, an operator's answer may carry a **value map onto an enum attribute**: `status` → `status_id`
+     with success=1, failed=2 (`respond --lookup`; a value-map box on the page).
+   - It uses the `lookup` transform the vendor tables already use: no contract change. The map is recorded in the
+     assertion's evidence.
+6. **`tz=` is used** (parser-pack **1.4.0**, additive: `time.timezone_field`).
+   - Where the event states a valid offset, its normalized event says `source_timezone: "+05:30"` with
+     `timezone_confidence: declared`.
+   - Where it doesn't, the pack's defaults stand. normalized-event is unchanged.
+   - The FortiGate vendor table declares `timezone_field: tz`, and the vendor packs were rebuilt. **All 254** real
+     default-format events now say `+05:30`/declared (they said `null`/unresolved).
+   - Tested: `TestTheSourcesOwnOffsetIsUsedWhereTheEventStatesIt`, `TestUTCOffset`.
+
+### Live, on the real FortiGate, after the fixes
+
+**Setup:**
+- driver `demo/devices/fortigate/live_drift.py`; its report and the console's jobs are in
+  `docs/metrics/fortigate-live-drift.json`;
+- the demo with `ULPF_REAL_DEVICES=1`, the model (Qwen 3.5 4B on the GPU) and the evidence archive;
+- **the four-vendor relay left ON** (8 events/s);
+- auto-onboard ON, prepared answers ON.
+
+| what the device did | ULPF's attribution | what happened | result |
+|---|---|---|---|
+| default format, traffic | — | parsed by the vendor pack while the relay ran | **parsed** |
+| **system events** (admin login/logout: 14 SSH sessions) | **new family of a known source**, bound by `fortigate-fw-01` | job-1: drafted as key=value behind `<PRI>` (24 fields); the model proposed **OCSF Authentication (3002)** in 97 s; no prepared sheet. **The operator's answers were given through the page's API by the driver, on the operator's behalf:** eventtime→time, user→user.name, status→status_id (success=1, failed=2), action→activity_id (login=1, logout=2), logdesc→message, srcip/dstip→endpoints. Promoted, verified by the Go engine, **hot-loaded** | **onboarded, then parsed** (after the operator was asked) |
+| `csv` | FortiGate drift (bound); the PAN-OS anchor's note shown as not an attribution | job-2: drafted as CSV, 44 columns; asked | **asked the operator.** But the drafted structure is positional CSV of `key=value` cells: FortiGate csv is comma-separated key=value (raised below) |
+| `cef` | FortiGate drift (bound) | job-3 **refused**: "a CEF extension value runs to the next key= and may hold unquoted spaces (FortiGate: dstcountry=United States)". Job-4, from samples that happened to hold no such value, drafted key=value behind CEF, 41 fields; asked | **quarantined with the reason, then asked the operator** on a family that would refuse the spaced values (raised below) |
+| `json` | FortiGate drift (bound) | job-5: drafted as JSON behind `<PRI>`, 48 named fields; asked; nothing carried over | **asked the operator** |
+| default again | — | parsed by the vendor pack | **parsed** |
+
+**Nothing healed automatically, and that is the policy as settled.**
+- Automatic healing (autoheal-1.1) covers a changed format **within** a family this console onboarded, for the same source
+  and the same L1/L2.
+- A syslog format switch changes the surface, and earlier answers carry over only under the §4.4 key: same source,
+  identical L1–L3.
+- So every new FortiGate format asked the operator. The JSON keys are the default format's keys (srcip, dstip, action, …),
+  and a cross-surface key would have healed most of them; that is raised below, not done.
+
+**Proof of Derivation on a live-onboarded event.** An admin login, parsed by the pack onboarded minutes earlier:
+- it is in OpenSearch (`ulpf-ocsf-3002`) and in the lake (`ulpf_authentication`);
+- "Prove it" passes every step. Proof of Derivation re-ran `fortigate-lab-01-rfc3164-kv-24` v1.0 (transparency-log entry
+  1583, "onboarded") on the raw bytes and reproduced the document field for field.
+
+### Raised, not done — each needs a decision
+
+1. **Cross-surface propagation.** Carrying answers by field name across surfaces of the same source would have healed most
+   of FortiGate's JSON automatically: json → kv, and csv once 2 is done. It changes the §4.4 propagation key, an
+   architecture decision.
+2. **A comma-separated key=value surface** in the router (`detectL2`) and its Python twin. FortiGate csv is `k=v,k=v,…`,
+   read today as CSV of `key=value` cells whose count varies by log type (42–44).
+3. **CEF extension values with unquoted spaces.** The kv op splits on whitespace. CEF needs a value that runs to the next
+   `key=`: a parser-spec (1.2.0 → 1.3.0) option.
+4. **Drafting from samples that miss a feature.** Job-4's CEF samples held no spaced value, so its drafted family would
+   refuse later lines that do (then a parse-drop drift job follows). A wider or later hold-out before promotion would
+   catch it.
+5. **The runtime's quarantine record keeps the router's anchor observation verbatim.** The attribution by binding is the
+   console's. Should the runtime carry the peer binding itself?
+6. **One model, jobs in series.** Job-2 (csv) took 4½ minutes to reach its questions behind the other jobs.
 
 ## Memory and disk
 
@@ -325,3 +417,7 @@ Both configurations pass, with the FortiGate lab running beside them:
 - `bash scripts/gate.sh --laptop`: 812 s.
 
 Three earlier runs failed on timing checks under load (`docs/laptop-branch.md` §15), each passing on the next run.
+
+After the real-device fixes (2026-09-30), both configurations passed on the first run, with the FortiGate lab running:
+- `gate.sh`: 738 s;
+- `gate.sh --laptop`: 819 s.

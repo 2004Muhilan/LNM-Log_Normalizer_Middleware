@@ -1,0 +1,1149 @@
+{
+ "started": "2026-09-29T15:26:19",
+ "policy": {
+  "auto_onboard": true,
+  "prepared_answers": true,
+  "operator": "op-014",
+  "heal_policy": "autoheal-1.1",
+  "vendor_relay": true
+ },
+ "baseline": {
+  "app": {
+   "name": "FortiGate firewall (real device, Containerlab)",
+   "events": 1861,
+   "usable": 1815,
+   "quarantined": 41,
+   "processes": [
+    2
+   ]
+  },
+  "relay_on": true
+ },
+ "events": {
+  "job": {
+   "id": "job-1",
+   "kind": "discovery",
+   "state": "done",
+   "format": "syslog RFC 3164 \u2192 key=value",
+   "signature": "rfc3164|kv||23",
+   "steps": [
+    "NEW EVENT FAMILY from FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01): syslog RFC 3164 \u2192 key=value lines that no onboarded family owns \u2014 anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input \u2014 19 quarantined, bytes kept",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "19 samples taken out of the evidence log (raw_hash checked)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "structure drafted from the lines own keys: 24 fields; proposals in 97.0s; 2 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+    "no prepared sheet for fortigate-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+    "waiting for the operator: say what each field is, then press Promote",
+    "operator op-014 asserts eventtime \u2192 time  (asked on the page)",
+    "operator op-014 asserts logdesc \u2192 message  (asked on the page)",
+    "operator op-014 asserts user \u2192 user.name  (asked on the page)",
+    "operator op-014 asserts srcip \u2192 src_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts dstip \u2192 dst_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts action \u2192 activity_id with login=1, logout=2  (asked on the page)",
+    "operator op-014 asserts status \u2192 status_id with success=1, failed=2  (asked on the page)",
+    "promoting: acceptance policy, signed pack",
+    "pack fortigate-lab-01-rfc3164-kv-24 v1.0 verified by the Go engine and HOT-LOADED \u2014 no restart; the activation is an evidence-log record",
+    "done: events of this format are normalized from here on"
+   ],
+   "fields_asked": [
+    "date",
+    "time",
+    "devname",
+    "devid",
+    "tz",
+    "logid",
+    "type",
+    "subtype",
+    "level",
+    "vd",
+    "sn",
+    "ui",
+    "method",
+    "reason",
+    "profile",
+    "msg",
+    "duration"
+   ],
+   "fields_carried_over": [],
+   "binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "alert": "asked the operator: the new format's 24 field(s) have no evidence yet \u2014 earlier answers carry over only under the \u00a74.4 key (same source, same L1\u2013L3), and this is a new surface \u2192 answered by op-014, pack 1.0 loaded"
+  },
+  "answered_by_the_driver_as_operator": {
+   "eventtime": "time",
+   "logdesc": "message",
+   "user": "user.name",
+   "srcip": "src_endpoint.ip",
+   "dstip": "dst_endpoint.ip",
+   "action": "activity_id {'login': 1, 'logout': 2}",
+   "status": "status_id {'success': 1, 'failed': 2}"
+  },
+  "other_event_jobs": [],
+  "latest_outcomes": {
+   "fortigate-traffic": 28,
+   "rfc3164-kv-24": 12
+  }
+ },
+ "drift": [
+  {
+   "format": "csv",
+   "job": null,
+   "latest_outcomes": {
+    "in flight": 6,
+    "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 34
+   },
+   "seconds_to_job_state": null,
+   "result": "quarantined (no job within the phase)"
+  },
+  {
+   "format": "cef",
+   "job": {
+    "id": "job-3",
+    "kind": "drift",
+    "state": "failed",
+    "format": "CEF header \u2192 key=value",
+    "signature": "cef|kv||41",
+    "steps": [
+     "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01, fortigate-lab-01-rfc3164-kv-24): the format changed to CEF header \u2192 key=value \u2014 10 quarantined, bytes kept.",
+     "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+     "10 samples taken out of the evidence log (raw_hash checked)",
+     "the local model labels the fields \u2014 proposals only, never evidence",
+     "FAILED: ulpf_learn onboard failed: /sih-2026/SIH26156/laptop-commit-pull/learning/ulpf_learn/draft.py\", line 197, in draft\n    raise ValueError(f\"{len(payloads) - len(kept)} sample(s) do not parse under the drafted {l2} spec: not drafted{why}\")\nValueError: 4 sample(s) do not parse under the drafted kv spec: not drafted \u2014 a CEF extension value runs to the next key= and may hold unquoted spaces (For"
+    ],
+    "fields_asked": [],
+    "fields_carried_over": [],
+    "binding": {
+     "bound": true,
+     "by_packs": [
+      "fortigate-fw-01",
+      "fortigate-lab-01-rfc3164-kv-24"
+     ],
+     "drifted_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "source_known_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "127.0.0.2"
+      ],
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "router_note": null,
+     "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+    },
+    "alert": "onboarding the new format of a known source\u2026"
+   },
+   "latest_outcomes": {
+    "in flight": 3,
+    "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 37
+   },
+   "seconds_to_job_state": 60,
+   "result": "quarantined (the job failed: FAILED: ulpf_learn onboard failed: /sih-2026/SIH26156/laptop-commit-pull/learning/ulpf_learn/draft.py\", line 197, in draft\n    raise ValueError(f\"{len(payloads) - len(kept)} sample(s) do not parse under the drafted {l2} spec: not drafted{why}\")\nValueError: 4 sample(s) do not parse under the drafted )"
+  },
+  {
+   "format": "json",
+   "job": {
+    "id": "job-5",
+    "kind": "drift",
+    "state": "answering",
+    "format": "syslog RFC 3164 \u2192 JSON",
+    "signature": "rfc3164|json||0",
+    "steps": [
+     "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01, fortigate-lab-01-rfc3164-kv-24): the format changed to syslog RFC 3164 \u2192 JSON \u2014 18 quarantined, bytes kept.",
+     "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+     "18 samples taken out of the evidence log (raw_hash checked)",
+     "the local model labels the fields \u2014 proposals only, never evidence",
+     "structure drafted from the lines own keys: 48 fields; proposals in 166.1s; 11 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+     "no prepared sheet for fortigate-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+     "waiting for the operator: say what each field is, then press Promote"
+    ],
+    "fields_asked": [
+     "date",
+     "time",
+     "devname",
+     "devid",
+     "eventtime",
+     "tz",
+     "logid",
+     "type",
+     "subtype",
+     "level",
+     "vd",
+     "srcip",
+     "srcport",
+     "srcintf",
+     "srcintfrole",
+     "dstip",
+     "dstport",
+     "dstintf",
+     "dstintfrole",
+     "srccountry",
+     "dstcountry",
+     "sessionid",
+     "proto",
+     "action",
+     "policyid",
+     "policytype",
+     "poluuid",
+     "policyname",
+     "service",
+     "trandisp",
+     "appcat",
+     "duration",
+     "sentbyte",
+     "rcvdbyte",
+     "sentpkt",
+     "rcvdpkt",
+     "crscore",
+     "craction",
+     "crlevel",
+     "devtype",
+     "osname",
+     "mastersrcmac",
+     "srcmac",
+     "srcserver",
+     "app",
+     "transip",
+     "transport",
+     "identifier"
+    ],
+    "fields_carried_over": [],
+    "binding": {
+     "bound": true,
+     "by_packs": [
+      "fortigate-fw-01",
+      "fortigate-lab-01-rfc3164-kv-24"
+     ],
+     "drifted_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "source_known_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "127.0.0.2"
+      ],
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "router_note": null,
+     "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+    },
+    "alert": "asked the operator: the new format's 48 field(s) have no evidence yet \u2014 earlier answers carry over only under the \u00a74.4 key (same source, same L1\u2013L3), and this is a new surface"
+   },
+   "latest_outcomes": {
+    "in flight": 2,
+    "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 38
+   },
+   "seconds_to_job_state": 189,
+   "result": "asked the operator"
+  },
+  {
+   "format": "default",
+   "latest_outcomes": {
+    "fortigate-traffic": 40
+   },
+   "app": {
+    "events": 2549,
+    "usable": 2011,
+    "quarantined": 530
+   }
+  }
+ ],
+ "finished": "2026-09-29T15:37:50",
+ "alerts": [
+  {
+   "id": "alert-1",
+   "alert": "new_family_known_source",
+   "policy_version": "autoheal-1.1",
+   "at": "2026-09-29T15:26:22Z",
+   "app": "FortiGate firewall (real device, Containerlab)",
+   "host": "172.20.20.2",
+   "source_id": "fortigate-lab-01",
+   "format": "syslog RFC 3164 \u2192 key=value",
+   "trigger": {
+    "kind": "unknown_signature",
+    "signature": "rfc3164|kv||23",
+    "quarantined_events": 19
+   },
+   "source_binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "outcome": "asked the operator: the new format's 24 field(s) have no evidence yet \u2014 earlier answers carry over only under the \u00a74.4 key (same source, same L1\u2013L3), and this is a new surface \u2192 answered by op-014, pack 1.0 loaded",
+   "job": "job-1",
+   "pack": {
+    "pack_id": "fortigate-lab-01-rfc3164-kv-24",
+    "pack_version": "1.0",
+    "sha256": "sha256:fd46723219aad87302b98335ced9497517842839eedb662215c180f2571e6ab0",
+    "signed_by": "ulpf-pack-authority-dev",
+    "previous_packs": []
+   }
+  },
+  {
+   "id": "alert-2",
+   "alert": "drift_new_format",
+   "policy_version": "autoheal-1.1",
+   "at": "2026-09-29T15:28:51Z",
+   "app": "FortiGate firewall (real device, Containerlab)",
+   "host": "172.20.20.2",
+   "source_id": "fortigate-lab-01",
+   "format": "syslog RFC 3164 \u2192 CSV",
+   "trigger": {
+    "kind": "unknown_signature",
+    "signature": "rfc3164|csv||44",
+    "quarantined_events": 11
+   },
+   "source_binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": "drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "outcome": "asked the operator: the new format's 44 field(s) have no evidence yet \u2014 earlier answers carry over only under the \u00a74.4 key (same source, same L1\u2013L3), and this is a new surface",
+   "job": "job-2"
+  },
+  {
+   "id": "alert-3",
+   "alert": "drift_new_format",
+   "policy_version": "autoheal-1.1",
+   "at": "2026-09-29T15:32:54Z",
+   "app": "FortiGate firewall (real device, Containerlab)",
+   "host": "172.20.20.2",
+   "source_id": "fortigate-lab-01",
+   "format": "CEF header \u2192 key=value",
+   "trigger": {
+    "kind": "unknown_signature",
+    "signature": "cef|kv||41",
+    "quarantined_events": 10
+   },
+   "source_binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "outcome": "onboarding the new format of a known source\u2026",
+   "job": "job-3"
+  },
+  {
+   "id": "alert-4",
+   "alert": "drift_new_format",
+   "policy_version": "autoheal-1.1",
+   "at": "2026-09-29T15:33:54Z",
+   "app": "FortiGate firewall (real device, Containerlab)",
+   "host": "172.20.20.2",
+   "source_id": "fortigate-lab-01",
+   "format": "CEF header \u2192 key=value",
+   "trigger": {
+    "kind": "unknown_signature",
+    "signature": "cef|kv||41",
+    "quarantined_events": 10
+   },
+   "source_binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "outcome": "asked the operator: the new format's 41 field(s) have no evidence yet \u2014 earlier answers carry over only under the \u00a74.4 key (same source, same L1\u2013L3), and this is a new surface",
+   "job": "job-4"
+  },
+  {
+   "id": "alert-5",
+   "alert": "drift_new_format",
+   "policy_version": "autoheal-1.1",
+   "at": "2026-09-29T15:33:57Z",
+   "app": "FortiGate firewall (real device, Containerlab)",
+   "host": "172.20.20.2",
+   "source_id": "fortigate-lab-01",
+   "format": "syslog RFC 3164 \u2192 JSON",
+   "trigger": {
+    "kind": "unknown_signature",
+    "signature": "rfc3164|json||0",
+    "quarantined_events": 18
+   },
+   "source_binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "outcome": "asked the operator: the new format's 48 field(s) have no evidence yet \u2014 earlier answers carry over only under the \u00a74.4 key (same source, same L1\u2013L3), and this is a new surface",
+   "job": "job-5"
+  }
+ ],
+ "console_jobs_at_end": [
+  {
+   "id": "job-1",
+   "kind": "discovery",
+   "state": "done",
+   "signature": "rfc3164|kv||23",
+   "format": "syslog RFC 3164 \u2192 key=value",
+   "binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "steps": [
+    "NEW EVENT FAMILY from FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01): syslog RFC 3164 \u2192 key=value lines that no onboarded family owns \u2014 anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input \u2014 19 quarantined, bytes kept",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "19 samples taken out of the evidence log (raw_hash checked)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "structure drafted from the lines own keys: 24 fields; proposals in 97.0s; 2 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+    "no prepared sheet for fortigate-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+    "waiting for the operator: say what each field is, then press Promote",
+    "operator op-014 asserts eventtime \u2192 time  (asked on the page)",
+    "operator op-014 asserts logdesc \u2192 message  (asked on the page)",
+    "operator op-014 asserts user \u2192 user.name  (asked on the page)",
+    "operator op-014 asserts srcip \u2192 src_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts dstip \u2192 dst_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts action \u2192 activity_id with login=1, logout=2  (asked on the page)",
+    "operator op-014 asserts status \u2192 status_id with success=1, failed=2  (asked on the page)",
+    "promoting: acceptance policy, signed pack",
+    "pack fortigate-lab-01-rfc3164-kv-24 v1.0 verified by the Go engine and HOT-LOADED \u2014 no restart; the activation is an evidence-log record",
+    "done: events of this format are normalized from here on"
+   ],
+   "fields": 24,
+   "asked": [
+    "date",
+    "time",
+    "devname",
+    "devid",
+    "tz",
+    "logid",
+    "type",
+    "subtype",
+    "level",
+    "vd",
+    "sn",
+    "ui",
+    "method",
+    "reason",
+    "profile",
+    "msg",
+    "duration"
+   ]
+  },
+  {
+   "id": "job-2",
+   "kind": "drift",
+   "state": "answering",
+   "signature": "rfc3164|csv||44",
+   "format": "syslog RFC 3164 \u2192 CSV",
+   "binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": "drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain",
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "steps": [
+    "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01, fortigate-lab-01-rfc3164-kv-24): the format changed to syslog RFC 3164 \u2192 CSV \u2014 11 quarantined, bytes kept. The router's note \u2014 drift signal: anchor panos-log-type located \"devid=FGVMEVXFB-07ZH02\" outside its declared domain \u2014 is a surface observation about another pack's anchor, not an attribution: this peer is bound to FortiGate firewall (real device, Containerlab).",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "11 samples taken out of the evidence log (raw_hash checked)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "structure drafted from the lines own keys: 44 fields; proposals in 277.9s; 8 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+    "no prepared sheet for fortigate-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+    "waiting for the operator: say what each field is, then press Promote"
+   ],
+   "fields": 44,
+   "asked": [
+    "pos_1",
+    "pos_2",
+    "pos_3",
+    "pos_4",
+    "pos_5",
+    "pos_6",
+    "pos_7",
+    "pos_8",
+    "pos_9",
+    "pos_10",
+    "pos_11",
+    "pos_12",
+    "pos_13",
+    "pos_14",
+    "pos_15",
+    "pos_16",
+    "pos_17",
+    "pos_18",
+    "pos_19",
+    "pos_20",
+    "pos_21",
+    "pos_22",
+    "pos_23",
+    "pos_24",
+    "pos_25",
+    "pos_26",
+    "pos_27",
+    "pos_28",
+    "pos_29",
+    "pos_30",
+    "pos_31",
+    "pos_32",
+    "pos_33",
+    "pos_34",
+    "pos_35",
+    "pos_36",
+    "pos_37",
+    "pos_38",
+    "pos_39",
+    "pos_40",
+    "pos_41",
+    "pos_42",
+    "pos_43",
+    "pos_44"
+   ]
+  },
+  {
+   "id": "job-3",
+   "kind": "drift",
+   "state": "failed",
+   "signature": "cef|kv||41",
+   "format": "CEF header \u2192 key=value",
+   "binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "steps": [
+    "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01, fortigate-lab-01-rfc3164-kv-24): the format changed to CEF header \u2192 key=value \u2014 10 quarantined, bytes kept.",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "10 samples taken out of the evidence log (raw_hash checked)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "FAILED: ulpf_learn onboard failed: /sih-2026/SIH26156/laptop-commit-pull/learning/ulpf_learn/draft.py\", line 197, in draft\n    raise ValueError(f\"{len(payloads) - len(kept)} sample(s) do not parse under the drafted {l2} spec: not drafted{why}\")\nValueError: 4 sample(s) do not parse under the drafted kv spec: not drafted \u2014 a CEF extension value runs to the next key= and may hold unquoted spaces (FortiGate: dstcountry=United States); the kv op splits pairs on whitespace, so a CEF family needs a par"
+   ],
+   "fields": 0,
+   "asked": []
+  },
+  {
+   "id": "job-4",
+   "kind": "drift",
+   "state": "answering",
+   "signature": "cef|kv||41",
+   "format": "CEF header \u2192 key=value",
+   "binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "steps": [
+    "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01, fortigate-lab-01-rfc3164-kv-24): the format changed to CEF header \u2192 key=value \u2014 10 quarantined, bytes kept.",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "10 samples taken out of the evidence log (raw_hash checked)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "structure drafted from the lines own keys: 41 fields; proposals in 98.9s; 3 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+    "no prepared sheet for fortigate-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+    "waiting for the operator: say what each field is, then press Promote"
+   ],
+   "fields": 41,
+   "asked": [
+    "deviceExternalId",
+    "FTNTFGTeventtime",
+    "FTNTFGTtz",
+    "FTNTFGTlogid",
+    "cat",
+    "FTNTFGTsubtype",
+    "FTNTFGTlevel",
+    "FTNTFGTvd",
+    "src",
+    "spt",
+    "deviceInboundInterface",
+    "FTNTFGTsrcintfrole",
+    "dst",
+    "dpt",
+    "deviceOutboundInterface",
+    "FTNTFGTdstintfrole",
+    "FTNTFGTsrccountry",
+    "FTNTFGTdstcountry",
+    "externalId",
+    "proto",
+    "act",
+    "FTNTFGTpolicyid",
+    "FTNTFGTpolicytype",
+    "FTNTFGTpoluuid",
+    "FTNTFGTpolicyname",
+    "app",
+    "FTNTFGTtrandisp",
+    "FTNTFGTappcat",
+    "FTNTFGTduration",
+    "out",
+    "in",
+    "FTNTFGTsentpkt",
+    "FTNTFGTrcvdpkt",
+    "FTNTFGTcrscore",
+    "FTNTFGTcraction",
+    "FTNTFGTcrlevel",
+    "FTNTFGTdevtype",
+    "FTNTFGTosname",
+    "FTNTFGTmastersrcmac",
+    "FTNTFGTsrcmac",
+    "FTNTFGTsrcserver"
+   ]
+  },
+  {
+   "id": "job-5",
+   "kind": "drift",
+   "state": "answering",
+   "signature": "rfc3164|json||0",
+   "format": "syslog RFC 3164 \u2192 JSON",
+   "binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "steps": [
+    "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01, fortigate-lab-01-rfc3164-kv-24): the format changed to syslog RFC 3164 \u2192 JSON \u2014 18 quarantined, bytes kept.",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "18 samples taken out of the evidence log (raw_hash checked)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "structure drafted from the lines own keys: 48 fields; proposals in 166.1s; 11 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+    "no prepared sheet for fortigate-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+    "waiting for the operator: say what each field is, then press Promote"
+   ],
+   "fields": 48,
+   "asked": [
+    "date",
+    "time",
+    "devname",
+    "devid",
+    "eventtime",
+    "tz",
+    "logid",
+    "type",
+    "subtype",
+    "level",
+    "vd",
+    "srcip",
+    "srcport",
+    "srcintf",
+    "srcintfrole",
+    "dstip",
+    "dstport",
+    "dstintf",
+    "dstintfrole",
+    "srccountry",
+    "dstcountry",
+    "sessionid",
+    "proto",
+    "action",
+    "policyid",
+    "policytype",
+    "poluuid",
+    "policyname",
+    "service",
+    "trandisp",
+    "appcat",
+    "duration",
+    "sentbyte",
+    "rcvdbyte",
+    "sentpkt",
+    "rcvdpkt",
+    "crscore",
+    "craction",
+    "crlevel",
+    "devtype",
+    "osname",
+    "mastersrcmac",
+    "srcmac",
+    "srcserver",
+    "app",
+    "transip",
+    "transport",
+    "identifier"
+   ]
+  }
+ ],
+ "proof_of_derivation_on_a_live_onboarded_event": {
+  "event_id": "ev_06GEVPWE92994VPDX4DTZ3CQK8",
+  "ok": true,
+  "steps": [
+   {
+    "step": "SIEM document",
+    "ok": true,
+    "detail": "index ulpf-ocsf-3002, _id ev_06GEVPWE92994VPDX4DTZ3CQK8 (= ULPF's event_id); its lineage names raw_hash sha256:a2f2aa584437a90e\u2026 at seg_00304 + 1217",
+    "document": {
+     "time": 1790696984141,
+     "action_id": null,
+     "src_endpoint": {
+      "ip": "172.20.20.1"
+     },
+     "dst_endpoint": {
+      "ip": "10.0.0.15"
+     },
+     "class_uid": 3002
+    }
+   },
+   {
+    "step": "raw bytes in the evidence log",
+    "ok": true,
+    "detail": "442 bytes at seg_00304 + 1217, read from the local evidence buffer, re-hashed now: sha256:a2f2aa584437a90e\u2026 \u2014 equal to the evidence index and to the SIEM document's lineage",
+    "raw": "<190>date=2026-09-29 time=21:19:43 devname=\"fgt\" devid=\"FGVMEVXFB-07ZH02\" eventtime=1790696984141977584 tz=\"+0530\" logid=\"0100032003\" type=\"event\" subtype=\"system\" level=\"information\" vd=\"root\" logdesc=\"Admin logout successful\" sn=\"1790696984\" user=\"admin\" ui=\"ssh(172.20.20.1)\" method=\"ssh\" srcip=172.20.20.1 dstip=10.0.0.15 action=\"logout\" status=\"success\" duration=0 reason=\"exit\" msg=\"Administrator admin logged out from ssh(172.20.20.1)\"",
+    "ingest_channel": "tcp:0.0.0.0:6515",
+    "peer": "172.20.20.2:52690",
+    "evidence_source": "local"
+   },
+   {
+    "step": "commit",
+    "ok": true,
+    "detail": "seg_00304 is covered by the signed checkpoint ckpt_000191 (the always-running committer; development seam: SEALED, not kernel-IMMUTABLE \u2014 said so)"
+   },
+   {
+    "step": "export",
+    "ok": true,
+    "detail": " ev_06GEVPWE92994VPDX4DTZ3CQK8: leaf 2 of seg_00304 (local buffer), root sha256:02a72c6d906d8817b8ca95aae21c34a68192f4be23ea813d60636bda43ec76e6, checkpoint ckpt_000191 -> /home/g2con/ulpf-demo/app/trace/bundle-ev_06GEVPWE92994VPDX4DTZ3CQK8"
+   },
+   {
+    "step": "Merkle proof verified",
+    "ok": true,
+    "detail": "VERIFY: OK \u2014 event ev_06GEVPWE92994VPDX4DTZ3CQK8: raw bytes match the record, leaf proof reaches segment root sha256:02a72c6d906d8817b8ca95aae21c34a68192f4be23ea813d60636bda43ec76e6, checkpoint ckpt_000191 signed by a trusted authority",
+    "verifier": "MODE ckpt_000191: *** sealed_only_dev *** \u2014 DEVELOPMENT checkpoint: attests to file hashes at commit time, NOT to kernel-locked evidence\nVERIFY: OK \u2014 event ev_06GEVPWE92994VPDX4DTZ3CQK8: raw bytes match the record, leaf proof reaches segment root sha256:02a72c6d906d8817b8ca95aae21c34a68192f4be23ea813d60636bda43ec76e6, checkpoint ckpt_000191 signed by a trusted authority"
+   },
+   {
+    "step": "Proof of Derivation",
+    "ok": true,
+    "detail": "the logged pack fortigate-lab-01-rfc3164-kv-24 v1.0 (entry 1583 of ulpf-tlog-dev, onboarded, logged 2026-09-29T15:28:09Z), re-run on these raw bytes, reproduces the SIEM document field for field (excluded: _lineage.processing_time) \u2014 checked offline by ulpf-verify",
+    "derivation": {
+     "ok": true,
+     "steps": [
+      {
+       "part": "raw bytes",
+       "name": "raw bytes hash to the evidence record",
+       "ok": true,
+       "detail": "442 bytes hash to sha256:a2f2aa584437a90ed2e5559d3b318b15f3fa0fc854d4d1ce99e6ce98de848f60; the record says sha256:a2f2aa584437a90ed2e5559d3b318b15f3fa0fc854d4d1ce99e6ce98de848f60"
+      },
+      {
+       "part": "raw bytes",
+       "name": "checkpoint signature",
+       "ok": true,
+       "detail": "checkpoint ckpt_000191 signed by ulpf-committer-dev (sealed_only_dev)"
+      },
+      {
+       "part": "raw bytes",
+       "name": "the checkpoint commits the segment",
+       "ok": true,
+       "detail": "seg_00304 root sha256:02a72c6d906d8817b8ca95aae21c34a68192f4be23ea813d60636bda43ec76e6"
+      },
+      {
+       "part": "raw bytes",
+       "name": "the evidence record is in the committed segment index",
+       "ok": true,
+       "detail": "the index's sha256 is the one the signed checkpoint names, and it holds this record field for field"
+      },
+      {
+       "part": "raw bytes",
+       "name": "Merkle inclusion proof",
+       "ok": true,
+       "detail": "leaf 2 of seg_00304 reaches the committed segment root"
+      },
+      {
+       "part": "pack",
+       "name": "the pack is in the parser transparency log",
+       "ok": true,
+       "detail": "fortigate-lab-01-rfc3164-kv-24 v1.0 is entry 1583 of ulpf-tlog-dev (checkpoint size 1584; produced by onboarded, logged 2026-09-29T15:28:09Z; witness cosignatures: 1)"
+      },
+      {
+       "part": "pack",
+       "name": "the SIEM document names this exact pack",
+       "ok": true,
+       "detail": "parser_sha256 sha256:fd46723219aad87302b98335ced9497517842839eedb662215c180f2571e6ab0; the bundled pack.json is sha256:fd46723219aad87302b98335ced9497517842839eedb662215c180f2571e6ab0"
+      },
+      {
+       "part": "pack",
+       "name": "the pack loads (signature, transparency log, contract, compiled parsers)",
+       "ok": true,
+       "detail": "loaded by the same fail-closed loader the runtime uses"
+      },
+      {
+       "part": "SIEM document",
+       "name": "the pack re-run on the raw bytes",
+       "ok": true,
+       "detail": "routed, parsed and normalized by ulpf-engine normalized-event 1.6.0, parser-spec 1.2.0, parser-pack 1.3.0 (laptop branch 2026-09-27); go1.27.1"
+      },
+      {
+       "part": "SIEM document",
+       "name": "the derivation equals the event the SIEM holds",
+       "ok": true,
+       "detail": "identical, field for field (1 excluded: _lineage.processing_time)"
+      }
+     ],
+     "derived_output": {
+      "_lineage": {
+       "collector_id": "col-01",
+       "envelope": {
+        "kind": "rfc3164",
+        "level": 1,
+        "payload_offset": 5,
+        "payload_length": 437,
+        "priority": 190,
+        "facility": 23,
+        "severity": 6
+       },
+       "event_id": "ev_06GEVPWE92994VPDX4DTZ3CQK8",
+       "event_time": 1790696984141,
+       "family_id": "rfc3164-kv-24",
+       "framing": {
+        "fragment_count": 1,
+        "framing_confidence": "high",
+        "method": "octet_count",
+        "original_message_length": 442,
+        "raw_prefix": "NDQyIA==",
+        "raw_suffix": "",
+        "truncation_status": "none"
+       },
+       "ingest_channel": "tcp:0.0.0.0:6515",
+       "ingest_time": 1790696984136,
+       "length": 442,
+       "mapping_version": "1.0",
+       "normalization_version": 1,
+       "ocsf_version": "1.3.0",
+       "offset": 1217,
+       "parser_id": "fortigate-lab-01-rfc3164-kv-24",
+       "parser_sha256": "sha256:fd46723219aad87302b98335ced9497517842839eedb662215c180f2571e6ab0",
+       "parser_version": "1.0",
+       "processing_time": 1790696984157,
+       "raw_hash": "sha256:a2f2aa584437a90ed2e5559d3b318b15f3fa0fc854d4d1ce99e6ce98de848f60",
+       "routing_signature": "rfc3164|kv||23",
+       "schema_version": "1.6.0",
+       "segment_id": "seg_00304",
+       "source_id": "fortigate-lab-01",
+       "source_timezone": null,
+       "store_id": "st_06GEVHFQ7J3ZGTKSFEKPRXRXSR",
+       "timezone_confidence": "unresolved"
+      },
+      "activity_id": 2,
+      "category_uid": 3,
+      "class_uid": 3002,
+      "dst_endpoint": {
+       "ip": "10.0.0.15"
+      },
+      "message": "Admin logout successful",
+      "metadata": {
+       "product": {
+        "name": "FortiGate-VM64-KVM",
+        "vendor_name": "Fortinet"
+       },
+       "version": "1.3.0"
+      },
+      "src_endpoint": {
+       "ip": "172.20.20.1"
+      },
+      "status_id": 1,
+      "time": 1790696984141,
+      "type_uid": 300202,
+      "unmapped": {
+       "date": "2026-09-29",
+       "devid": "FGVMEVXFB-07ZH02",
+       "devname": "fgt",
+       "duration": "0",
+       "level": "information",
+       "logid": "0100032003",
+       "method": "ssh",
+       "msg": "Administrator admin logged out from ssh(172.20.20.1)",
+       "reason": "exit",
+       "sn": "1790696984",
+       "subtype": "system",
+       "time": "21:19:43",
+       "type": "event",
+       "tz": "+0530",
+       "ui": "ssh(172.20.20.1)",
+       "vd": "root"
+      },
+      "user": {
+       "name": "admin"
+      }
+     },
+     "excluded_from_comparison": {
+      "_lineage.processing_time": "the wall-clock instant at which the runtime normalized the event: it records WHEN, not WHAT, and no re-run can reproduce it"
+     },
+     "engine": "ulpf-engine normalized-event 1.6.0, parser-spec 1.2.0, parser-pack 1.3.0 (laptop branch 2026-09-27); go1.27.1",
+     "transparency_log": {
+      "Entry": {
+       "PackID": "fortigate-lab-01-rfc3164-kv-24",
+       "PackVersion": "1.0",
+       "PackSHA256": "sha256:fd46723219aad87302b98335ced9497517842839eedb662215c180f2571e6ab0",
+       "ProducedBy": "onboarded",
+       "SignedBy": "ulpf-pack-authority-dev",
+       "LoggedAt": "2026-09-29T15:28:09Z"
+      },
+      "Index": 1583,
+      "Checkpoint": {
+       "Origin": "ulpf-tlog-dev",
+       "Size": 1584,
+       "Root": [
+        72,
+        0,
+        173,
+        248,
+        242,
+        234,
+        47,
+        132,
+        220,
+        162,
+        192,
+        62,
+        187,
+        142,
+        208,
+        236,
+        121,
+        150,
+        101,
+        231,
+        221,
+        200,
+        158,
+        166,
+        186,
+        114,
+        53,
+        158,
+        0,
+        52,
+        73,
+        246
+       ]
+      },
+      "Log": "ulpf-tlog-dev",
+      "Witnesses": [
+       "ulpf-witness-dev"
+      ]
+     }
+    },
+    "bundle": "/home/g2con/ulpf-demo/app/trace/derivation-ev_06GEVPWE92994VPDX4DTZ3CQK8.json"
+   },
+   {
+    "step": "the same event in the lake",
+    "ok": true,
+    "detail": "ext/ulpf_authentication/region=local/accountId=000000000000/eventDay=20260929/part-df67e81cf56c-00000000000001612494-00000000000001620101.parquet: raw_hash sha256:a2f2aa584437a90e\u2026, seg_00304 + 1217 \u2014 the lineage survived into Parquet"
+   }
+  ],
+  "process": 1
+ }
+}

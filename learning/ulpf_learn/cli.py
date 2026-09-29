@@ -72,6 +72,7 @@ def main(argv=None) -> int:
         p = sub.add_parser(name); p.add_argument("--session", required=True)
     r = sub.add_parser("respond"); r.add_argument("--session", required=True); r.add_argument("--discriminator", required=True); r.add_argument("--input", required=True)
     r.add_argument("--field"); r.add_argument("--attribute"); r.add_argument("--initiator-ip"); r.add_argument("--sample-line")
+    r.add_argument("--lookup", help='operator_assertion onto an enum attribute: the value map the operator states, JSON {"success": 1, "failed": 2, "default": 99}')
     pr = sub.add_parser("promote"); pr.add_argument("--session", required=True); pr.add_argument("--out", required=True); pr.add_argument("--pack-id", required=True)
     pr.add_argument("--withhold-unevidenced", action="store_true", help="map only what rests on sufficient evidence; a column resting on a proposal alone is carried unmapped, its certificate retained")
     pr.add_argument("--produced-by", default="onboarded", help="recorded in the parser transparency log entry: onboarded | auto-healed | …")
@@ -120,7 +121,8 @@ def main(argv=None) -> int:
         show_certificates(s)
     elif a.cmd == "respond":
         text = Path(a.input[1:]).read_text() if a.input.startswith("@") else a.input
-        s.respond(a.discriminator, text, field=a.field, attribute=a.attribute, initiator_ip=a.initiator_ip, sample_line=a.sample_line)
+        s.respond(a.discriminator, text, field=a.field, attribute=a.attribute, initiator_ip=a.initiator_ip, sample_line=a.sample_line,
+                  lookup=json.loads(a.lookup) if a.lookup else None)
         show_status(s)
     elif a.cmd == "promote":
         import os
