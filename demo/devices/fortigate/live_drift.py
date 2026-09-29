@@ -76,12 +76,14 @@ def summary(j):
         "steps": [s["text"][:400] for s in j.get("steps", [])],
         "fields_asked": [f["field"] for f in j.get("fields", []) if not f.get("evidenced") and not f.get("propagated")],
         "fields_carried_over": [f["field"] for f in j.get("fields", []) if f.get("propagated")],
+        "fields_carried_by_name": len([f for f in j.get("fields", []) if f.get("by_name")]), "family": j.get("family"), "pack": j.get("pack"),
         "binding": j.get("binding"), "alert": (j.get("alert") or {}).get("outcome")}
 
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True); ap.add_argument("--phase-seconds", type=float, default=240)
     ap.add_argument("--skip-events", action="store_true")
+    ap.add_argument("--formats", default="csv,cef,json,default", help="the drift sequence (2026-09-30 re-run: json,default)")
     a = ap.parse_args()
     rep = {"started": time.strftime("%Y-%m-%dT%H:%M:%S"), "policy": get("/api/state")["policy"]}
     print(clab(str(HERE / "syslog-format.sh").replace("\\", "/"), "default").strip().splitlines()[-1])
@@ -113,7 +115,7 @@ def main():
         print("events:", json.dumps(rep["events"], default=str)[:1500])
 
     rep["drift"] = []
-    for fmt in ("csv", "cef", "json", "default"):
+    for fmt in a.formats.split(","):
         n0 = len(jobs())
         print(clab(str(HERE / "syslog-format.sh").replace("\\", "/"), fmt).strip().splitlines()[-1])
         t0 = time.time()
@@ -123,9 +125,12 @@ def main():
             continue
         mine = {"csv": lambda s: s.split("|")[1:2] == ["csv"], "cef": lambda s: s.startswith("cef|"), "json": lambda s: s.split("|")[1:2] == ["json"]}[fmt]
         j = wait(lambda: next((x for x in jobs(n0) if mine(x.get("signature") or "") and x["state"] in ("answering", "asking", "failed", "done", "waiting_approval")), None), a.phase_seconds)
+        if j and j.get("auto_heal") and j["state"] == "asking":
+            time.sleep(40)   # the healed pack is loaded; let the format's events flow through it before the outcomes are read
         time.sleep(max(0, 60 - (time.time() - t0)))
         rec = {"format": fmt, "job": summary(j) if j else None, "latest_outcomes": labels(), "seconds_to_job_state": round(time.time() - t0) if j else None,
-               "result": ("healed automatically" if j and j["state"] == "done" and j["kind"] == "heal" else
+               "result": ("healed automatically" if j and j["state"] == "done" and (j["kind"] == "heal" or j.get("auto_heal")) else
+                          "healed automatically in part, the rest asked" if j and j.get("auto_heal") and j["state"] == "asking" else
                           "asked the operator" if j and j["state"] in ("answering", "asking") else
                           "quarantined (the job failed: " + j["steps"][-1]["text"][:300] + ")" if j and j["state"] == "failed" else
                           "waiting for the operator's approval" if j and j["state"] == "waiting_approval" else

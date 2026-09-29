@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -193,14 +194,17 @@ func main() {
 		packs, err := loadAll()
 		die(err)
 		// SIGHUP: reload. A pack that does not load (schema, invariants, signature) leaves the running set untouched.
-		var livePipe *pipeline.Pipeline
+		// The pipeline becomes live AFTER the listener has said "listening": a SIGHUP in between used to be dropped
+		// (`livePipe == nil`), so a reload sent right after a start was silently lost — found by the gate under load,
+		// 2026-09-30. Now the reloader waits for the live pipeline and the pending signal stays queued in `hup`.
+		live := make(chan *pipeline.Pipeline, 1)
+		var liveOnce sync.Once
+		setLive := func(p *pipeline.Pipeline) { liveOnce.Do(func() { live <- p }) }
 		hup := make(chan os.Signal, 1)
 		signal.Notify(hup, syscall.SIGHUP)
 		go func() {
+			livePipe := <-live
 			for range hup {
-				if livePipe == nil {
-					continue
-				}
 				next, err := loadAll()
 				if err == nil {
 					err = livePipe.Reload(next, "SIGHUP reload of --pack and --packs-file")
@@ -351,7 +355,7 @@ func main() {
 					terr = e
 				}
 				return terr
-			}, o, func(p *pipeline.Pipeline) { t.OnClose = p.Lost; h.Commit = p.Commit; livePipe = p })
+			}, o, func(p *pipeline.Pipeline) { t.OnClose = p.Lost; h.Commit = p.Commit; setLive(p) })
 			die(err)
 		case strings.HasPrefix(*listen, "udp:"):
 			// syslog over UDP: one datagram per frame; every received byte is evidence, the envelope is
@@ -378,7 +382,7 @@ func main() {
 			}
 			fmt.Fprintf(os.Stderr, "listening for syslog over TCP on %s\n", ln.Addr())
 			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return t.Serve(ctx, ln, emit) }, o,
-				func(p *pipeline.Pipeline) { t.OnClose = p.Lost; livePipe = p })
+				func(p *pipeline.Pipeline) { t.OnClose = p.Lost; setLive(p) })
 			die(err)
 			fmt.Fprintf(os.Stderr, "tcp: accepted=%d refused=%d idle_closed=%d partial_at_close=%d peak_active=%d\n", t.Accepted.Load(), t.Refused.Load(), t.IdleClosed.Load(), t.PartialAtClose.Load(), t.PeakActive.Load())
 		case strings.HasPrefix(*listen, "http:"):
@@ -391,7 +395,7 @@ func main() {
 				o.Channel = "http:" + addr
 			}
 			fmt.Fprintf(os.Stderr, "receiving HTTP POST bodies on %s\n", ln.Addr())
-			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return h.Serve(ctx, ln, emit) }, o, func(p *pipeline.Pipeline) { h.Commit = p.Commit; livePipe = p })
+			st, err = pipeline.RunFramesWith(func(emit func(frame.Frame) error) error { return h.Serve(ctx, ln, emit) }, o, func(p *pipeline.Pipeline) { h.Commit = p.Commit; setLive(p) })
 			die(err)
 			fmt.Fprintf(os.Stderr, "http: requests=%d rejected=%d truncated=%d\n", h.Requests.Load(), h.Rejected.Load(), h.Truncated.Load())
 		case *listen != "":

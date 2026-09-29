@@ -421,3 +421,59 @@ Three earlier runs failed on timing checks under load (`docs/laptop-branch.md` �
 After the real-device fixes (2026-09-30), both configurations passed on the first run, with the FortiGate lab running:
 - `gate.sh`: 738 s;
 - `gate.sh --laptop`: 819 s.
+
+## Answers carried across formats by name (2026-09-30, the user's decision)
+
+The user decided that, for a **self-describing** format — JSON, key=value, where every value is labelled with its field's
+name — earlier resolved answers of the same source carry over **by name**. The name is the evidence. Everything else
+keeps the structure-based §4.4 key.
+
+This is recorded as a change to the settled propagation key (`learning/ulpf_learn/propagation.py`, docstring):
+
+    same source_id + same family (the source's family keys, FortiGate type=traffic) + same field name + same value class
+
+**What makes it safe:**
+- **The family part.** FortiGate's `action` is a session verdict in traffic logs and login/logout in event logs.
+- **The value class.** A field whose values changed class changed meaning; the flowtap test's protocol is an example.
+- **One family per onboarding.** Mixed samples are split by the family key, the largest family is kept, and the rest stay
+  quarantined for their own job.
+- **The OCSF class.** An answer carries only into the class it was given for. When the model proposes another class for a
+  family with earlier answers, the family's class, which rests on evidence, wins. The step is logged as
+  `class_from_earlier_answers`.
+
+**Where the answers come from:**
+- earlier onboardings of the source record their answers at promotion;
+- the source's **bound vendor pack** (the FortiGate's `fortigate-fw-01`) is seeded by the console with
+  `ulpf_learn seed-propagation`. The value class of each key is observed on the lines that pack parsed from this device,
+  taken out of the evidence store with `raw_hash` checked.
+
+**Healing:** a drifted format whose fields carried by name heals like a known family (autoheal-1.1). What rests on evidence
+is promoted at once; the rest is withheld (carried unmapped) and asked.
+
+**Console fixes that came with it:**
+- the active family key now includes the source and the family, so two devices' JSON, or one device's traffic and event
+  JSON, never replace each other;
+- an answer "carried unmapped by name" counts as evidenced.
+
+**Live re-run, relay on** (`docs/metrics/fortigate-live-drift-json.json`):
+
+1. The FortiGate's system events were onboarded again as a new family of the bound source: `type=event`, pack
+   `fortigate-lab-01-rfc3164-kv-24-event`. The driver answered on the operator's behalf.
+2. `default` → `json` gave job-2, drift of the FortiGate (bound):
+   - 13 samples, family `type=traffic`;
+   - 47 answers seeded from `fortigate-fw-01` (value classes observed on 48 of the device's own default-format lines);
+   - the model proposed 4001; **47 of 52 fields carried by name**;
+   - pack `fortigate-lab-01-rfc3164-json-52-traffic` v1.0 promoted and hot-loaded, `auto-healed` in the transparency log,
+     with nobody asked.
+3. **Result: healed automatically in part.** The JSON traffic parsed at once: 35 of the 40 latest events, the other 5 in
+   flight.
+4. **The 5 withheld fields** — `sentdelta`, `rcvddelta`, `durationdelta`, `sentpktdelta`, `rcvdpktdelta` — appear only
+   in a session's interim updates.
+   - Three of them are in no documentation table.
+   - Two are in the table, but no default-format line in the window carried them, so they had no observed value class.
+
+   They are carried unmapped and asked; nothing is guessed.
+5. `json` → `default`: parsed by `fortigate-traffic` again.
+
+The first attempt of this run failed on a syntax slip in the new CLI line. The second ran with the old drift path, which
+asked for all fields when any was open; it was changed to heal in part as above. The run reported here is the third.

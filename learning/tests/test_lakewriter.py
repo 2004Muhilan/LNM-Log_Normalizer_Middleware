@@ -137,3 +137,17 @@ def test_every_pinned_class_has_a_schema_duckdb_accepts(uid, tmp_path):
     cols = lakewriter.schema.read_columns(str(PINNED), uid)
     (tmp_path / "e.jsonl").write_text("")
     duckdb.connect().execute(f"SELECT * FROM read_json('{tmp_path / "e.jsonl"}', format='newline_delimited', columns={cols}) LIMIT 0")
+
+
+def test_a_row_whose_time_is_text_is_refused_with_its_reason_and_the_rest_are_written(tmp_path):
+    """Found live (2026-09-30): an event whose `time` stayed text crashed the rotation, and with it every later write of
+    that writer. Now the row is refused into rejected.jsonl with its reason and everything else is written."""
+    lake = mk(tmp_path)
+    bad = event(2, time="2026-09-29T17:01:40.291297+0000")
+    post(lake, [event(0), event(1), bad, event(3)], "spoolA", 0)
+    assert lake.flush(force=True) == 3
+    rej = [json.loads(l) for l in (tmp_path / "lake" / "_writer" / "rejected.jsonl").read_text().splitlines()]
+    assert len(rej) == 1 and rej[0]["event_id"] == "ev_00002" and "not epoch milliseconds" in rej[0]["reason"]
+    assert lake.status()["rows_rejected"] == 1 and lake.status()["staged_rows"] == 0
+    con = duckdb.connect()
+    assert con.execute(f"SELECT count(*) FROM read_parquet({[str(f) for f in files(tmp_path / 'lake')]!r})").fetchone()[0] == 3

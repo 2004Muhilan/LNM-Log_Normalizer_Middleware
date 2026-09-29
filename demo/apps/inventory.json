@@ -24,5 +24,20 @@
       "serial": "FGVMEVXFB-07ZH02",
       "lab": "demo/devices/fortigate (Containerlab, evaluation licence)"
     }
+  },
+  "172.20.20.11": {
+    "source_id": "suricata-lab-01",
+    "name": "Suricata IDS (real sensor, Docker)",
+    "vendor": "OISF",
+    "product": "Suricata",
+    "family_keys": [
+      "event_type"
+    ],
+    "real_device": {
+      "product": "Suricata",
+      "version": "7.0.7 RELEASE (Alpine 3.20 package)",
+      "serial": null,
+      "lab": "demo/devices/suricata (Docker in the Containerlab distro; sniffs the FortiGate's port2 wire; EVE via rsyslog 172.20.20.11)"
+    }
   }
 }

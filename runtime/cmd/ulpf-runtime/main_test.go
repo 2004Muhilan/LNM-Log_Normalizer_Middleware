@@ -53,9 +53,10 @@ func TestUnloggedPackIsRefusedAtStartupAndOnReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cmd.Process.Kill()
-	// a deadline, not a count: returns the moment the line appears. It was 100 x 50 ms (5 s), and under the gate's parallel
-	// load a reload — which verifies the pack against the transparency log — once took longer (2026-09-29). The check is
-	// the same; only how long a loaded machine may take to reach it changed.
+	// a deadline, not a count: returns the moment the line appears. The failures under the gate's load (2026-09-29/30) were
+	// NOT a slow reload: the SIGHUP below arrives right after "listening", before the pipeline was live, and the runtime
+	// dropped it — nothing was ever printed. Fixed in main.go (the reloader waits for the live pipeline; the signal stays
+	// queued); this test is what caught it.
 	wait := func(s string) bool {
 		for end := time.Now().Add(60 * time.Second); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
 			if strings.Contains(stderr.String(), s) {

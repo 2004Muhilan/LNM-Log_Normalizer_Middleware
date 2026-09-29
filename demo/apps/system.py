@@ -30,6 +30,7 @@ import hashlib
 import http.server
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -47,7 +48,9 @@ ATTRIBUTES = ["time", "action_id", "src_endpoint.ip", "src_endpoint.port", "src_
               "connection_info.protocol_name", "connection_info.protocol_num", "connection_info.direction", "traffic.bytes_out", "traffic.bytes_in", "traffic.packets_out", "traffic.packets_in",
               # a device's own events (2026-09-30, the FortiGate's system events: OCSF Authentication and kin); the learning
               # plane checks every answer against the pinned table of the class being onboarded
-              "user.name", "status_id", "status", "status_detail", "message", "activity_id", "logon_type", "auth_protocol", "service.name", "metadata.event_code"]
+              "user.name", "status_id", "status", "status_detail", "message", "activity_id", "logon_type", "auth_protocol", "service.name", "metadata.event_code",
+              # an IDS's alerts (2026-09-30, Suricata: OCSF Detection Finding)
+              "finding_info.title", "finding_info.uid", "finding_info.desc", "severity_id", "severity", "action", "confidence_id"]
 # op-014's prepared answer sheet for THEIR sensor, by column order (the six shapes carry the same columns in the same order)
 SHEET = [("time", "flowtap stamps the line when the flow is logged: it is the event time"), ("action_id", "the verdict code: 1 allowed, 2 denied — the same codes OCSF uses"),
          ("connection_info.protocol_name", "tcp or udp"), ("src_endpoint.ip", "flowtap writes the initiator first"), ("src_endpoint.port", "the initiator's port follows its address"),
@@ -155,10 +158,16 @@ class System:
         self.tlog_refusals = []                   # packs a process refused (pack_refused records in its evidence log)
         self.bound = {}                           # (ingest channel, peer host) -> {pack_id: events it parsed}: the SOURCE BINDING
         self.pack_vendor = {}                     # pack_id -> declared vendor (lower case), for the packs loaded at start
+        self.pack_dir = {}                        # pack_id -> its directory (the packs loaded at start)
+        self.pack_family_keys = {}                # pack_id -> the keys its families are told apart by (key-locator anchors)
         for d in [a.golden] + [str(Path(a.vendor_packs) / v) for v in ("cisco-asa", "panos", "fortigate") if a.vendor_packs]:
             try:
                 doc = json.loads((Path(d) / "pack.json").read_text())
                 self.pack_vendor[doc["pack_id"]] = (doc.get("source") or {}).get("vendor", "").lower()
+                self.pack_dir[doc["pack_id"]] = d
+                keyof = {x["anchor_id"]: x["locator"].get("key") for x in doc.get("anchors", []) if x.get("locator", {}).get("kind") == "key"}
+                self.pack_family_keys[doc["pack_id"]] = sorted({keyof[v["anchor_id"]] for f in doc.get("families", [])
+                                                                for v in f.get("routing_signature", {}).get("l3_anchor_values", []) if keyof.get(v["anchor_id"])})
             except (OSError, ValueError, KeyError):
                 pass
 
@@ -615,18 +624,55 @@ class System:
         return r.stdout
 
     def family_key(self, job, arity):
-        return f"{job['l1']}|{job['l2']}" if job["l2"] in ("json", "xml") else f"{job['l1']}|{job['l2']}|{arity}"
+        """One active pack per (source, format, family): two devices sending JSON, or one device's traffic and event
+        families in JSON, are different families and never replace each other."""
+        base = f"{job['l1']}|{job['l2']}" if job["l2"] in ("json", "xml") else f"{job['l1']}|{job['l2']}|{arity}"
+        return f"{job.get('source_id', '')}|{base}" + (f"|{job['family']}" if job.get("family") else "")
+
+    def family_keys_for(self, inv, packs):
+        """The keys whose values name a family of this source: declared by its bound packs' anchors (FortiGate: type), or
+        by the operator in the inventory (`family_keys`)."""
+        return sorted(set(inv.get("family_keys") or []) | {k for p in packs for k in self.pack_family_keys.get(p, [])})
+
+    def seed_answers(self, job, inv, packs, work):
+        """Cross-format carry-over by name (the user's decision, 2026-09-30): the answers the source's BOUND vendor packs
+        already give for its self-describing families are recorded for this source under the name key. The value class of
+        each key is observed on lines that pack parsed from THIS peer, taken out of the evidence store (raw_hash checked)."""
+        n = 0
+        for pid in packs:
+            if pid not in self.pack_dir:
+                continue   # a pack this console onboarded recorded its own answers when it was promoted
+            with LOCK:
+                parsed = [e for e in (self.events[i] for i in self.order) if e.get("ok") and e.get("pack") == pid and self.host_of(e) == job["host"]][-48:]
+            lines = []
+            for e in parsed:
+                raw = self.raw(e["rec"])
+                if raw is not None and "sha256:" + hashlib.sha256(raw).hexdigest() == e["rec"]["raw_hash"]:
+                    lines.append(raw.rstrip(b"\r\n"))
+            if not lines:
+                continue
+            f = work / f"seed-{pid}.log"
+            f.write_bytes(b"".join(l + b"\n" for l in lines))
+            out = self.learn("seed-propagation", "--store", str(self.dir / "propagation.json"), "--source-id", job["source_id"], "--samples", str(f), self.pack_dir[pid])
+            k = int(out.split()[1]) if out.startswith("seeded ") else 0
+            n += k
+            self.step(job, f"earlier answers for {inv['name']}: {k} field answer(s) of its bound pack {pid} (vendor documentation), value classes observed on "
+                           f"{len(lines)} of its lines that pack parsed — recorded under the cross-format name key (self-describing formats only)")
+        return n
 
     def publish_fields(self, job, session):
         s = json.loads((session / "session.json").read_text())
         certs = {c["context"]["slot_index"]: c for c in s["certificates"].values() if c["status"] != "resolved"}
         prop = {h["slot_index"] for h in s.get("propagated", [])}
+        by_name = {h["slot_index"] for h in s.get("propagated", []) if h.get("by") == "name"}
         fields = []
         for sl in s["plan"]["slots"]:
             p = sl["parts"][0]; c = certs.get(sl["index"])
             cats = [m["provenance"].get("category") for m in p["mappings"]]
             fields.append({"field": p["field"], "slot": sl["index"], "cls": p["cls"], "samples": sl["samples"][:3], "mapped": [m["attribute"] for m in p["mappings"]], "provenance": cats,
-                           "propagated": sl["index"] in prop, "evidenced": bool(cats) and all(x not in ("model_proposal", "fixture_proposal") for x in cats),
+                           "propagated": sl["index"] in prop, "by_name": sl["index"] in by_name, "unmapped_name": p.get("unmapped_name"),
+                           # a carried answer may be "carried unmapped under its name" — the evidence named it so; that is an answer too
+                           "evidenced": (bool(cats) and all(x not in ("model_proposal", "fixture_proposal") for x in cats)) or (sl["index"] in prop and bool(p.get("unmapped_name"))),
                            "ambiguity": c and c["evidence"]["discriminator"].get("ambiguity_class"), "candidates": [r["attribute"] for r in c["ranked_candidates"]] if c else p["candidates"]})
         with LOCK:
             job["fields"], job["blockers"] = fields, s["verdict"]["blockers"]
@@ -720,6 +766,9 @@ class System:
             lines.append(raw.rstrip(b"\r\n"))
         (work / "samples.log").write_bytes(b"".join(l + b"\n" for l in lines))
         self.step(job, f"{len(lines)} samples taken out of the evidence log (raw_hash checked)", "model")
+        keys = self.family_keys_for(inv, by)
+        if job["kind"] != "onboard":
+            self.seed_answers(job, inv, by, work)
         a = self.a
         prov = (["--provider", "model", "--model-id", a.model_id, "--server", a.server, "--backend", a.backend, "--mode", "whole"] if a.provider == "model"
                 else ["--provider", "fixture", "--fixture", str(ROOT / "demo" / "live" / "flowtap-proposals.json")])
@@ -727,14 +776,31 @@ class System:
         session = work / "session"
         t0 = time.time()
         self.learn("onboard", "--samples", str(work / "samples.log"), "--source-id", src, "--operator", self.policy["operator"] if job["kind"] != "heal" else "auto-heal", "--session", str(session),
-                   "--vendor", inv["vendor"], "--product", inv["product"], "--transport-hint", "syslog-tcp", "--propagation-store", str(self.dir / "propagation.json"), *prov)
+                   "--vendor", inv["vendor"], "--product", inv["product"], "--transport-hint", "syslog-tcp", "--propagation-store", str(self.dir / "propagation.json"),
+                   *(["--family-keys", ",".join(keys)] if keys else []), *prov)
         s = self.publish_fields(job, session)
+        job["family"] = s.get("family") or ""
+        split = [e for e in s["timeline"] if e["step"] == "family_split"]
+        if split:
+            self.step(job, f"one family per onboarding: kept {split[0]['kept']} ({s['sample_count']} samples); "
+                           + ", ".join(f"{k or 'no family key'}: {v}" for k, v in split[0]["left"].items()) + " stay quarantined for their own job")
         arity = s["structure"]["arity"]
         drafted = s.get("drafted")
         self.step(job, f"structure {'drafted from the lines own keys' if drafted else 'induced'}: {arity} fields; proposals in {time.time() - t0:.1f}s; {len(s['certificates'])} ambiguity certificate(s); "
                        f"{len(s.get('propagated', []))} field(s) carried over from earlier answers")
         version = "1.0"
-        if job["kind"] in ("onboard", "drift", "discovery"):
+        # a drifted or new family of a BOUND source whose answers carried over by name (self-describing format, the user's
+        # decision of 2026-09-30) heals as a known family heals (autoheal-1.1): what rests on evidence is promoted now,
+        # what nobody has answered is withheld (carried unmapped) and asked — the format's events flow meanwhile
+        named = [f for f in job["fields"] if f.get("by_name")]
+        job["auto_heal"] = job["kind"] in ("drift", "discovery") and bool(named) and not job["blockers"]
+        if job["auto_heal"]:
+            by = sorted({h["from_family"] for h in s.get("propagated", []) if h.get("by") == "name"})
+            job["alert"]["alert"] = "drift_auto_heal"
+            job["alert"]["carried_by_name_from"] = by
+            self.step(job, f"{len(named)} of {len(job['fields'])} field(s) carried over BY NAME from earlier answers for {inv['name']} ({', '.join(by)}) — a self-describing "
+                           f"format, same source, same family ({job['family'] or 'none declared'}), same value class: nothing guessed", "promoting")
+        elif job["kind"] in ("onboard", "drift", "discovery"):
             sheet = PREPARED_SHEETS.get(src) if self.policy["prepared_answers"] else None
             if sheet:
                 self.step(job, f"answers: {sheet['author']}'s PREPARED SHEET for {src} ({sheet['for']}; policy prepared_answers is on)", "answering")
@@ -751,7 +817,8 @@ class System:
                 if job["kind"] in ("drift", "discovery"):
                     job["alert"]["outcome"] = (f"asked the operator: the new format's {len(open_)} field(s) have no evidence yet"
                                                + (f" ({len(job['fields']) - len(open_)} carried over)" if len(open_) < len(job["fields"]) else "")
-                                               + " — earlier answers carry over only under the §4.4 key (same source, same L1–L3), and this is a new surface")
+                                               + " — earlier answers carry over by name only for a self-describing format (JSON, key=value) of the same source and family with the same value class; "
+                                               "anything else keeps the structure key (same source, same L1–L3)")
                 self.step(job, "waiting for the operator: say what each field is, then press Promote", "answering")
                 self.wait_answers(job, session)
         else:
@@ -764,14 +831,16 @@ class System:
                 self.step(job, alert["outcome"], "answering")
                 self.wait_answers(job, session)
         self.promote_and_load(job, session, work, arity, version, replace=None)
-        if job["kind"] == "heal":
+        if job["kind"] == "heal" or job.get("auto_heal"):
             withheld = [f for f in job["fields"] if not f["evidenced"]]
             alert = job["alert"]
             alert["auto_promoted"] = [{"field": f["field"], "attribute": f["mapped"][0], "provenance": f["provenance"][0]} for f in job["fields"] if f["evidenced"] and f["mapped"]]
             alert["withheld"] = [{"field": f["field"], "samples": f["samples"], "why": ("ambiguous between " + ", ".join(f["candidates"])) if f["ambiguity"] else "a proposal is not evidence" if f["mapped"] or f["candidates"] else "nobody has said what this field is"} for f in withheld]
             alert["pack"] = job["pack"]
-            alert["outcome"] = ("healed: every field resolved on sufficient evidence" if not withheld else
-                                f"healed in part: {len(alert['auto_promoted'])} field(s) carried over on earlier evidence, {len(withheld)} withheld — the operator is asked")
+            how = " (by name, from " + ", ".join(alert.get("carried_by_name_from", [])) + ")" if job.get("auto_heal") else ""
+            alert["outcome"] = (f"healed automatically: every field resolved on sufficient evidence{how}, nobody asked" if not withheld else
+                                f"healed automatically in part: {len(job['fields']) - len(withheld)} field(s) carried over on earlier evidence{how}, "
+                                f"{len(withheld)} withheld (carried unmapped) — the operator is asked for those: " + ", ".join(f["field"] for f in withheld))
             self.step(job, "ALERT: " + alert["outcome"], "asking" if withheld else "done")
             if withheld:
                 self.wait_answers(job, session, only=[f["field"] for f in withheld])
@@ -780,7 +849,8 @@ class System:
                 alert["answered"] = dict(job["answers"]); alert["outcome"] += f" → answered by {self.policy['operator']}, pack {job['pack']['pack_version']} loaded"
         if job["kind"] in ("drift", "discovery"):
             job["alert"]["pack"] = job.get("pack")
-            job["alert"]["outcome"] += f" → answered by {self.policy['operator']}, pack {job['pack']['pack_version']} loaded" if job.get("pack") else ""
+            if not job.get("auto_heal"):
+                job["alert"]["outcome"] += f" → answered by {self.policy['operator']}, pack {job['pack']['pack_version']} loaded" if job.get("pack") else ""
         self.step(job, "done: events of this format are normalized from here on", "done")
 
     def wait_answers(self, job, session, only=None):
@@ -803,9 +873,11 @@ class System:
     def promote_and_load(self, job, session, work, arity, version, replace):
         fam = json.loads((session / "session.json").read_text())["plan"].get("family_id") or f"positional-{arity}"
         out = work / f"pack-{version}"
-        self.step(job, "promoting: acceptance policy, signed pack" + (" (what rests on a proposal alone is withheld, carried unmapped)" if job["kind"] == "heal" else ""), "promoting")
-        self.learn("promote", "--session", str(session), "--out", str(out), "--pack-id", f"{job['source_id']}-{fam}", "--withhold-unevidenced", "--pack-version", version,
-                   "--produced-by", "auto-healed" if job["kind"] == "heal" else "onboarded")   # logged in the parser transparency log BEFORE it is activated
+        self.step(job, "promoting: acceptance policy, signed pack" + (" (what rests on a proposal alone is withheld, carried unmapped)" if job["kind"] == "heal" or job.get("auto_heal") else ""), "promoting")
+        auto = job["kind"] == "heal" or job.get("auto_heal")
+        fam_tag = ("-" + re.sub(r"[^A-Za-z0-9]+", "-", job["family"].split("=", 1)[-1]).strip("-")) if job.get("family") else ""
+        self.learn("promote", "--session", str(session), "--out", str(out), "--pack-id", f"{job['source_id']}-{fam}{fam_tag}", "--withhold-unevidenced", "--pack-version", version,
+                   "--produced-by", "auto-healed" if auto else "onboarded")   # logged in the parser transparency log BEFORE it is activated
         r = subprocess.run([self.a.rt, "verify-pack", "--pack", str(out)], capture_output=True, text=True, cwd=str(ROOT))
         if r.returncode != 0:
             raise RuntimeError("verify-pack: " + (r.stdout + r.stderr)[-300:])

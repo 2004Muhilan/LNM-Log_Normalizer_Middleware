@@ -16,7 +16,11 @@ export ULPF_DEMO_PROVIDER="${ULPF_DEMO_PROVIDER:-fixture}"
 bash demo/start-demo.sh > "$STATE/apps-check-start.log" 2>&1 || { tail -5 "$STATE/apps-check-start.log"; echo "apps-check: FAIL (start)"; exit 1; }
 G=http://127.0.0.1:8780; S=http://127.0.0.1:8765; OS=http://127.0.0.1:9200
 fail() { echo "apps-check: FAIL — $1"; [ "${KEEP:-0}" = "1" ] || bash demo/start-demo.sh stop > /dev/null; exit 1; }
-gset() { curl -s -X POST $G/api/set -d "$1"; }
+gset() { curl -sf -m 10 -X POST $G/api/set -d "$1" > /dev/null || fail "the generator did not accept $1"; }
+# start-demo.sh returns when the processes are started, not when their pages answer: a shape posted to a generator that
+# is not listening yet was lost silently, and the check then waited for a job that could never come (gate, 2026-09-30)
+for _ in $(seq 1 120); do curl -sf -m 2 $G/ > /dev/null && curl -sf -m 2 $S/api/state > /dev/null && break; sleep 0.5; done
+curl -sf -m 2 $S/api/state > /dev/null || fail "the System page did not answer within 60 s of the start"
 jq_() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
 st() { curl -s $S/api/state | jq_ "$1"; }
 dest() { st "next(e for e in d['egress'] if e['kind']=='$1')$2"; }
@@ -27,11 +31,19 @@ wait_job() { # index state seconds
   done
   st "[x['text'] for x in d['jobs'][$1]['steps']] if len(d['jobs'])>$1 else 'no job'"; fail "job $1 is '$s', wanted '$2'"
 }
+wait_any() { # index "state1 state2" seconds -> prints the state reached
+  local s
+  for _ in $(seq 1 $(( $3 * 2 ))); do
+    s=$(st "d['jobs'][$1]['state'] if len(d['jobs'])>$1 else 'none'"); case " $2 " in *" $s "*) echo "$s"; return 0;; esac; [ "$s" = "failed" ] && break; sleep 0.5
+  done
+  echo "$s"
+}
 until_true() { # seconds python-expression-over-state description
   for _ in $(seq 1 $(( $1 * 2 ))); do [ "$(st "$2")" = "True" ] && return 0; sleep 0.5; done
   fail "timed out after $1 s: $3"
 }
 n=0
+named=0   # 1 once the drift of a self-describing shape (json, kv, leef: key=value) of flowtap-01 has been answered
 for shape in ${APPS_SHAPES:-positional json kv}; do
   gset "{\"connector\":\"$([ $((n % 4)) -eq 0 ] && echo tcp || echo http)\",\"shape\":\"$shape\",\"drift\":false,\"running\":true}"
   wait_job $n done $WAIT; echo "$shape: onboarded — $(st "d['jobs'][$n]['steps'][-2]['text'][:90]")"; n=$((n+1))
@@ -39,7 +51,19 @@ for shape in ${APPS_SHAPES:-positional json kv}; do
   # pack): drift that arrives before one event of the new pack was parsed is refused and asked, correctly — so let it flow first
   until_true 30 "d['parse_success'] == 1.0" "$shape: events flowing under the new pack before the drift"
   gset '{"drift":true}'
-  wait_job $n asking $WAIT
+  # answers carry across formats BY NAME for self-describing formats (the user's decision, 2026-09-30): once one of them
+  # had its drift answered, a later one heals completely; structure-keyed formats (positional, csv, xml) always ask
+  s=$(wait_any $n "asking done" $WAIT)
+  if [ "$s" = "done" ]; then
+    case "$shape" in json|kv|leef) [ "$named" = 1 ] || fail "$shape: healed completely although no self-describing format of this source had answered its new fields";;
+      *) fail "$shape: a structure-keyed format healed completely — only self-describing formats carry answers by name";; esac
+    [ "$(st "len(d['jobs'][$n]['alert']['propagated'])")" = "10" ] || fail "$shape: a complete heal carries over all 10 fields"
+    echo "$shape: drift healed by name, nobody asked — $(st "d['alerts'][-1]['outcome'][:150]")"; n=$((n+1))
+    until_true 20 "d['parse_success'] == 1.0" "$shape: parse success back to 100%"
+    continue
+  fi
+  [ "$s" = "asking" ] || { st "[x['text'] for x in d['jobs'][$n]['steps']] if len(d['jobs'])>$n else 'no job'"; fail "job $n is '$s', wanted 'asking' or 'done'"; }
+  case "$shape" in json|kv|leef) [ "$named" = 0 ] || fail "$shape: asked again although a self-describing format of this source already answered these names";; esac
   jid=$(st "d['jobs'][$n]['id']")
   [ "$(st "len(d['jobs'][$n]['alert']['propagated'])")" = "8" ] || fail "$shape: the heal must carry over 8 fields"
   for f in $(st "' '.join(f['field'] for f in d['jobs'][$n]['fields'] if not f['evidenced'])"); do
@@ -48,6 +72,7 @@ for shape in ${APPS_SHAPES:-positional json kv}; do
   done
   sleep 1; curl -s -X POST $S/api/promote -d "{\"job\":\"$jid\"}"
   wait_job $n done 60; echo "$shape: drift healed — $(st "d['alerts'][-1]['outcome'][:150]")"; n=$((n+1))
+  case "$shape" in json|kv|leef) named=1;; esac
   until_true 20 "d['parse_success'] == 1.0" "$shape: parse success back to 100%"
 done
 until_true 30 "all(e['up'] and e['ahead_by'] <= 25 for e in d['egress'])" "both destinations UP and current"

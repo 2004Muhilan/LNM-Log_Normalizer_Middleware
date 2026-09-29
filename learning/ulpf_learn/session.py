@@ -66,21 +66,35 @@ class Session:
 
     # ------------------------------------------------------------------ workflow
     def onboard(self, samples_path: Path, source_id: str, operator_id: str, provider: Provider | None = None, vendor: str = "squid",
-                propagation_store: Path | None = None, product: str | None = None, transport_hint: str | None = None):
+                propagation_store: Path | None = None, product: str | None = None, transport_hint: str | None = None, family_keys: list[str] | None = None):
+        """`family_keys`: the keys whose values name a family of this source (FortiGate `type`), as the source's bound packs
+        or the operator's inventory declare them. One onboarding learns ONE family: when the samples hold several, the
+        largest is kept and the rest stay quarantined for their own job. On a self-describing surface the family is part
+        of the cross-format name key (propagation.py)."""
         raw = Path(samples_path).read_bytes()
         lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
         self.state = {"source_id": source_id, "operator_id": operator_id, "vendor": vendor, "created_at": now_iso(),
                       "samples_path": str(samples_path), "sample_count": len(lines), "state": "induced", "timeline": [], "certificates": {}, "resolutions": [],
-                      "product": product, "transport_hint": transport_hint}
+                      "product": product, "transport_hint": transport_hint, "family_keys": list(family_keys or [])}
         self.log("session_started", samples=len(lines))
         from .draft import draft
         from .envelope import chain, chain_payload
+        if family_keys:
+            groups: dict[str, list[bytes]] = {}
+            for l in lines:
+                groups.setdefault(family_values(chain_payload(l), family_keys), []).append(l)
+            fam = max(groups, key=lambda k: (len(groups[k]), k))
+            if len(groups) > 1:
+                self.log("family_split", kept=fam, left={k: len(v) for k, v in groups.items() if k != fam})
+            lines = groups[fam]
+            self.state["family"], self.state["sample_count"] = fam, len(lines)
         d = draft(lines, f"{source_id}-draft")   # None for whitespace-token text: induction, as before
         if d is not None:
             structure = d.structure
             d.spec["spec_id"] = f"{source_id}-{d.l2}-{structure.arity}"
             self.state["app_envelope"] = d.l1 if d.l1 != "raw" else None
-            self.state["drafted"] = {"l1": d.l1, "l2": d.l2, "named": d.named}
+            self.state["drafted"] = {"l1": d.l1, "l2": d.l2, "named": d.named,
+                                     "names": {c["field"]: k for k, c in (d.spec["root"].get("keys") or d.spec["root"].get("paths") or {}).items()}}
             if d.l1 != "raw":   # onboarding sees the payload routing sees: every envelope removed, as frame.UnwrapChain removes it
                 lines = [chain_payload(l) for l in lines]
             self.state["structure"] = {"arity": structure.arity, "other_arities": {}, "slots": [asdict(s) for s in structure.slots], "routing_sketch": d.routing}
@@ -117,7 +131,17 @@ class Session:
         if not store_path:
             return
         store = PropagationStore(store_path)
-        hits = store.apply(self.plan, self.state["source_id"], self.state["structure"]["routing_sketch"], by_name=bool((self.state.get("drafted") or {}).get("named")))
+        dr = self.state.get("drafted") or {}
+        fc = store.family_class(self.state["source_id"], self.state.get("family", "")) if dr.get("named") and dr.get("l2") in ("json", "kv") else None
+        if fc and fc[0] != self.plan.event_class_uid:
+            # the family's class is evidence (earlier answers for this source's family); the model's other class is a
+            # proposal — its per-field proposals were made for that other class and are dropped, so what does not carry is asked
+            self.log("class_from_earlier_answers", family=self.state["family"], event_class=fc[0], proposed=self.plan.event_class_uid)
+            self.plan.event_class_uid, self.plan.event_class_name = fc
+            for _, part in self.plan.parts():
+                part.mappings, part.candidates = [], []
+        hits = store.apply(self.plan, self.state["source_id"], self.state["structure"]["routing_sketch"], by_name=bool(dr.get("named")),
+                           family=self.state.get("family", "") if dr.get("named") else None, names=dr.get("names"))
         self.state["propagated"] = hits
         self.log("propagated", slots=len(hits), from_families=sorted({h["from_family"] for h in hits}))
 
@@ -337,8 +361,9 @@ class Session:
                          f"{self.plan.event_class_name} family induced from {self.state['sample_count']} samples; resolved by: " + ", ".join(sorted({r["discriminator_id"] for r in self.state["resolutions"]} | ({"propagation"} if self.state.get("propagated") else set()))) + ".")
         if self.state.get("propagation_store"):
             store = PropagationStore(Path(self.state["propagation_store"]))
+            dr = self.state.get("drafted") or {}
             n = store.record(self.plan, self.state["source_id"], routing, self.plan.family_id or f"positional-{len(self.plan.slots)}", str(self.path),
-                             by_name=bool((self.state.get("drafted") or {}).get("named")))
+                             by_name=bool(dr.get("named")), family=self.state.get("family", "") if dr.get("named") else None, names=dr.get("names"))
             store.save()
             self.log("propagation_recorded", slots=n)
         self.state["state"] = "promoted"
@@ -357,6 +382,33 @@ class Session:
             from .envelope import chain_payload
             lines = [chain_payload(l) for l in lines]   # the payload routing sees, every envelope removed
         return lines
+
+
+def family_values(payload: bytes, keys: list[str]) -> str:
+    """The family a payload belongs to: the values it carries under the source's family keys (a JSON path, or a key=value
+    key). A key the line does not carry contributes nothing, so such a line is its own (empty-valued) family."""
+    import re
+    from .propagation import family_of
+    vals: dict[str, list[str]] = {}
+    obj = None
+    if payload[:1] == b"{":
+        try:
+            obj = json.loads(payload)
+        except ValueError:
+            obj = None
+    for k in keys:
+        v = None
+        if isinstance(obj, dict):
+            v = obj
+            for part in k.split("."):
+                v = v.get(part) if isinstance(v, dict) else None
+        else:
+            m = re.search(rb'(?:^|[\s,|])' + re.escape(k.encode()) + rb'="((?:[^"\\]|\\.)*)"', payload) or \
+                re.search(rb'(?:^|[\s,|])' + re.escape(k.encode()) + rb'=([^\s,"]*)', payload)
+            v = m.group(1).decode("utf-8", "replace") if m else None
+        if v is not None and not isinstance(v, (dict, list)):
+            vals[k] = [str(v)]
+    return family_of(vals)
 
 
 def _l2_of(spec: dict) -> str:

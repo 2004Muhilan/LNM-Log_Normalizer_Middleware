@@ -70,7 +70,9 @@ EOF
 echo "  image: $(docker image inspect ulpf-runtime --format '{{.Size}}' | awk '{printf "%.1f MB", $1/1048576}'), user $(docker image inspect ulpf-runtime --format '{{.Config.User}}')"
 
 echo "=== container test stage (fresh, not quiet about what it is)"
-DOCKER_BUILDKIT=1 docker build -q -f runtime/Dockerfile --target test -t ulpf-runtime-test . >/dev/null && echo "  container test stage: PASS (note: the five corpus replay tests SKIP inside the image — corpus/cache is never copied into a build context)" || { echo "  container test stage: FAIL"; status=1; }
+# the build log is kept: a failure names its tests (it once failed under the gate's full load with nothing to go on)
+CT_LOG="${TMPDIR:-/tmp}/ulpf-p8-container-test.log"
+DOCKER_BUILDKIT=1 docker build --progress=plain -f runtime/Dockerfile --target test -t ulpf-runtime-test . > "$CT_LOG" 2>&1 && echo "  container test stage: PASS (note: the five corpus replay tests SKIP inside the image — corpus/cache is never copied into a build context)" || { echo "  container test stage: FAIL (log: $CT_LOG)"; grep -aE -- "--- FAIL|^#[0-9]+ [0-9.]+ FAIL|panic:" "$CT_LOG" | head -20 | sed 's/^/    /'; status=1; }
 
 if [ "${ULPF_P8_LEARNING_IMAGE:-0}" = "1" ]; then
   echo "=== requirement (k), learning plane: fresh bundled image, onboarding inside it with --network none (~6 min)"

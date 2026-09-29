@@ -414,8 +414,33 @@ The trigger window is per source (2026-09-30), so the relay can stay ON.
 **Live format change:** `syslog-format.sh csv|cef|json` is shown as **format drift of the FortiGate (bound source)**, never as
 another vendor's drift. The console then onboards the new format and asks the operator.
 
+**`json` heals by name (2026-09-30).** `syslog-format.sh json` heals automatically in part:
+- 47 of 52 fields carry over by name from the FortiGate vendor pack's documented answers, and the pack loads with no
+  question;
+- 5 interim-update counters no one has answered yet are carried unmapped and asked.
+
 **What not to say:**
-- that the FortiGate's format changes heal automatically: they ask. Earlier answers carry over only within a surface (the
-  §4.4 key), and a cross-surface key is raised;
+- that every format change heals: only self-describing formats (JSON, key=value) carry answers by name. csv and cef
+  (whose keys differ) ask;
 - that csv or cef are fully handled: csv is drafted as CSV of `key=value` cells, and CEF values with spaces need a
   parser-spec change. Both are raised in the doc.
+
+## A second real device: Suricata on the FortiGate's wire (optional; `docs/real-device-suricata.md`)
+
+**Start** (after the FortiGate lab): `wsl -d Containerlab -- bash …/demo/devices/suricata/start.sh`. It builds the image
+once, while online. The ruleset is local only.
+
+**Show.**
+- The System page lists **Suricata IDS (real sensor, Docker)** with a REAL DEVICE tag, 172.20.20.11.
+- Its alerts are quarantined as a new format. The console drafts the JSON, the model proposes, and the operator answers.
+- The pack is hot-loaded.
+- At ULPF's output, each Suricata alert matches the FortiGate's log of the same connection (same source and destination
+  port).
+
+**What not to say, until the time finding is decided:**
+- that Suricata's alerts are in OpenSearch or the lake. Its `+0000` timestamp stays text, so OpenSearch rejects them and
+  the lake refuses them with the reason;
+- that the cross-vendor OpenSearch search returns Suricata. It returns the FortiGate only, for now.
+
+"Prove it" on a Suricata alert proves the evidence (archive bytes, checkpoint, Merkle proof) and reports the SIEM
+document and the lake row missing.

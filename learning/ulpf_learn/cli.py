@@ -59,6 +59,10 @@ def main(argv=None) -> int:
     o.add_argument("--provider", choices=["fixture", "model", "recorded"], default="fixture", help="fixture (default; the P3 path, unchanged), model (P4: llama-server), or recorded (P6: replay a spike recording of the model's proposals)")
     o.add_argument("--recording", help="with --provider recorded: spike/results/<machine>/<model>__<backend>__<case>__<mode>.json")
     o.add_argument("--propagation-store", help="P6: JSON store of resolutions for this operator; hits resolve slots under the §4.4 key before any request is issued")
+    o.add_argument("--family-keys", help="comma list: the keys whose values name a family of this source (FortiGate: type); one onboarding learns one family, and on a self-describing format the family is part of the cross-format name key")
+    sp = sub.add_parser("seed-propagation", help="record a promoted pack's self-describing answers for a source under the cross-format name key (the caller binds the pack to the source)")
+    sp.add_argument("--store", required=True); sp.add_argument("--source-id", required=True); sp.add_argument("pack_dirs", nargs="+")
+    sp.add_argument("--samples", help="lines the pack parsed from this source (the key's token class is observed on them); default: the pack's own samples")
     os_ = sub.add_parser("onboard-spec", help="P6: onboard a source whose structure is a given spec (csv/kv/regex drafts); the model labels the spec's fields")
     for name, kw in (("--samples", {}), ("--spec", {}), ("--source-id", {}), ("--operator", {}), ("--session", {}), ("--vendor", {}), ("--family-id", {})):
         os_.add_argument(name, required=True, **kw)
@@ -101,10 +105,19 @@ def main(argv=None) -> int:
             prov.served_model = served
         store = Path(a.propagation_store) if a.propagation_store else None
         if a.cmd == "onboard":
-            s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor, propagation_store=store, product=a.product, transport_hint=a.transport_hint)
+            s.onboard(Path(a.samples), a.source_id, a.operator, prov, a.vendor, propagation_store=store, product=a.product, transport_hint=a.transport_hint,
+                      family_keys=[k for k in (a.family_keys or "").split(",") if k])
         else:
             s.onboard_spec(Path(a.samples), Path(a.spec), a.source_id, a.operator, a.vendor, a.family_id, prov, a.unwrap_envelope, propagation_store=store)
         show_status(s)
+        return 0
+    if a.cmd == "seed-propagation":
+        from .propagation import Store
+        st = Store(Path(a.store))
+        for d in a.pack_dirs:
+            obs = [l.rstrip(b"\r") for l in Path(a.samples).read_bytes().split(b"\n") if l.strip()] if a.samples else None
+            print(f"seeded {st.seed_from_pack(Path(d), a.source_id, obs)} field answer(s) from {d} for {a.source_id}")
+        st.save()
         return 0
     if a.cmd == "merge":
         from .anchors import load_declared

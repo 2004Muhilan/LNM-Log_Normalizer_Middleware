@@ -1,0 +1,47 @@
+%YAML 1.1
+---
+# Loaded on top of Alpine's /etc/suricata/suricata.yaml with --include: the lab's rules, and EVE JSON through syslog(3).
+# EVE's syslog output writes to /dev/log; in this container /dev/log is the socket of the rsyslog forwarder (fgt-ids-syslog),
+# which sends it to ULPF over TCP (RFC 6587 octet counting). Only alerts: one EVE event type, one family to onboard.
+vars:
+  address-groups:
+    HOME_NET: "[10.10.1.0/24]"
+    EXTERNAL_NET: "any"
+  port-groups:   # Suricata's defaults (an included `vars` replaces the whole node, so they are restated)
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: 502
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: 21
+    GENEVE_PORTS: 6081
+    VXLAN_PORTS: 4789
+    TEREDO_PORTS: 3544
+default-rule-path: /etc/ulpf-suricata
+rule-files:
+  - local.rules
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: syslog
+      identity: "suricata"
+      facility: local5
+      level: Info
+      types:
+        - alert:
+            payload: no
+            packet: no
+            metadata: no
+            http-body: no
+            tagged-packets: no
+  - stats:
+      enabled: no
+  - fast:
+      enabled: no
+logging:
+  default-log-level: notice
+  outputs:
+    - console:
+        enabled: yes

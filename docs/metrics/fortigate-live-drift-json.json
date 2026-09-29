@@ -1,0 +1,542 @@
+{
+ "started": "2026-09-29T16:51:12",
+ "policy": {
+  "auto_onboard": true,
+  "prepared_answers": true,
+  "operator": "op-014",
+  "heal_policy": "autoheal-1.1",
+  "vendor_relay": true
+ },
+ "baseline": {
+  "app": {
+   "name": "FortiGate firewall (real device, Containerlab)",
+   "events": 59,
+   "usable": 57,
+   "quarantined": 0,
+   "processes": [
+    2
+   ]
+  },
+  "relay_on": true
+ },
+ "events": {
+  "job": {
+   "id": "job-1",
+   "kind": "discovery",
+   "state": "done",
+   "format": "syslog RFC 3164 \u2192 key=value",
+   "signature": "rfc3164|kv||23",
+   "steps": [
+    "NEW EVENT FAMILY from FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01): syslog RFC 3164 \u2192 key=value lines that no onboarded family owns \u2014 anchor value in the declared domain but no onboarded family owns it (fortigate-type=event): family discovery input \u2014 18 quarantined, bytes kept",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "18 samples taken out of the evidence log (raw_hash checked)",
+    "earlier answers for FortiGate firewall (real device, Containerlab): 48 field answer(s) of its bound pack fortigate-fw-01 (vendor documentation), value classes observed on 48 of its lines that pack parsed \u2014 recorded under the cross-format name key (self-describing formats only)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "structure drafted from the lines own keys: 24 fields; proposals in 100.9s; 5 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+    "no prepared sheet for fortigate-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+    "waiting for the operator: say what each field is, then press Promote",
+    "operator op-014 asserts eventtime \u2192 time  (asked on the page)",
+    "operator op-014 asserts logdesc \u2192 message  (asked on the page)",
+    "operator op-014 asserts user \u2192 user.name  (asked on the page)",
+    "operator op-014 asserts srcip \u2192 src_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts dstip \u2192 dst_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts action \u2192 activity_id with login=1, logout=2  (asked on the page)",
+    "operator op-014 asserts status \u2192 status_id with success=1, failed=2  (asked on the page)",
+    "promoting: acceptance policy, signed pack",
+    "pack fortigate-lab-01-rfc3164-kv-24-event v1.0 verified by the Go engine and HOT-LOADED \u2014 no restart; the activation is an evidence-log record",
+    "done: events of this format are normalized from here on"
+   ],
+   "fields_asked": [
+    "date",
+    "time",
+    "devname",
+    "devid",
+    "tz",
+    "logid",
+    "type",
+    "subtype",
+    "level",
+    "vd",
+    "sn",
+    "ui",
+    "method",
+    "reason",
+    "profile",
+    "msg",
+    "duration"
+   ],
+   "fields_carried_over": [],
+   "fields_carried_by_name": 0,
+   "family": "type=event",
+   "pack": {
+    "pack_id": "fortigate-lab-01-rfc3164-kv-24-event",
+    "pack_version": "1.0",
+    "sha256": "sha256:92235212f99546807fb2c3482f6133b1f206190fd79555c9a8cb75e4e6d0606b",
+    "signed_by": "ulpf-pack-authority-dev",
+    "previous_packs": []
+   },
+   "binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "alert": "asked the operator: the new format's 24 field(s) have no evidence yet \u2014 earlier answers carry over by name only for a self-describing format (JSON, key=value) of the same source and family with the same value class; anything else keeps the structure key (same source, same L1\u2013L3) \u2192 answered by op-014, pack 1.0 loaded"
+  },
+  "answered_by_the_driver_as_operator": {
+   "eventtime": "time",
+   "logdesc": "message",
+   "user": "user.name",
+   "srcip": "src_endpoint.ip",
+   "dstip": "dst_endpoint.ip",
+   "action": "activity_id {'login': 1, 'logout': 2}",
+   "status": "status_id {'success': 1, 'failed': 2}"
+  },
+  "other_event_jobs": [],
+  "latest_outcomes": {
+   "fortigate-traffic": 28,
+   "rfc3164-kv-24": 12
+  }
+ },
+ "drift": [
+  {
+   "format": "json",
+   "job": {
+    "id": "job-2",
+    "kind": "drift",
+    "state": "asking",
+    "format": "syslog RFC 3164 \u2192 JSON",
+    "signature": "rfc3164|json||0",
+    "steps": [
+     "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01, fortigate-lab-01-rfc3164-kv-24-event): the format changed to syslog RFC 3164 \u2192 JSON \u2014 12 quarantined, bytes kept.",
+     "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+     "12 samples taken out of the evidence log (raw_hash checked)",
+     "earlier answers for FortiGate firewall (real device, Containerlab): 47 field answer(s) of its bound pack fortigate-fw-01 (vendor documentation), value classes observed on 48 of its lines that pack parsed \u2014 recorded under the cross-format name key (self-describing formats only)",
+     "the local model labels the fields \u2014 proposals only, never evidence",
+     "structure drafted from the lines own keys: 52 fields; proposals in 99.8s; 0 ambiguity certificate(s); 47 field(s) carried over from earlier answers",
+     "47 of 52 field(s) carried over BY NAME from earlier answers for FortiGate firewall (real device, Containerlab) (fortigate-fw-01/fortigate-traffic) \u2014 a self-describing format, same source, same family (type=traffic), same value class: nothing guessed",
+     "promoting: acceptance policy, signed pack (what rests on a proposal alone is withheld, carried unmapped)",
+     "pack fortigate-lab-01-rfc3164-json-52-traffic v1.0 verified by the Go engine and HOT-LOADED \u2014 no restart; the activation is an evidence-log record",
+     "ALERT: healed automatically in part: 47 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 5 withheld (carried unmapped) \u2014 the operator is asked for those: sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta"
+    ],
+    "fields_asked": [
+     "sentdelta",
+     "rcvddelta",
+     "durationdelta",
+     "sentpktdelta",
+     "rcvdpktdelta"
+    ],
+    "fields_carried_over": [
+     "date",
+     "time",
+     "devname",
+     "devid",
+     "eventtime",
+     "tz",
+     "logid",
+     "type",
+     "subtype",
+     "level",
+     "vd",
+     "srcip",
+     "srcport",
+     "srcintf",
+     "srcintfrole",
+     "dstip",
+     "dstport",
+     "dstintf",
+     "dstintfrole",
+     "srccountry",
+     "dstcountry",
+     "sessionid",
+     "proto",
+     "action",
+     "policyid",
+     "policytype",
+     "poluuid",
+     "policyname",
+     "service",
+     "trandisp",
+     "appcat",
+     "duration",
+     "sentbyte",
+     "rcvdbyte",
+     "sentpkt",
+     "rcvdpkt",
+     "crscore",
+     "craction",
+     "crlevel",
+     "devtype",
+     "osname",
+     "mastersrcmac",
+     "srcmac",
+     "srcserver",
+     "app",
+     "transip",
+     "transport"
+    ],
+    "fields_carried_by_name": 47,
+    "family": "type=traffic",
+    "pack": {
+     "pack_id": "fortigate-lab-01-rfc3164-json-52-traffic",
+     "pack_version": "1.0",
+     "sha256": "sha256:9174d874f6c31fcaa3b457bd79b1d5715da062e49004fc9e06e0153934b07aa9",
+     "signed_by": "ulpf-pack-authority-dev",
+     "previous_packs": [
+      "/home/g2con/ulpf-demo/app/jobs/job-1/pack-1.0"
+     ]
+    },
+    "binding": {
+     "bound": true,
+     "by_packs": [
+      "fortigate-fw-01",
+      "fortigate-lab-01-rfc3164-kv-24-event"
+     ],
+     "drifted_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "source_known_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "127.0.0.2"
+      ],
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "router_note": null,
+     "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+    },
+    "alert": "healed automatically in part: 47 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 5 withheld (carried unmapped) \u2014 the operator is asked for those: sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta"
+   },
+   "latest_outcomes": {
+    "rfc3164-json-52": 35,
+    "in flight": 5
+   },
+   "seconds_to_job_state": 164,
+   "result": "healed automatically in part, the rest asked"
+  },
+  {
+   "format": "default",
+   "latest_outcomes": {
+    "fortigate-traffic": 40
+   },
+   "app": {
+    "events": 437,
+    "usable": 292,
+    "quarantined": 134
+   }
+  }
+ ],
+ "finished": "2026-09-29T16:57:34",
+ "alerts": [
+  {
+   "id": "alert-1",
+   "alert": "new_family_known_source",
+   "policy_version": "autoheal-1.1",
+   "at": "2026-09-29T16:51:31Z",
+   "app": "FortiGate firewall (real device, Containerlab)",
+   "host": "172.20.20.2",
+   "source_id": "fortigate-lab-01",
+   "format": "syslog RFC 3164 \u2192 key=value",
+   "trigger": {
+    "kind": "unknown_signature",
+    "signature": "rfc3164|kv||23",
+    "quarantined_events": 18
+   },
+   "source_binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "outcome": "asked the operator: the new format's 24 field(s) have no evidence yet \u2014 earlier answers carry over by name only for a self-describing format (JSON, key=value) of the same source and family with the same value class; anything else keeps the structure key (same source, same L1\u2013L3) \u2192 answered by op-014, pack 1.0 loaded",
+   "job": "job-1",
+   "pack": {
+    "pack_id": "fortigate-lab-01-rfc3164-kv-24-event",
+    "pack_version": "1.0",
+    "sha256": "sha256:92235212f99546807fb2c3482f6133b1f206190fd79555c9a8cb75e4e6d0606b",
+    "signed_by": "ulpf-pack-authority-dev",
+    "previous_packs": []
+   }
+  },
+  {
+   "id": "alert-2",
+   "alert": "drift_auto_heal",
+   "policy_version": "autoheal-1.1",
+   "at": "2026-09-29T16:54:02Z",
+   "app": "FortiGate firewall (real device, Containerlab)",
+   "host": "172.20.20.2",
+   "source_id": "fortigate-lab-01",
+   "format": "syslog RFC 3164 \u2192 JSON",
+   "trigger": {
+    "kind": "unknown_signature",
+    "signature": "rfc3164|json||0",
+    "quarantined_events": 12
+   },
+   "source_binding": {
+    "bound": true,
+    "by_packs": [
+     "fortigate-fw-01",
+     "fortigate-lab-01-rfc3164-kv-24-event"
+    ],
+    "drifted_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "source_known_from": [
+     [
+      "tcp:0.0.0.0:6515",
+      "127.0.0.2"
+     ],
+     [
+      "tcp:0.0.0.0:6515",
+      "172.20.20.2"
+     ]
+    ],
+    "router_note": null,
+    "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+   },
+   "outcome": "healed automatically in part: 47 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 5 withheld (carried unmapped) \u2014 the operator is asked for those: sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta",
+   "job": "job-2",
+   "carried_by_name_from": [
+    "fortigate-fw-01/fortigate-traffic"
+   ],
+   "auto_promoted": [
+    {
+     "field": "devname",
+     "attribute": "device.name",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "devid",
+     "attribute": "device.uid",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "eventtime",
+     "attribute": "time",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "logid",
+     "attribute": "metadata.event_code",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "type",
+     "attribute": "metadata.log_name",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "subtype",
+     "attribute": "activity_name",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "level",
+     "attribute": "severity",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "srcip",
+     "attribute": "src_endpoint.ip",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "srcport",
+     "attribute": "src_endpoint.port",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "srcintf",
+     "attribute": "src_endpoint.interface_name",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "dstip",
+     "attribute": "dst_endpoint.ip",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "dstport",
+     "attribute": "dst_endpoint.port",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "dstintf",
+     "attribute": "dst_endpoint.interface_name",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "srccountry",
+     "attribute": "src_endpoint.location.country",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "dstcountry",
+     "attribute": "dst_endpoint.location.country",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "sessionid",
+     "attribute": "connection_info.uid",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "proto",
+     "attribute": "connection_info.protocol_num",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "action",
+     "attribute": "action",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "policyid",
+     "attribute": "firewall_rule.uid",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "policytype",
+     "attribute": "firewall_rule.type",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "policyname",
+     "attribute": "firewall_rule.name",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "duration",
+     "attribute": "duration",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "sentbyte",
+     "attribute": "traffic.bytes_out",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "rcvdbyte",
+     "attribute": "traffic.bytes_in",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "sentpkt",
+     "attribute": "traffic.packets_out",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "rcvdpkt",
+     "attribute": "traffic.packets_in",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "osname",
+     "attribute": "src_endpoint.os.name",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "srcmac",
+     "attribute": "src_endpoint.mac",
+     "provenance": "vendor_schema_or_device_configuration"
+    },
+    {
+     "field": "app",
+     "attribute": "app_name",
+     "provenance": "vendor_schema_or_device_configuration"
+    }
+   ],
+   "withheld": [
+    {
+     "field": "sentdelta",
+     "samples": [
+      "17867"
+     ],
+     "why": "nobody has said what this field is"
+    },
+    {
+     "field": "rcvddelta",
+     "samples": [
+      "960"
+     ],
+     "why": "nobody has said what this field is"
+    },
+    {
+     "field": "durationdelta",
+     "samples": [
+      "22"
+     ],
+     "why": "nobody has said what this field is"
+    },
+    {
+     "field": "sentpktdelta",
+     "samples": [
+      "24"
+     ],
+     "why": "nobody has said what this field is"
+    },
+    {
+     "field": "rcvdpktdelta",
+     "samples": [
+      "24"
+     ],
+     "why": "nobody has said what this field is"
+    }
+   ],
+   "pack": {
+    "pack_id": "fortigate-lab-01-rfc3164-json-52-traffic",
+    "pack_version": "1.0",
+    "sha256": "sha256:9174d874f6c31fcaa3b457bd79b1d5715da062e49004fc9e06e0153934b07aa9",
+    "signed_by": "ulpf-pack-authority-dev",
+    "previous_packs": [
+     "/home/g2con/ulpf-demo/app/jobs/job-1/pack-1.0"
+    ]
+   }
+  }
+ ]
+}

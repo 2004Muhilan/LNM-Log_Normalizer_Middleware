@@ -77,6 +77,7 @@ class Lake:
         self.wdir = self.lake / ("_writer" + (f"-{writer_id}" if writer_id else ""))   # one staging area and state per writer
         self.wdir.mkdir(parents=True, exist_ok=True)
         self.staging, self.state_path = self.wdir / "staging.jsonl", self.wdir / "state.json"
+        self.rejected = self.wdir / "rejected.jsonl"   # rows the lake refuses (see flush), with the reason — never silently dropped
         self.lock = threading.Lock()
         self.st = {"marks": {}, "staging_bytes": 0, "staged_rows": 0, "oldest_staged_at": None}
         if self.state_path.exists():
@@ -87,7 +88,7 @@ class Lake:
                 f.truncate(self.st["staging_bytes"])
                 f.flush()
                 os.fsync(f.fileno())
-        self.stats = {"received_batches": 0, "received_rows": 0, "duplicate_rows_ignored": 0, "rows_written": 0, "files_written": 0,
+        self.stats = {"received_batches": 0, "received_rows": 0, "duplicate_rows_ignored": 0, "rows_written": 0, "files_written": 0, "rows_rejected": 0,
                       "last_flush": None, "last_error": None, "started": time.time()}
 
     # ------------------------------------------------------------------ ingest
@@ -142,11 +143,19 @@ class Lake:
             if not self.st["staging_bytes"] or not (force or self.due()):
                 return 0
             groups: dict[tuple, list] = {}
+            refused = []
             with open(self.staging, "rb") as f:
                 for line in f:
                     spool, off, ev = line.split(b" ", 2)
                     e = json.loads(ev)
                     cu = e.get("class_uid")
+                    if e.get("time") is not None and (not isinstance(e["time"], int) or isinstance(e["time"], bool)):
+                        # the pinned schema's `time` is epoch milliseconds (BIGINT). A row that carries text there (found live,
+                        # 2026-09-30: Suricata's ISO 8601 "+0000" timestamp, uncoerced) is REFUSED — kept with its reason in
+                        # rejected.jsonl — instead of failing the whole rotation for every other source's rows
+                        refused.append(json.dumps({"spool": spool.decode(), "offset": int(off), "reason": f"time is {type(e['time']).__name__}, not epoch milliseconds: {str(e['time'])[:60]}",
+                                                   "event_id": (e.get("_lineage") or {}).get("event_id"), "event": e}).encode() + b"\n")
+                        continue
                     ms = e.get("time") or (e.get("_lineage") or {}).get("ingest_time") or 0
                     day = dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%Y%m%d")
                     groups.setdefault((spool.decode(), cu, day), []).append((int(off), ev))
@@ -176,6 +185,12 @@ class Lake:
             except Exception as ex:   # loud, and nothing is lost: the rows stay staged and the next rotation tries again
                 self.stats["last_error"] = f"{type(ex).__name__}: {str(ex)[:400]}"
                 return 0
+            if refused:   # before the staging is emptied: a crash here repeats them in rejected.jsonl, never loses them
+                with open(self.rejected, "ab") as f:
+                    f.write(b"".join(refused))
+                    f.flush()
+                    os.fsync(f.fileno())
+                self.stats["rows_rejected"] += len(refused)
             with open(self.staging, "r+b") as f:
                 f.truncate(0)
                 f.flush()
@@ -186,9 +201,16 @@ class Lake:
             return written
 
     def status(self) -> dict:
-        with self.lock:
-            return {"app": "ulpf lake writer", "lake": str(self.lake), **self.stats, "staged_rows": self.st["staged_rows"], "staging_bytes": self.st["staging_bytes"],
-                    "high_water_marks": dict(self.st["marks"]), "at": time.time()}
+        """Answers at once. A rotation holds the lock for its whole Parquet write — seconds under load — and a health probe
+        that waited on it read a busy writer as DOWN (gate, 2026-09-30); then the last snapshot is returned, marked so."""
+        if not self.lock.acquire(timeout=0.25):
+            return {**getattr(self, "_last_status", {"app": "ulpf lake writer", "lake": str(self.lake)}), "busy": "rotating: this is the last snapshot", "at": time.time()}
+        try:
+            self._last_status = {"app": "ulpf lake writer", "lake": str(self.lake), **self.stats, "staged_rows": self.st["staged_rows"], "staging_bytes": self.st["staging_bytes"],
+                                 "high_water_marks": dict(self.st["marks"]), "at": time.time()}
+            return self._last_status
+        finally:
+            self.lock.release()
 
 
 def handler(lake: Lake):
@@ -237,7 +259,10 @@ def main() -> int:
 
     def rotator():
         while not stop.is_set():
-            lake.flush()
+            try:
+                lake.flush()
+            except Exception as ex:   # never let one bad rotation stop every later one (the thread died once, 2026-09-30)
+                lake.stats["last_error"] = f"{type(ex).__name__}: {str(ex)[:400]}"
             if a.status:
                 tmp = a.status + ".tmp"
                 Path(tmp).write_text(json.dumps(lake.status()), encoding="utf-8")

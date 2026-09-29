@@ -697,3 +697,74 @@ None of the three weakens what is checked.
 - `bash scripts/gate.sh`: **PASS in 738 s**, first run (Go 132 tests, 0 skipped; Python 107).
 - `bash scripts/gate.sh --laptop`: **PASS in 819 s**, first run. This is the laptop's configuration on the desktop, not the
   laptop.
+
+## 17. Answers across formats by name; a second real device, Suricata (2026-09-30)
+
+Details: `docs/real-device-fortigate.md`, "Answers carried across formats by name", and `docs/real-device-suricata.md`.
+
+**The user's decision, recorded as a change to the settled §4.4 key.** For JSON and key=value, earlier answers of the same
+source carry over by name. The key is:
+
+    source + family (the source's family keys) + field name + value class
+
+Other formats keep the structure key.
+
+**What was built for it:**
+- `Store.seed_from_pack`, and the `seed-propagation` CLI for a source's bound vendor pack;
+- `onboard --family-keys`: one family per onboarding;
+- the family's evidenced class beats a model's other class;
+- the console heals a drifted self-describing format in part (autoheal-1.1): promote what is evidenced now, ask for the
+  rest.
+
+**Live, on the FortiGate:** `json` **healed automatically in part**. 47 of 52 fields carried from the vendor pack's
+documented answers, the pack was hot-loaded with nobody asked, and 5 interim-update counters were asked.
+
+**Suricata 7.0.7 on the FortiGate's wire** (`demo/devices/suricata/`, no VM, no licence):
+- It shares `fgt-client`'s network namespace; EVE alerts go through syslog(3) to an rsyslog forwarder, then over TCP to
+  ULPF.
+- It was onboarded live as an unknown source: JSON drafted with 20 fields, the model proposed 4001, the operator answers
+  were given by the driver, and the pack was hot-loaded. Every later alert parsed.
+- At ULPF's output, all 95 alerts from 10.10.1.10 match a FortiGate event on the same connection.
+
+**Found:**
+- Suricata's ISO 8601 `+0000` timestamp gets no coercion; the pack is promoted with `time` as text, and OpenSearch
+  rejects every Suricata document. **Raised, not changed.**
+- That text `time` stopped lake writer 1, which from then on acknowledged batches it could not write. **Fixed:** such rows
+  are refused into `rejected.jsonl` with the reason, and the rotator survives.
+- The model's class cannot be overruled on the page, and OCSF Detection Finding keeps addresses in an array ULPF cannot
+  write. **Raised.**
+
+**The gate, changed by the decision:**
+- `demo/apps-check.sh` walks all six shapes of one source (`flowtap-01`). It now expects what the decision says:
+  - once a self-describing shape (json, kv, leef) has had its drift answered, a later self-describing shape heals
+    completely by name, with all 10 fields and nobody asked;
+  - positional, csv and xml still ask;
+  - both directions are asserted.
+- apps-check also waits until the Generator and the System page answer before posting the first shape. A shape posted
+  to a generator that was not listening yet was lost silently, and the check then waited for a job that never came:
+  "job 0 is 'none'", seen twice.
+- `scripts/p8-check.sh` keeps the container test stage's build log and prints the failing tests. That stage failed once
+  under the full gate's load, passed alone, and had printed nothing to go on.
+
+**Two real bugs the gate's load surfaced (not timeouts):**
+- **A SIGHUP right after the runtime starts was dropped.** The runtime prints "listening…" and only then builds its
+  pipeline. The reload goroutine skipped a signal that arrived before the pipeline was live (`livePipe == nil`), so the
+  reload never happened and nothing was printed.
+  - This is what failed `TestUnloggedPackIsRefusedAtStartupAndOnReload` (in the container stage, twice). My 60-second
+    deadline last time only waited longer for a line that could never come.
+  - Fixed in `runtime/cmd/ulpf-runtime/main.go`: the reloader waits for the live pipeline, handed over a channel, and the
+    pending signal stays queued. This also removes the unsynchronised shared variable. `go test -race` passes.
+- **The lake writer read as DOWN while busy.** `/status` waited on the lock a rotation holds for its whole Parquet write,
+  so under load the console's 1.5-second health probe timed out. Now `/status` answers at once, with the last snapshot
+  marked `busy` while a rotation runs. The check's thresholds are unchanged.
+
+**Gate, on the desktop, with the FortiGate and Suricata running:**
+- `bash scripts/gate.sh`: **PASS in 845 s** (Go 132 tests, 0 skipped; Python 113).
+- `bash scripts/gate.sh --laptop`: **PASS in 841 s**. This is the laptop's configuration on the desktop, not the laptop.
+
+**The runs that failed first, in order:**
+1. CRLF line endings from my edit script, which the pre-flight refused; plus the apps-check startup race.
+2. The old apps-check expectation, now superseded by the decision; plus the dropped SIGHUP in the container stage.
+3. The dropped SIGHUP again, and the lake writer read as DOWN.
+
+Each cause is fixed above; none by loosening a check.
