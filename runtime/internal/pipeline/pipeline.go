@@ -18,8 +18,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -206,16 +208,20 @@ func Run(in io.Reader, o Options) (Stats, error) {
 // Pipeline is the running state a transport may call back into (P7): Lost records a connection
 // that ended mid-frame as a gap record. Obtained through RunFramesWith.
 type Pipeline struct {
-	mu      sync.Mutex
-	router  *route.Router
-	active  map[string]string // pack_id -> "version sha256" of what is loaded now
-	store   *evidence.Store
-	tracker *gap.Tracker
-	st      *Stats
-	o       Options
-	source  string
-	now     func() time.Time
-	err     error
+	mu     sync.Mutex
+	router *route.Router
+	active map[string]string // pack_id -> "version sha256" of what is loaded now
+	// the operator's source binding (2026-09-30): peer HOST -> the pack ids of the source it is bound to. A line from a
+	// bound host routes only among those packs that are loaded; an unbound host (or one none of whose packs is loaded)
+	// routes over every pack, as before. Trusts the sender's address: sound for TCP, spoofable for UDP.
+	bindings map[string]map[string]bool
+	store    *evidence.Store
+	tracker  *gap.Tracker
+	st       *Stats
+	o        Options
+	source   string
+	now      func() time.Time
+	err      error
 	// group commit: frames staged in the evidence store, not yet durable, not yet interpreted
 	pending []staged
 	since   time.Time // wall clock: when the oldest pending frame was staged
@@ -301,6 +307,88 @@ func (p *Pipeline) Reload(packs []*pack.Pack, reason string) error {
 	}
 	p.router, p.active = r, next
 	return nil
+}
+
+// SetBindings replaces the peer bindings between two frames (SIGHUP with --bindings, like the packs). Every host whose
+// bound pack set changed is a `binding_activated` leaf in the evidence log (an empty set: the binding is removed) — from
+// that leaf on, that peer's lines route differently, provable from the log alone like a pack activation.
+func (p *Pipeline) SetBindings(b map[string][]string, reason string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := p.commitLocked(); err != nil {
+		return err
+	}
+	next := map[string]map[string]bool{}
+	for host, ids := range b {
+		if len(ids) == 0 {
+			continue
+		}
+		set := map[string]bool{}
+		for _, id := range ids {
+			set[id] = true
+		}
+		next[host] = set
+	}
+	key := func(m map[string]bool) string {
+		ids := make([]string, 0, len(m))
+		for id := range m {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		return strings.Join(ids, " ")
+	}
+	hosts := map[string]bool{}
+	for h := range next {
+		hosts[h] = true
+	}
+	for h := range p.bindings {
+		hosts[h] = true
+	}
+	order := make([]string, 0, len(hosts))
+	for h := range hosts {
+		order = append(order, h)
+	}
+	sort.Strings(order)
+	for _, h := range order {
+		was, now := key(p.bindings[h]), key(next[h])
+		if was == now {
+			continue
+		}
+		detail := fmt.Sprintf("peer %s routes only among [%s] (was: [%s]); %s", h, now, was, reason)
+		if now == "" {
+			detail = fmt.Sprintf("peer %s is no longer bound (was: [%s]): structure-only routing over every pack; %s", h, was, reason)
+		}
+		p.appendGap(gap.Record{RecordVersion: gap.RecordVersion, Kind: "binding_activated", SourceID: p.source, Channel: "control:reload", Peer: "binding:" + h, DetectedAt: p.now().UnixMilli(),
+			Detail: detail}, "binding:"+h)
+	}
+	p.bindings = next
+	return nil
+}
+
+// allowedFor is the pack set a line from `peer` (host:port) may route among, and the note a quarantine reason gets;
+// nil when the host is unbound or none of its bound packs is loaded.
+func (p *Pipeline) allowedFor(peer string) (map[string]bool, string) {
+	host := peer
+	if h, _, err := net.SplitHostPort(peer); err == nil {
+		host = h
+	}
+	set := p.bindings[host]
+	if len(set) == 0 {
+		return nil, ""
+	}
+	live := map[string]bool{}
+	var ids []string
+	for id := range set {
+		if _, ok := p.active[id]; ok {
+			live[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(live) == 0 {
+		return nil, ""
+	}
+	sort.Strings(ids)
+	return live, fmt.Sprintf("routed only among the packs bound to peer %s [%s]", host, strings.Join(ids, " "))
 }
 
 // Refused records a pack the runtime REFUSED to load on a hot reload (parser transparency log, signature, contract):
@@ -795,7 +883,8 @@ func RunFramesWith(source Source, o Options, ready func(*Pipeline)) (Stats, erro
 			p.appendGap(g, fr.Peer)
 		}
 		// 4. route: the decision DAG narrows to one family or quarantines; no parser runs here
-		d := p.router.RouteChain(payload, ch) // p.mu is held: Reload swaps the router between two frames, never inside one
+		allowed, note := p.allowedFor(fr.Peer)
+		d := p.router.RouteChainAmong(payload, ch, allowed, note) // p.mu is held: Reload swaps the router between two frames, never inside one
 		st.CandidateSets[fmt.Sprint(d.Candidates)]++
 		if d.Drift {
 			st.DriftSignals++

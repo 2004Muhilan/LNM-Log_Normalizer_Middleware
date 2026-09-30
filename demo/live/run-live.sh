@@ -16,7 +16,8 @@
 #   F  the operator answers those two: pack 1.2
 #   G  backfill from the evidence log;  H  the accounting;  I  whitespace drift, the case no policy can heal
 #
-# The two apps are demo/live/flowgen.py and demo/apps/database.py (standard library only). This sequence is SCRIPTED — it is the
+# The apps are demo/live/flowgen.py (the generators) and the SIEM stand-in demo/siem/fake_bulk.py on :8790 (the old SQLite
+# consumer and its database page are gone), plus the lake writer. This sequence is SCRIPTED — it is the
 # repeatable gate (twice-live.sh). The interactive demo, driven by buttons on three pages, is demo/start-demo.sh.
 source "$(dirname "$(readlink -f "$0")")/../lib.sh"
 cd "$ROOT"

@@ -100,7 +100,9 @@ if [ "${ULPF_SIEM:-opensearch}" != "fake" ]; then
   echo "finding: $(curl -s $S/api/findings | jq_ "d[0]['rule']") naming $F"
   sleep 12   # the lake writer rotates every 10 s: the event is in a Parquet file by now
   curl -s -X POST $S/api/prove -d "{\"event_id\":\"$F\"}"
-  for _ in $(seq 1 40); do T=$(curl -s "$S/api/trace?id=$F"); [ "$T" != "null" ] && break; sleep 1; done
+  # a deadline, not a count: it returns the moment the trace lands. 40 x 1 s once ran out under the gate's full load
+  # (2026-09-30) — the round trip took 30–90 s in the real-device demo runs; the check on the trace is unchanged
+  for _ in $(seq 1 180); do T=$(curl -s -m 5 "$S/api/trace?id=$F"); [ -n "$T" ] && [ "$T" != "null" ] && break; sleep 1; done
   echo "$T" | jq_ "'\n'.join(('  ✓ ' if s['ok'] else '  ✗ ') + s['step'] + ': ' + s['detail'][:150] for s in d['steps'])"
   [ "$(echo "$T" | jq_ "d['ok']")" = "True" ] || fail "the round trip SIEM finding -> evidence did not complete"
   [ "$(echo "$T" | jq_ "next((s['ok'] for s in d['steps'] if s['step'] == 'Proof of Derivation'), False)")" = "True" ] || fail "Proof of Derivation did not verify"

@@ -1,0 +1,961 @@
+{
+ "what": "the rehearsal's collision reproduced with the routing fix: the FortiGate on JSON (its JSON heal loaded) and Suricata running at once",
+ "bindings_json": {
+  "172.20.20.11": [
+   "suricata-lab-01-rfc3164-json-20-alert"
+  ],
+  "172.20.20.2": [
+   "fortigate-fw-01",
+   "fortigate-lab-01-rfc3164-json-53-traffic"
+  ]
+ },
+ "latest_30_outcomes_per_device_every_40s": [
+  {
+   "at": "01:38:28",
+   "fortigate": {
+    "rfc3164-json-53": 30
+   },
+   "suricata": {
+    "rfc3164-json-20": 30
+   }
+  },
+  {
+   "at": "01:39:10",
+   "fortigate": {
+    "rfc3164-json-53": 30
+   },
+   "suricata": {
+    "rfc3164-json-20": 30
+   }
+  },
+  {
+   "at": "01:39:52",
+   "fortigate": {
+    "rfc3164-json-53": 30
+   },
+   "suricata": {
+    "rfc3164-json-20": 30
+   }
+  },
+  {
+   "at": "01:40:33",
+   "fortigate": {
+    "rfc3164-json-53": 29,
+    "in flight": 1
+   },
+   "suricata": {
+    "rfc3164-json-20": 30
+   }
+  }
+ ],
+ "binding_activated_records": [
+  "{\"channel\":\"control:reload\",\"detail\":\"peer 172.20.20.11 routes only among [suricata-lab-01-rfc3164-json-20-alert] (was: []); SIGHUP reload of --bindings\",\"detected_at\":1790732037068,\"kind\":\"binding_activated\",\"peer\":\"binding:172.20.20.11\",\"record_version\":\"gap-record 1.0.0\",\"source_id\":\"live-ingress-01\"}",
+  "{\"channel\":\"control:reload\",\"detail\":\"peer 172.20.20.11 routes only among [suricata-lab-01-rfc3164-json-20-alert] (was: []); SIGHUP reload of --bindings\",\"detected_at\":1790732037078,\"kind\":\"binding_activated\",\"peer\":\"binding:172.20.20.11\",\"record_version\":\"gap-record 1.0.0\",\"source_id\":\"live-ingress-01\"}",
+  "{\"channel\":\"control:reload\",\"detail\":\"peer 172.20.20.2 routes only among [fortigate-fw-01 fortigate-lab-01-rfc3164-json-53-traffic] (was: [fortigate-fw-01]); SIGHUP reload of --bindings\",\"detected_at\":1790732264390,\"kind\":\"binding_activated\",\"peer\":\"binding:172.20.20.2\",\"record_version\":\"gap-record 1.0.0\",\"source_id\":\"live-ingress-01\"}",
+  "{\"channel\":\"control:reload\",\"detail\":\"peer 172.20.20.2 routes only among [fortigate-fw-01 fortigate-lab-01-rfc3164-json-53-traffic] (was: [fortigate-fw-01]); SIGHUP reload of --bindings\",\"detected_at\":1790732264403,\"kind\":\"binding_activated\",\"peer\":\"binding:172.20.20.2\",\"record_version\":\"gap-record 1.0.0\",\"source_id\":\"live-ingress-01\"}",
+  "{\"channel\":\"control:reload\",\"detail\":\"peer 172.20.20.2 routes only among [fortigate-fw-01] (was: []); bindings at start\",\"detected_at\":1790731946220,\"kind\":\"binding_activated\",\"peer\":\"binding:172.20.20.2\",\"record_version\":\"gap-record 1.0.0\",\"source_id\":\"live-ingress-01\"}",
+  "{\"channel\":\"control:reload\",\"detail\":\"peer 172.20.20.2 routes only among [fortigate-fw-01] (was: []); bindings at start\",\"detected_at\":1790731946223,\"kind\":\"binding_activated\",\"peer\":\"binding:172.20.20.2\",\"record_version\":\"gap-record 1.0.0\",\"source_id\":\"live-ingress-01\"}"
+ ],
+ "suricata_onboarding": {
+  "job": {
+   "id": "job-1",
+   "kind": "onboard",
+   "state": "done",
+   "format": "syslog RFC 3164 \u2192 JSON",
+   "signature": "rfc3164|json||0",
+   "family": "event_type=alert",
+   "event_class_uid": 4001,
+   "provider": "model",
+   "pack": {
+    "pack_id": "suricata-lab-01-rfc3164-json-20-alert",
+    "pack_version": "1.0",
+    "sha256": "sha256:160ecda7095f92a45b539fb1b83c62086cb243c0e702073f66f48f1b518b081a",
+    "signed_by": "ulpf-pack-authority-dev",
+    "previous_packs": []
+   },
+   "steps": [
+    "NEW FORMAT from Suricata IDS (real sensor, Docker): syslog RFC 3164 \u2192 JSON \u2014 every line quarantined, bytes kept, nothing parsed, nothing guessed",
+    "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+    "24 samples taken out of the evidence log (raw_hash checked)",
+    "the local model labels the fields \u2014 proposals only, never evidence",
+    "structure drafted from the lines own keys: 20 fields; proposals in 70.0s; 5 ambiguity certificate(s); 0 field(s) carried over from earlier answers",
+    "no prepared sheet for suricata-lab-01: a sheet is bound to the source it was written for (flowtap-01) and is never applied to another device's fields",
+    "waiting for the operator: say what each field is, then press Promote",
+    "operator op-014 asserts timestamp \u2192 time  (asked on the page)",
+    "operator op-014 asserts src_ip \u2192 src_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts src_port \u2192 src_endpoint.port  (asked on the page)",
+    "operator op-014 asserts dest_ip \u2192 dst_endpoint.ip  (asked on the page)",
+    "operator op-014 asserts dest_port \u2192 dst_endpoint.port  (asked on the page)",
+    "operator op-014 asserts proto \u2192 connection_info.protocol_name  (asked on the page)",
+    "operator op-014 asserts action \u2192 action_id with allowed=1, blocked=2  (asked on the page)",
+    "operator op-014 asserts signature \u2192 message  (asked on the page)",
+    "promoting: acceptance policy, signed pack",
+    "pack suricata-lab-01-rfc3164-json-20-alert v1.0 verified by the Go engine and HOT-LOADED \u2014 no restart; the activation is an evidence-log record",
+    "done: events of this format are normalized from here on"
+   ],
+   "fields": [
+    {
+     "field": "timestamp",
+     "cls": "text",
+     "mapped": [
+      "time"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "2026-09-30T01:31:25.102852+0000",
+      "2026-09-30T01:31:26.093085+0000",
+      "2026-09-30T01:31:27.118855+0000"
+     ]
+    },
+    {
+     "field": "flow_id",
+     "cls": "integer",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "1030348690502974",
+      "1104619001449754",
+      "1203749277671927"
+     ]
+    },
+    {
+     "field": "in_iface",
+     "cls": "word",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "eth1"
+     ]
+    },
+    {
+     "field": "event_type",
+     "cls": "word",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "alert"
+     ]
+    },
+    {
+     "field": "src_ip",
+     "cls": "ipv4",
+     "mapped": [
+      "src_endpoint.ip"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "10.10.1.10"
+     ]
+    },
+    {
+     "field": "src_port",
+     "cls": "integer",
+     "mapped": [
+      "src_endpoint.port"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "34478",
+      "35787",
+      "37873"
+     ]
+    },
+    {
+     "field": "dest_ip",
+     "cls": "ipv4",
+     "mapped": [
+      "dst_endpoint.ip"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "172.20.20.10"
+     ]
+    },
+    {
+     "field": "dest_port",
+     "cls": "integer",
+     "mapped": [
+      "dst_endpoint.port"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "23",
+      "3389",
+      "445"
+     ]
+    },
+    {
+     "field": "proto",
+     "cls": "word",
+     "mapped": [
+      "connection_info.protocol_name"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "TCP"
+     ]
+    },
+    {
+     "field": "pkt_src",
+     "cls": "text",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "wire/pcap"
+     ]
+    },
+    {
+     "field": "action",
+     "cls": "word",
+     "mapped": [
+      "action_id"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "allowed"
+     ]
+    },
+    {
+     "field": "gid",
+     "cls": "integer",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "1"
+     ]
+    },
+    {
+     "field": "signature_id",
+     "cls": "integer",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "9000001",
+      "9000002",
+      "9000003"
+     ]
+    },
+    {
+     "field": "rev",
+     "cls": "integer",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "1"
+     ]
+    },
+    {
+     "field": "signature",
+     "cls": "text",
+     "mapped": [
+      "message"
+     ],
+     "provenance": [
+      "operator_assertion"
+     ],
+     "candidates": [],
+     "samples": [
+      "ULPF LAB RDP connection attempt",
+      "ULPF LAB SMB connection attempt",
+      "ULPF LAB SQL injection scanner user agent"
+     ]
+    },
+    {
+     "field": "category",
+     "cls": "text",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "Attempted Administrator Privilege Gain",
+      "Attempted Information Leak",
+      "Web Application Attack"
+     ]
+    },
+    {
+     "field": "severity",
+     "cls": "integer",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [
+      "severity"
+     ],
+     "samples": [
+      "1",
+      "2"
+     ]
+    },
+    {
+     "field": "direction",
+     "cls": "word",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "to_server"
+     ]
+    },
+    {
+     "field": "tx_id",
+     "cls": "integer",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [],
+     "samples": [
+      "0",
+      "1"
+     ]
+    },
+    {
+     "field": "app_proto",
+     "cls": "word",
+     "mapped": [],
+     "provenance": [],
+     "candidates": [
+      "app_name"
+     ],
+     "samples": [
+      "http"
+     ]
+    }
+   ],
+   "answered_by_the_driver_as_operator": {
+    "timestamp": "time",
+    "src_ip": "src_endpoint.ip",
+    "src_port": "src_endpoint.port",
+    "dest_ip": "dst_endpoint.ip",
+    "dest_port": "dst_endpoint.port",
+    "proto": "connection_info.protocol_name",
+    "action": "action_id {'allowed': 1, 'blocked': 2}",
+    "signature": "message"
+   },
+   "left_unanswered": [
+    "flow_id",
+    "in_iface",
+    "event_type",
+    "pkt_src",
+    "gid",
+    "signature_id",
+    "rev",
+    "category",
+    "severity",
+    "direction",
+    "tx_id",
+    "app_proto"
+   ]
+  },
+  "cross_vendor_search": {
+   "query": "query_string \"\\\"10.10.1.10\\\"\" over ulpf-ocsf-*, filtered by metadata.product.vendor_name",
+   "results": [
+    {
+     "vendor": "Fortinet",
+     "total": 19669,
+     "indices": [
+      "ulpf-ocsf-4001"
+     ],
+     "where_the_address_is": [
+      "src_endpoint.ip"
+     ],
+     "example": {
+      "class_uid": 4001,
+      "class_name": null,
+      "time": 1790732084448,
+      "metadata": {
+       "event_code": "0000000013",
+       "log_name": "traffic",
+       "product": {
+        "name": "FortiGate",
+        "vendor_name": "Fortinet"
+       },
+       "version": "1.3.0"
+      },
+      "src_endpoint": {
+       "interface_name": "port2",
+       "ip": "10.10.1.10",
+       "location": {
+        "country": "Reserved"
+       },
+       "mac": "1a:25:3c:94:2f:05",
+       "os": {
+        "name": "Unknown"
+       },
+       "port": 36731
+      },
+      "finding_info": null,
+      "unmapped": {
+       "appcat": "unscanned",
+       "craction": 131072,
+       "crlevel": "high",
+       "crscore": 30,
+       "date": 1790726400000,
+       "devtype": "Unknown",
+       "dstintfrole": "undefined",
+       "mastersrcmac": "1a:25:3c:94:2f:05",
+       "poluuid": "fb4d64aa-bc02-51f1-14c6-0b833772ce50",
+       "service": "DNS",
+       "srcintfrole": "lan",
+       "srcserver": "0",
+       "time": "07:04:44",
+       "trandisp": "noop",
+       "tz": "+0530",
+       "vd": "root"
+      },
+      "_lineage": {
+       "collector_id": "col-01",
+       "envelope": {
+        "kind": "rfc3164",
+        "level": 1,
+        "payload_offset": 5,
+        "payload_length": 756,
+        "priority": 189,
+        "facility": 23,
+        "severity": 5
+       },
+       "event_id": "ev_06GEZWS5C3YXZG22209BVKD8QG",
+       "event_time": 1790732084448,
+       "family_id": "fortigate-traffic",
+       "framing": {
+        "fragment_count": 1,
+        "framing_confidence": "high",
+        "method": "octet_count",
+        "original_message_length": 761,
+        "raw_prefix": "NzYxIA==",
+        "raw_suffix": "",
+        "truncation_status": "none"
+       },
+       "ingest_channel": "tcp:0.0.0.0:6515",
+       "ingest_time": 1790732084576,
+       "length": 761,
+       "mapping_version": "1.0",
+       "normalization_version": 1,
+       "ocsf_version": "1.3.0",
+       "offset": 1528,
+       "parser_id": "fortigate-fw-01",
+       "parser_sha256": "sha256:ad585f6431d284f5bc468f48bbadbb1c143076589eebae38bae17a33ec4560b8",
+       "parser_version": "1.0",
+       "processing_time": 1790732084591,
+       "raw_hash": "sha256:112d614de1e8721d2bd43b9f1fb861fbbbc22e6cd8e3d2726f278626f492e3c1",
+       "routing_signature": "rfc3164|kv|fortigate-type=traffic|44",
+       "schema_version": "1.6.0",
+       "segment_id": "seg_00048",
+       "source_id": "fortigate-fw-01",
+       "source_timezone": "+05:30",
+       "store_id": "st_06GEZW88X2AVJ5501W96BMGPZC",
+       "timezone_confidence": "declared"
+      }
+     }
+    },
+    {
+     "vendor": "OISF",
+     "total": 22,
+     "indices": [
+      "ulpf-ocsf-4001"
+     ],
+     "where_the_address_is": [
+      "src_endpoint.ip"
+     ],
+     "example": {
+      "class_uid": 4001,
+      "class_name": null,
+      "time": 1790732080847,
+      "metadata": {
+       "product": {
+        "name": "Suricata",
+        "vendor_name": "OISF"
+       },
+       "version": "1.3.0"
+      },
+      "src_endpoint": {
+       "ip": "10.10.1.10",
+       "port": 40735
+      },
+      "finding_info": null,
+      "unmapped": {
+       "category": "Attempted Administrator Privilege Gain",
+       "direction": "to_server",
+       "event_type": "alert",
+       "flow_id": "2210686826642314",
+       "gid": "1",
+       "in_iface": "eth1",
+       "pkt_src": "wire/pcap",
+       "rev": "1",
+       "severity": "1",
+       "signature_id": "9000002"
+      },
+      "_lineage": {
+       "collector_id": "col-01",
+       "envelope": {
+        "kind": "rfc3164",
+        "level": 1,
+        "payload_offset": 47,
+        "payload_length": 433,
+        "priority": 174,
+        "facility": 21,
+        "severity": 6,
+        "timestamp": "Sep 30 01:34:40",
+        "hostname": "suricata-ids",
+        "app_name": "suricata",
+        "proc_id": "1"
+       },
+       "event_id": "ev_06GEZWRPTM5WS4N4BXE55X9T2R",
+       "event_time": 1790732080847,
+       "family_id": "rfc3164-json-20",
+       "framing": {
+        "fragment_count": 1,
+        "framing_confidence": "high",
+        "method": "octet_count",
+        "original_message_length": 480,
+        "raw_prefix": "NDgwIA==",
+        "raw_suffix": "",
+        "truncation_status": "none"
+       },
+       "ingest_channel": "tcp:0.0.0.0:6515",
+       "ingest_time": 1790732080853,
+       "length": 480,
+       "mapping_version": "1.0",
+       "normalization_version": 1,
+       "ocsf_version": "1.3.0",
+       "offset": 0,
+       "parser_id": "suricata-lab-01-rfc3164-json-20-alert",
+       "parser_sha256": "sha256:160ecda7095f92a45b539fb1b83c62086cb243c0e702073f66f48f1b518b081a",
+       "parser_version": "1.0",
+       "processing_time": 1790732080873,
+       "raw_hash": "sha256:4a2281182da119e41653912024825803a6330baf7d5d2c973a2d83976efa08d9",
+       "routing_signature": "rfc3164|json||0",
+       "schema_version": "1.6.0",
+       "segment_id": "seg_00047",
+       "source_id": "suricata-lab-01",
+       "source_timezone": null,
+       "store_id": "st_06GEZW88X2AVJ5501W96BMGPZC",
+       "timezone_confidence": "unresolved"
+      }
+     }
+    }
+   ]
+  },
+  "prove_it": {
+   "event_id": "ev_06GEZWRB266895X172M0SWP834",
+   "preview": "<174>Sep 30 01:34:37 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-30T01:34:37.841155+0000\",\"flow_id\":1642409882775211,\"in_iface",
+   "trace": {
+    "event_id": "ev_06GEZWRB266895X172M0SWP834",
+    "ok": true,
+    "steps": [
+     {
+      "step": "SIEM document",
+      "ok": true,
+      "detail": "index ulpf-ocsf-4001, _id ev_06GEZWRB266895X172M0SWP834 (= ULPF's event_id); its lineage names raw_hash sha256:5abadc73ac141605\u2026 at seg_00045 + 2488",
+      "document": {
+       "time": 1790732077841,
+       "action_id": 1,
+       "src_endpoint": {
+        "ip": "10.10.1.10",
+        "port": 33581
+       },
+       "dst_endpoint": {
+        "ip": "172.20.20.10",
+        "port": 445
+       },
+       "class_uid": 4001
+      }
+     },
+     {
+      "step": "raw bytes in the evidence log",
+      "ok": true,
+      "detail": "467 bytes at seg_00045 + 2488, read from the local evidence buffer, re-hashed now: sha256:5abadc73ac141605\u2026 \u2014 equal to the evidence index and to the SIEM document's lineage",
+      "raw": "<174>Sep 30 01:34:37 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-30T01:34:37.841155+0000\",\"flow_id\":1642409882775211,\"in_iface\":\"eth1\",\"event_type\":\"alert\",\"src_ip\":\"10.10.1.10\",\"src_port\":33581,\"dest_ip\":\"172.20.20.10\",\"dest_port\":445,\"proto\":\"TCP\",\"pkt_src\":\"wire/pcap\",\"alert\":{\"action\":\"allowed\",\"gid\":1,\"signature_id\":9000003,\"rev\":1,\"signature\":\"ULPF LAB SMB connection attempt\",\"category\":\"Attempted Information Leak\",\"severity\":2},\"direction\":\"to_server\"}",
+      "ingest_channel": "tcp:0.0.0.0:6515",
+      "peer": "172.20.20.11:59878",
+      "evidence_source": "local"
+     },
+     {
+      "step": "commit",
+      "ok": true,
+      "detail": "seg_00045 is covered by the signed checkpoint ckpt_000025 (the always-running committer; development seam: SEALED, not kernel-IMMUTABLE \u2014 said so)"
+     },
+     {
+      "step": "export",
+      "ok": true,
+      "detail": " ev_06GEZWRB266895X172M0SWP834: leaf 4 of seg_00045 (local buffer), root sha256:263749662e5ec2d0480e247fef74b40ad6e58b4ae9d6620337ddeec8d48bb940, checkpoint ckpt_000025 -> /home/g2con/ulpf-demo/app/trace/bundle-ev_06GEZWRB266895X172M0SWP834"
+     },
+     {
+      "step": "Merkle proof verified",
+      "ok": true,
+      "detail": "VERIFY: OK \u2014 event ev_06GEZWRB266895X172M0SWP834: raw bytes match the record, leaf proof reaches segment root sha256:263749662e5ec2d0480e247fef74b40ad6e58b4ae9d6620337ddeec8d48bb940, checkpoint ckpt_000025 signed by a trusted authority",
+      "verifier": "MODE ckpt_000025: *** sealed_only_dev *** \u2014 DEVELOPMENT checkpoint: attests to file hashes at commit time, NOT to kernel-locked evidence\nVERIFY: OK \u2014 event ev_06GEZWRB266895X172M0SWP834: raw bytes match the record, leaf proof reaches segment root sha256:263749662e5ec2d0480e247fef74b40ad6e58b4ae9d6620337ddeec8d48bb940, checkpoint ckpt_000025 signed by a trusted authority"
+     },
+     {
+      "step": "Proof of Derivation",
+      "ok": true,
+      "detail": "the logged pack suricata-lab-01-rfc3164-json-20-alert v1.0 (entry 3084 of ulpf-tlog-dev, onboarded, logged 2026-09-30T01:33:55Z), re-run on these raw bytes, reproduces the SIEM document field for field (excluded: _lineage.processing_time) \u2014 checked offline by ulpf-verify",
+      "derivation": {
+       "ok": true,
+       "steps": [
+        {
+         "part": "raw bytes",
+         "name": "raw bytes hash to the evidence record",
+         "ok": true,
+         "detail": "467 bytes hash to sha256:5abadc73ac1416052eba69f10da2e21b180327f1bd96f29dfc73c53a454d9ab9; the record says sha256:5abadc73ac1416052eba69f10da2e21b180327f1bd96f29dfc73c53a454d9ab9"
+        },
+        {
+         "part": "raw bytes",
+         "name": "checkpoint signature",
+         "ok": true,
+         "detail": "checkpoint ckpt_000025 signed by ulpf-committer-dev (sealed_only_dev)"
+        },
+        {
+         "part": "raw bytes",
+         "name": "the checkpoint commits the segment",
+         "ok": true,
+         "detail": "seg_00045 root sha256:263749662e5ec2d0480e247fef74b40ad6e58b4ae9d6620337ddeec8d48bb940"
+        },
+        {
+         "part": "raw bytes",
+         "name": "the evidence record is in the committed segment index",
+         "ok": true,
+         "detail": "the index's sha256 is the one the signed checkpoint names, and it holds this record field for field"
+        },
+        {
+         "part": "raw bytes",
+         "name": "Merkle inclusion proof",
+         "ok": true,
+         "detail": "leaf 4 of seg_00045 reaches the committed segment root"
+        },
+        {
+         "part": "pack",
+         "name": "the pack is in the parser transparency log",
+         "ok": true,
+         "detail": "suricata-lab-01-rfc3164-json-20-alert v1.0 is entry 3084 of ulpf-tlog-dev (checkpoint size 3085; produced by onboarded, logged 2026-09-30T01:33:55Z; witness cosignatures: 1)"
+        },
+        {
+         "part": "pack",
+         "name": "the SIEM document names this exact pack",
+         "ok": true,
+         "detail": "parser_sha256 sha256:160ecda7095f92a45b539fb1b83c62086cb243c0e702073f66f48f1b518b081a; the bundled pack.json is sha256:160ecda7095f92a45b539fb1b83c62086cb243c0e702073f66f48f1b518b081a"
+        },
+        {
+         "part": "pack",
+         "name": "the pack loads (signature, transparency log, contract, compiled parsers)",
+         "ok": true,
+         "detail": "loaded by the same fail-closed loader the runtime uses"
+        },
+        {
+         "part": "SIEM document",
+         "name": "the pack re-run on the raw bytes",
+         "ok": true,
+         "detail": "routed, parsed and normalized by ulpf-engine normalized-event 1.6.0, parser-spec 1.2.0, parser-pack 1.3.0 (laptop branch 2026-09-27); go1.27.1"
+        },
+        {
+         "part": "SIEM document",
+         "name": "the derivation equals the event the SIEM holds",
+         "ok": true,
+         "detail": "identical, field for field (1 excluded: _lineage.processing_time)"
+        }
+       ],
+       "derived_output": {
+        "_lineage": {
+         "collector_id": "col-01",
+         "envelope": {
+          "kind": "rfc3164",
+          "level": 1,
+          "payload_offset": 47,
+          "payload_length": 420,
+          "priority": 174,
+          "facility": 21,
+          "severity": 6,
+          "timestamp": "Sep 30 01:34:37",
+          "hostname": "suricata-ids",
+          "app_name": "suricata",
+          "proc_id": "1"
+         },
+         "event_id": "ev_06GEZWRB266895X172M0SWP834",
+         "event_time": 1790732077841,
+         "family_id": "rfc3164-json-20",
+         "framing": {
+          "fragment_count": 1,
+          "framing_confidence": "high",
+          "method": "octet_count",
+          "original_message_length": 467,
+          "raw_prefix": "NDY3IA==",
+          "raw_suffix": "",
+          "truncation_status": "none"
+         },
+         "ingest_channel": "tcp:0.0.0.0:6515",
+         "ingest_time": 1790732077841,
+         "length": 467,
+         "mapping_version": "1.0",
+         "normalization_version": 1,
+         "ocsf_version": "1.3.0",
+         "offset": 2488,
+         "parser_id": "suricata-lab-01-rfc3164-json-20-alert",
+         "parser_sha256": "sha256:160ecda7095f92a45b539fb1b83c62086cb243c0e702073f66f48f1b518b081a",
+         "parser_version": "1.0",
+         "processing_time": 1790732077856,
+         "raw_hash": "sha256:5abadc73ac1416052eba69f10da2e21b180327f1bd96f29dfc73c53a454d9ab9",
+         "routing_signature": "rfc3164|json||0",
+         "schema_version": "1.6.0",
+         "segment_id": "seg_00045",
+         "source_id": "suricata-lab-01",
+         "source_timezone": null,
+         "store_id": "st_06GEZW88X2AVJ5501W96BMGPZC",
+         "timezone_confidence": "unresolved"
+        },
+        "action_id": 1,
+        "category_uid": 4,
+        "class_uid": 4001,
+        "connection_info": {
+         "protocol_name": "TCP"
+        },
+        "dst_endpoint": {
+         "ip": "172.20.20.10",
+         "port": 445
+        },
+        "message": "ULPF LAB SMB connection attempt",
+        "metadata": {
+         "product": {
+          "name": "Suricata",
+          "vendor_name": "OISF"
+         },
+         "version": "1.3.0"
+        },
+        "src_endpoint": {
+         "ip": "10.10.1.10",
+         "port": 33581
+        },
+        "time": 1790732077841,
+        "type_uid": 400100,
+        "unmapped": {
+         "category": "Attempted Information Leak",
+         "direction": "to_server",
+         "event_type": "alert",
+         "flow_id": "1642409882775211",
+         "gid": "1",
+         "in_iface": "eth1",
+         "pkt_src": "wire/pcap",
+         "rev": "1",
+         "severity": "2",
+         "signature_id": "9000003"
+        }
+       },
+       "excluded_from_comparison": {
+        "_lineage.processing_time": "the wall-clock instant at which the runtime normalized the event: it records WHEN, not WHAT, and no re-run can reproduce it"
+       },
+       "engine": "ulpf-engine normalized-event 1.6.0, parser-spec 1.2.0, parser-pack 1.3.0 (laptop branch 2026-09-27); go1.27.1",
+       "transparency_log": {
+        "Entry": {
+         "PackID": "suricata-lab-01-rfc3164-json-20-alert",
+         "PackVersion": "1.0",
+         "PackSHA256": "sha256:160ecda7095f92a45b539fb1b83c62086cb243c0e702073f66f48f1b518b081a",
+         "ProducedBy": "onboarded",
+         "SignedBy": "ulpf-pack-authority-dev",
+         "LoggedAt": "2026-09-30T01:33:55Z"
+        },
+        "Index": 3084,
+        "Checkpoint": {
+         "Origin": "ulpf-tlog-dev",
+         "Size": 3085,
+         "Root": [
+          229,
+          188,
+          204,
+          255,
+          221,
+          153,
+          242,
+          208,
+          16,
+          147,
+          249,
+          77,
+          59,
+          145,
+          68,
+          85,
+          250,
+          55,
+          2,
+          57,
+          42,
+          203,
+          45,
+          165,
+          108,
+          158,
+          131,
+          249,
+          175,
+          53,
+          116,
+          57
+         ]
+        },
+        "Log": "ulpf-tlog-dev",
+        "Witnesses": [
+         "ulpf-witness-dev"
+        ]
+       }
+      },
+      "bundle": "/home/g2con/ulpf-demo/app/trace/derivation-ev_06GEZWRB266895X172M0SWP834.json"
+     },
+     {
+      "step": "the same event in the lake",
+      "ok": true,
+      "detail": "ext/ulpf_network_activity/region=local/accountId=000000000000/eventDay=20260930/part-ead5d18e795a-00000000000047353013-00000000000047386493.parquet: raw_hash sha256:5abadc73ac141605\u2026, seg_00045 + 2488 \u2014 the lineage survived into Parquet"
+     }
+    ],
+    "process": 1
+   }
+  },
+  "result": "onboarded live"
+ },
+ "fortigate_json": [
+  {
+   "format": "json",
+   "job": {
+    "id": "job-2",
+    "kind": "drift",
+    "state": "asking",
+    "format": "syslog RFC 3164 \u2192 JSON",
+    "signature": "rfc3164|json||0",
+    "steps": [
+     "DRIFT on FortiGate firewall (real device, Containerlab) (bound: its lines on this channel and peer were parsed by fortigate-fw-01): the format changed to syslog RFC 3164 \u2192 JSON \u2014 16 quarantined, bytes kept.",
+     "onboarding started BY POLICY (auto-onboard is on; set by op-014)",
+     "16 samples taken out of the evidence log (raw_hash checked)",
+     "earlier answers for FortiGate firewall (real device, Containerlab): 48 field answer(s) of its bound pack fortigate-fw-01 (vendor documentation), value classes observed on 48 of its lines that pack parsed \u2014 recorded under the cross-format name key (self-describing formats only)",
+     "the local model labels the fields \u2014 proposals only, never evidence",
+     "structure drafted from the lines own keys: 53 fields; proposals in 105.0s; 0 ambiguity certificate(s); 47 field(s) carried over from earlier answers",
+     "47 of 53 field(s) carried over BY NAME from earlier answers for FortiGate firewall (real device, Containerlab) (fortigate-fw-01/fortigate-traffic) \u2014 a self-describing format, same source, same family (type=traffic), same value class: nothing guessed",
+     "promoting: acceptance policy, signed pack (what rests on a proposal alone is withheld, carried unmapped)",
+     "pack fortigate-lab-01-rfc3164-json-53-traffic v1.0 verified by the Go engine and HOT-LOADED \u2014 no restart; the activation is an evidence-log record",
+     "ALERT: healed automatically in part: 47 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 6 withheld (carried unmapped) \u2014 the operator is asked for those: app, sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta"
+    ],
+    "fields_asked": [
+     "app",
+     "sentdelta",
+     "rcvddelta",
+     "durationdelta",
+     "sentpktdelta",
+     "rcvdpktdelta"
+    ],
+    "fields_carried_over": [
+     "date",
+     "time",
+     "devname",
+     "devid",
+     "eventtime",
+     "tz",
+     "logid",
+     "type",
+     "subtype",
+     "level",
+     "vd",
+     "srcip",
+     "srcport",
+     "srcintf",
+     "srcintfrole",
+     "dstip",
+     "dstport",
+     "dstintf",
+     "dstintfrole",
+     "srccountry",
+     "dstcountry",
+     "sessionid",
+     "proto",
+     "action",
+     "policyid",
+     "service",
+     "trandisp",
+     "duration",
+     "sentbyte",
+     "rcvdbyte",
+     "sentpkt",
+     "rcvdpkt",
+     "policytype",
+     "poluuid",
+     "policyname",
+     "appcat",
+     "crscore",
+     "craction",
+     "crlevel",
+     "devtype",
+     "osname",
+     "mastersrcmac",
+     "srcmac",
+     "srcserver",
+     "transip",
+     "transport",
+     "identifier"
+    ],
+    "fields_carried_by_name": 47,
+    "family": "type=traffic",
+    "pack": {
+     "pack_id": "fortigate-lab-01-rfc3164-json-53-traffic",
+     "pack_version": "1.0",
+     "sha256": "sha256:ab9b7d4cb159d0b80dee1399fdb6488ab36c313ab1726dd577fc5ed087db5598",
+     "signed_by": "ulpf-pack-authority-dev",
+     "previous_packs": [
+      "/home/g2con/ulpf-demo/app/jobs/job-1/pack-1.0"
+     ]
+    },
+    "binding": {
+     "bound": true,
+     "by_packs": [
+      "fortigate-fw-01"
+     ],
+     "drifted_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "source_known_from": [
+      [
+       "tcp:0.0.0.0:6515",
+       "127.0.0.2"
+      ],
+      [
+       "tcp:0.0.0.0:6515",
+       "172.20.20.2"
+      ]
+     ],
+     "router_note": null,
+     "limit": "binding is by ingest channel and peer host; the transports in use authenticate nobody"
+    },
+    "alert": "healed automatically in part: 47 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 6 withheld (carried unmapped) \u2014 the operator is asked for those: app, sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta"
+   },
+   "latest_outcomes": {
+    "in flight": 1,
+    "rfc3164-json-53": 39
+   },
+   "seconds_to_job_state": 167,
+   "result": "healed automatically in part, the rest asked"
+  }
+ ]
+}

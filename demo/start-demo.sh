@@ -8,6 +8,12 @@
 #   4 SIEM        http://127.0.0.1:5601/      OpenSearch Dashboards: "ULPF — normalized events", Security Analytics findings
 #
 #   bash demo/start-demo.sh            start (fresh state: $STATE/app, and a fresh SIEM)
+#   bash demo/start-demo.sh devices    THE FINAL DEMO: the real FortiGate and Suricata (demo/devices), no generator. Runs the device
+#                                      pre-flight first (licence Valid, lab up, both devices reach :6515 — the FortiGate reconnected
+#                                      automatically if needed — the Containerlab distro kept up without a window), then starts with
+#                                      the devices DISCONNECTED, OpenSearch STOPPED and no lake writer: the presenter connects
+#                                      ingress and egress on stage from the System page (docs/demo-runbook.md, "The final demo").
+#                                      The generator demo stays the fallback, and the gate runs on it.
 #   bash demo/start-demo.sh stop       stop the apps, the runtime, the lake writer and the SIEM
 #   ULPF_DEMO_PROVIDER=fixture ...     team-authored proposals instead of the model (the System page says so)
 #   ULPF_SIEM_DASHBOARDS=0 ...         OpenSearch without Dashboards (memory fallback: a screen is lost, not the demo)
@@ -30,6 +36,7 @@ stop() {
   pkill -9 -f "demo/apps/[gs][a-z]*.py" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py --lake $APP/" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" 2>/dev/null
   pkill -f "[p]acks-file $APP/packs.txt" 2>/dev/null; pkill -f "[u]lpf-committer commit --evidence $APP/" 2>/dev/null; pkill -f "[u]lpf-witness .*--listen 127.0.0.1:8796" 2>/dev/null; return 0
 }
+MODE=generator; [ "${1:-}" = "devices" ] && { MODE=devices; export ULPF_REAL_DEVICES=1; }
 if [ "${1:-start}" = "stop" ]; then stop; [ "${ULPF_SIEM:-opensearch}" = "fake" ] || bash demo/siem/siem.sh stop > /dev/null; echo "stopped"; exit 0; fi
 [ -d "$APP" ] && stop
 chmod -R u+w "$APP" 2>/dev/null; rm -rf "$APP"; mkdir -p "$APP/run-1"
@@ -38,6 +45,9 @@ chmod -R u+w "$APP" 2>/dev/null; rm -rf "$APP"; mkdir -p "$APP/run-1"
 python -c "import duckdb" 2>/dev/null || { echo "duckdb is not installed in the venv (pip install -r learning/requirements.txt, before going offline)"; exit 1; }
 N=${ULPF_PROCESSES:-2}
 for p in 6515 8516 8765 8780 8796 $(seq 8792 $((8792 + N - 1))); do freeport_check $p || { echo "port $p is busy (bash demo/start-demo.sh stop; an old live sequence?)"; exit 1; }; done
+if [ "$MODE" = devices ] && [ "${ULPF_SKIP_DEVICE_PREFLIGHT:-0}" != 1 ]; then
+  python3 demo/devices/preflight.py || { echo "device pre-flight failed: fix what it names (or ULPF_SKIP_DEVICE_PREFLIGHT=1 to start anyway)"; exit 1; }
+fi
 PROV=(--provider fixture)
 if [ "$DEMO_PROVIDER" = "model" ]; then
   curl -s -m 3 "http://127.0.0.1:$LLAMA_PORT/health" | grep -q ok || { echo "llama-server is not up on :$LLAMA_PORT — bash demo/llama-server.sh start   (or ULPF_DEMO_PROVIDER=fixture)"; exit 1; }
@@ -52,9 +62,14 @@ if [ "${ULPF_SIEM:-opensearch}" = "fake" ]; then
   echo "SIEM: the bulk stand-in (ULPF_SIEM=fake) — no Dashboards, no Security Analytics findings"
 else
   bash demo/siem/siem.sh start || { echo "the SIEM did not start (memory? try ULPF_SIEM_DASHBOARDS=0, or ULPF_SIEM=fake)"; exit 1; }
+  # devices mode: OpenSearch is set up (templates, rules, dashboards), then STOPPED — "Connect OpenSearch" on stage starts it,
+  # and what ULPF spooled for it meanwhile is delivered from its cursor
+  [ "$MODE" = devices ] && bash demo/siem/siem.sh outage > /dev/null
 fi
-# one lake writer per process, all into the same lake root (demo rotation: 10 s — production rotates on size)
-for i in $(seq 1 $N); do
+# one lake writer per process, all into the same lake root (demo rotation: 10 s — production rotates on size). Devices mode:
+# none — "Connect the lake" on the System page starts them, with these same arguments
+LW=$N; [ "$MODE" = devices ] && LW=0
+for i in $(seq 1 $LW); do
   setsid -f python adapters/lake/lakewriter.py --lake "$APP/lake" --listen "127.0.0.1:$((8792 + i - 1))" --writer-id "$i" --rotate-bytes 8MiB \
     --rotate-seconds "${ULPF_LAKE_ROTATE_SECONDS:-10}" > "$APP/lakewriter-$i.log" 2>&1
 done
@@ -76,22 +91,33 @@ for i in $(seq 1 $N); do   # one committer per process's evidence store; all shi
 done
 setsid -f python demo/apps/system.py --state "$APP" --rt "$RT" --golden "$GOLDEN" --python "$(command -v python)" --lake "$APP/lake" "${VENDOR[@]}" "${PROV[@]}" \
   --archive "$APP/evidence-archive" --commit-dir "$APP/commit" --evidence-grace "${ULPF_EVIDENCE_GRACE:-60s}" --evidence-buffer-cap "${ULPF_EVIDENCE_BUFFER_CAP:-64MiB}" \
-  --processes "$N" --lake-port 8792 $([ "${ULPF_REAL_DEVICES:-0}" = 1 ] && echo --in-tcp 0.0.0.0:6515) > "$APP/system.log" 2>&1
-setsid -f python3 demo/apps/generator.py --rate "${ULPF_LIVE_RATE:-6}" > "$APP/generator.log" 2>&1
+  --processes "$N" --lake-port 8792 --mode "$MODE" $([ "${ULPF_REAL_DEVICES:-0}" = 1 ] && echo --in-tcp 0.0.0.0:6515) > "$APP/system.log" 2>&1
+[ "$MODE" = devices ] || setsid -f python3 demo/apps/generator.py --rate "${ULPF_LIVE_RATE:-6}" > "$APP/generator.log" 2>&1
 # everything above was started detached: on a loaded machine a process may take seconds to exec, and a detaching setsid
 # parent is briefly counted beside its child. Wait (at most 30 s) until every one is up and each count is exact; the checks
 # below are unchanged. It was a fixed `sleep 2`, which failed once under the gate's parallel load (2026-09-29).
 for _ in $(seq 1 60); do
-  [ "$(pgrep -fc "[u]lpf-committer commit --evidence $APP/")" = "$N" ] && [ "$(pgrep -fc "adapters/lake/[l]akewriter.py --lake $APP/")" = "$N" ] \
-    && pgrep -f "demo/apps/[g]enerator.py" > /dev/null && pgrep -f "demo/apps/[s]ystem.py" > /dev/null && pgrep -f "[u]lpf-witness .*--listen 127.0.0.1:8796" > /dev/null && break
+  [ "$(pgrep -fc "[u]lpf-committer commit --evidence $APP/")" = "$N" ] && [ "$(pgrep -fc "adapters/lake/[l]akewriter.py --lake $APP/")" = "$LW" ] \
+    && { [ "$MODE" = devices ] || pgrep -f "demo/apps/[g]enerator.py" > /dev/null; } && pgrep -f "demo/apps/[s]ystem.py" > /dev/null && pgrep -f "[u]lpf-witness .*--listen 127.0.0.1:8796" > /dev/null && break
   sleep 0.5
 done
 pgrep -f "demo/apps/[g]enerator.py" > "$APP/generator.pid"; pgrep -f "demo/apps/[s]ystem.py" > "$APP/system.pid"; pgrep -f "adapters/lake/[l]akewriter.py --lake $APP/" | head -1 > "$APP/lakewriter.pid"
 pgrep -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" > "$APP/fakesiem.pid" 2>/dev/null
 pgrep -f "[u]lpf-committer commit --evidence $APP/" | head -1 > "$APP/committer.pid"
 pgrep -f "[u]lpf-witness .*--listen 127.0.0.1:8796" | head -1 > "$APP/witness.pid"
-for f in generator system lakewriter committer witness; do [ -s "$APP/$f.pid" ] || { echo "$f did not start:"; tail -5 "$APP/$f.log" "$APP/$f-1.log" 2>/dev/null; exit 1; }; done
-[ "$(pgrep -fc "[u]lpf-committer commit --evidence $APP/")" = "$N" ] && [ "$(pgrep -fc "adapters/lake/[l]akewriter.py --lake $APP/")" = "$N" ] || { echo "not every committer / lake writer started ($N expected)"; exit 1; }
+for f in $([ "$MODE" = devices ] && echo system committer witness || echo generator system lakewriter committer witness); do [ -s "$APP/$f.pid" ] || { echo "$f did not start:"; tail -5 "$APP/$f.log" "$APP/$f-1.log" 2>/dev/null; exit 1; }; done
+[ "$(pgrep -fc "[u]lpf-committer commit --evidence $APP/")" = "$N" ] && [ "$(pgrep -fc "adapters/lake/[l]akewriter.py --lake $APP/")" = "$LW" ] || { echo "not every committer / lake writer started ($N / $LW expected)"; exit 1; }
+if [ "$MODE" = devices ]; then
+cat <<EOF
+THE FINAL DEMO — real devices (the devices, OpenSearch and the lake start DISCONNECTED: connect them on the System page)
+1 Devices     http://127.0.0.1:8765/#devsec   (the System page: connect the FortiGate and Suricata, format switch, attack traffic)
+2 System      http://127.0.0.1:8765/
+3 Data lake   http://127.0.0.1:8765/lake
+4 SIEM        http://127.0.0.1:5601/app/dashboards#/view/ulpf-real-devices   (security plugin DISABLED — demo only)
+state: $APP   (device actions: devices.log)
+EOF
+exit 0
+fi
 cat <<EOF
 1 Generator   http://127.0.0.1:8780/
 2 System      http://127.0.0.1:8765/

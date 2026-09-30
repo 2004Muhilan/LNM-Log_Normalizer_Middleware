@@ -841,3 +841,89 @@ The run before failed once, in apps-check's outage step. At one instant under lo
 behind (limit 25). The step now looks, over 20 s, for a moment where the SIEM is at least 40 behind and the lake at most
 25 behind at the same time. The thresholds are unchanged, and a stalled lake never passes.
 
+## 19. Routing among the sending device's packs; the final demo on the real devices (2026-09-30)
+
+**CHANGE TO THE SETTLED ROUTING RULE (the user's decision).** Routing was structure-only (L1–L4) over every loaded pack.
+Now:
+- a line from a peer **bound** to a source is routed **only among that source's packs** (`route.RouteChainAmong`);
+- an **unbound** peer keeps structure-only routing over every pack, so onboarding a new source is unchanged.
+
+**How the binding reaches the runtime:**
+- It is the operator's inventory, made explicit. The console writes `bindings.json`: each inventory host → the loaded
+  packs that belong to its source (the packs onboarded for it, and the vendor packs of its declared vendor).
+- `ulpf-runtime run --bindings FILE` re-reads it on every SIGHUP, after the packs.
+- Every change is a **`binding_activated` record in the evidence log**, like a pack activation.
+- A bound host none of whose packs is loaded falls back to every pack.
+- A bound source's unknown line is quarantined with the binding named in its reason.
+
+**It trusts the sender's address.** That is sound for TCP, where the handshake proves the address can receive, and
+spoofable for UDP.
+
+**Invariant 6 is unchanged:** the static test still finds exactly one Parse, after the routing decision.
+
+**Tests:**
+- `route/binding_test.go`: the rehearsal's collision in memory — ambiguous without a binding, one owner each with one;
+- `pipeline/binding_test.go`: the host lookup and the fallback.
+
+**Live** (`docs/metrics/routing-binding-live.json`): the FortiGate on JSON with its JSON heal loaded, Suricata running.
+For 2 minutes, every sample of the latest 30 lines per device parsed under its own pack (`rfc3164-json-53`,
+`rfc3164-json-20`), with no `routing_ambiguous`.
+
+**The final demo** — `bash demo/start-demo.sh devices`; the runbook has what to press and say:
+- **Pages:** the same (System, Data lake, SIEM); the first tab reads *1 Devices*.
+- **Devices panel on the System page:** connect or disconnect each device's syslog (its ingress connector), the
+  FortiGate's live format switch, admin logins, and attack traffic, all through `demo/devices/lab.sh` in the
+  Containerlab distro. Also licence, syslog and container status, and the action log.
+- **Egress controls:** connect OpenSearch and the lake (its writers) from the page.
+- **SIEM:** the dashboard "ULPF — real devices, side by side" and the saved search "One attacker, every device"
+  (`src_endpoint.ip: 10.10.1.10`).
+- **Onboarding jobs** list their ambiguity certificates. **Prove it** works from any normalized event's detail.
+- **Reliability:**
+  - `demo/devices/preflight.py`, run by `start-demo.sh devices`, checks the licence is Valid, the containers and traffic
+    loop run, and both devices reach :6515 (a throwaway listener). It reconnects the FortiGate's syslog automatically if
+    needed, then disconnects both for the on-stage "Connect".
+  - A hidden Windows-side `wsl.exe` session (`ulpf-clab-keepalive`) keeps the Containerlab distro up without a window.
+    Tested: with this session's own keep-alive stopped, the distro was still Running 100 s later, with the lab
+    containers' uptime unchanged.
+  - A watchdog on the page re-commits the FortiGate's syslog if it is ON but silent for 60 s.
+- **Fallback:** the generator demo is unchanged (`bash demo/start-demo.sh`), and the gate stays on it.
+
+**What the runs found and fixed:**
+- **Run 1, step 6 failed.** With auto-onboard off (so Suricata's onboarding waits for the presenter's click), the
+  FortiGate's JSON drift also waited for a click. Now a changed format of a bound source is a heal, governed by the heal
+  policy. Auto-onboard is about new sources and new event families.
+- **Run 3, step 6 failed.** The family split kept 12 `type=traffic` samples, but acceptance re-read all 16 lines of the
+  sample file. The 4 JSON event lines failed the traffic spec, so the heal waited for answers. Now acceptance judges the
+  kept family only. The mixed-family test now asserts no blockers; it fails without the fix.
+- The device pre-flight's keep-alive check matched its own command line, and the hidden session needed its `bash -c`
+  script quoted as one argument. Both fixed.
+
+**The two consecutive runs after every fix** (`docs/metrics/final-demo-runs.json`, runs 4 and 5): each a fresh
+`start-demo.sh devices` with its pre-flight PASS, then `demo/devices/final_demo.py`.
+
+| Step | Run 4 | Run 5 |
+|---|---|---|
+| 1 connect ingress | WORKED, 3.5 s | WORKED, 3.5 s |
+| 2 connect egress | WORKED, 19.5 s | WORKED, 19.6 s |
+| 3 onboarding (FortiGate by its pack; Suricata live: 5 / 6 certificates, operator answers) | WORKED, 66 s | WORKED, 86 s |
+| 4 flow (search on 10.10.1.10: Fortinet 162 / 182, OISF 53 / 53; lake: both vendors) | WORKED | WORKED |
+| 5 outage (SIEM 66 / 68 behind, lake 0; after recovery 333 / 357 documents = distinct event ids) | WORKED | WORKED |
+| 6 drift (heals in part: 44 / 46 carried, 6 / 7 asked; Suricata never quarantined) | WORKED, 316 s | WORKED, 158 s |
+| 7 Prove it (every step incl. Proof of Derivation and the lake) and the certificate draft | WORKED | WORKED |
+
+No step needed a nudge in either run. Runs 1 and 3 each failed step 6 and found the two bugs above; run 2 passed all
+seven between them.
+
+**Gate, on the desktop, with both real devices' lab running** (the gate itself runs on the generator; it cannot depend on
+the licensed VM):
+- `bash scripts/gate.sh`: **PASS in 910 s** (Go 136 tests, 0 skipped; Python 116).
+- `bash scripts/gate.sh --laptop`: **PASS in 905 s**. This is the laptop's configuration on the desktop, not the
+  laptop.
+
+**Desktop runs that failed first:**
+- **p8-check, twice.** Once the image build could not reach Docker Hub to resolve `golang:1.24-alpine` (a TLS handshake
+  timeout: the network, not the code). The next time its log was overwritten before it could be read. p8-check passed
+  alone and in the next two gates.
+- **apps-check, once.** It waited 40 × 1 s for the "Prove it" trace, which under the full load took longer. It now waits
+  up to 180 s and returns the moment the trace lands; the check on the trace is unchanged.
+

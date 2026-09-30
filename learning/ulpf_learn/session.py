@@ -376,6 +376,11 @@ class Session:
     def _samples(self) -> list[bytes]:
         raw = Path(self.state["samples_path"]).read_bytes()
         lines = [l.rstrip(b"\r") for l in raw.split(b"\n") if l.strip()]
+        if self.state.get("family_keys") and "family" in self.state:
+            # one family per onboarding: the lines onboarding kept, and only those, are what acceptance judges (found on the
+            # real FortiGate, 2026-09-30: its JSON event lines, left for their own job, failed the traffic spec as samples)
+            from .envelope import chain_payload
+            lines = [l for l in lines if family_values(chain_payload(l), self.state["family_keys"]) == self.state["family"]]
         if self.state.get("unwrap_envelope"):
             lines = [envelope_payload(l) for l in lines]   # the parser sees the payload, exactly as the runtime unwraps it
         if self.state.get("app_envelope"):

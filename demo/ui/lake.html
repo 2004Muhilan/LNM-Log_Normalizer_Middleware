@@ -1,6 +1,6 @@
 <!doctype html><meta charset=utf-8><title>Data lake — ULPF demo</title><link rel=stylesheet href=theme.css>
 <header><span class=brand>Data lake<small>OCSF Parquet in Security Lake's layout — read-only, DuckDB</small></span>
-<a class="pill" href="http://127.0.0.1:8780/">1 Generator</a><a class="pill" href="http://127.0.0.1:8765/">2 System</a><a class="pill here" href="http://127.0.0.1:8765/lake">3 Data lake</a><a class=pill href="http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview" target=_blank>4 SIEM ↗</a></header>
+<a class="pill" id=nav1 href="http://127.0.0.1:8780/">1 Generator</a><a class="pill" href="http://127.0.0.1:8765/">2 System</a><a class="pill here" href="http://127.0.0.1:8765/lake">3 Data lake</a><a class=pill href="http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview" target=_blank>4 SIEM ↗</a></header>
 <main>
 <div class=row>
  <div class=panel><h2>What is in the lake</h2><div id=sources></div><p class=lab id=writer></p></div>
@@ -11,6 +11,7 @@
 <p class=lab>Fixed queries only (DuckDB, read-only). DuckDB's own UI is not used: it loads its assets from ui.duckdb.org at request time and answers HTTP 500 without a network. Layout: <span class=mono>ext/{source}/region=/accountId=/eventDay=</span> — this follows Amazon Security Lake's layout convention; it has not been tested against Security Lake.</p>
 </main>
 <script>
+fetch('/api/state').then(r=>r.json()).then(S=>{if(S.mode=='devices'){const n=document.getElementById('nav1');n.textContent='1 Devices';n.href='/#devsec'}}).catch(()=>{});
 Object.defineProperty(HTMLElement.prototype,'html',{set(h){if(this._h!==h){this.innerHTML=h;this._h=h}}});
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function tick(){let d;try{d=await (await fetch('/api/lake')).json()}catch(e){return}

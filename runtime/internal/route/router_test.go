@@ -219,7 +219,7 @@ func TestStaticNoTryAllPath(t *testing.T) {
 		t.Fatalf("pipeline must call Program.Parse exactly once (found %d)", len(calls))
 	}
 	// and that single call is on the routed family, after the routing decision
-	if !regexp.MustCompile(`(?s)router\.Route(Chain)?\(.*d\.Family\.Program\.Parse\(`).Match(pipe) { // P7: RouteChain is the chain-aware entry
+	if !regexp.MustCompile(`(?s)router\.Route(Chain(Among)?)?\(.*d\.Family\.Program\.Parse\(`).Match(pipe) { // P7: RouteChain; 2026-09-30: RouteChainAmong (peer binding)
 		t.Fatal("the single Parse call must be on the family the router chose, after Route")
 	}
 	// P8: the correction path (renormalize.go) is the runtime's only other parser call site, and it is held to the

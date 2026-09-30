@@ -8,7 +8,8 @@
      for our network activity class, two rules (a known-bad address; a deny spike, an aggregation rule) and a detector
      over `ulpf-ocsf-4001` running every minute. Verified against OpenSearch 2.19.2 on 2026-09-27: findings name the
      matching documents by _id, which is ULPF's event_id.
-  3. Dashboards (with --osd): index patterns, five panels and one dashboard, "ULPF — normalized events", every panel split
+  3. Dashboards (with --osd): index patterns, six panels and two dashboards ("ULPF — normalized events"; "ULPF — real
+     devices, side by side", 2026-09-30, with the saved search "One attacker, every device"), every panel split
      BY VENDOR (unified visibility, requirement f), and two saved cross-vendor searches (below). The time axis is ULPF's
      RECEIVE time (_lineage.ingest_time): the recorded four-vendor capture keeps its original 2018-2020 event times.
 
@@ -176,17 +177,38 @@ def dashboards(osd_url):
                      "sort": [["_lineage.ingest_time", "desc"]], "version": 1,
                      "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps({"query": {"query": q, "language": "kuery"}, "filter": [], "indexRefName": "kibanaSavedObjectMeta.searchSourceJSON.index"})}},
                      "references": [{"name": "kibanaSavedObjectMeta.searchSourceJSON.index", "type": "index-pattern", "id": "ulpf-ocsf"}]})
-    panels, refs = [], []
-    layout = (("ulpf-by-class", "visualization", 0, 0, 24), ("ulpf-quarantine", "visualization", 24, 0, 24), ("ulpf-denies", "visualization", 0, 15, 24),
-              ("ulpf-top-src", "visualization", 24, 15, 24), ("ulpf-denied-internal", "search", 0, 30, 48))
-    for i, (vid, typ, x, y, w) in enumerate(layout):
-        panels.append({"panelIndex": str(i + 1), "gridData": {"x": x, "y": y, "w": w, "h": 15, "i": str(i + 1)}, "version": "2.19.2", "panelRefName": f"panel_{i}", "embeddableConfig": {}})
-        refs.append({"name": f"panel_{i}", "type": typ, "id": vid})
-    objs.append({"type": "dashboard", "id": "ulpf-overview", "attributes": {
-        "title": "ULPF — normalized events", "description": "OCSF events delivered by ULPF's bulk encoding; quarantine counts from the ULPF console",
-        "panelsJSON": json.dumps(panels), "optionsJSON": json.dumps({"useMargins": True, "hidePanelTitles": False}), "version": 1,
-        "timeRestore": True, "timeFrom": "now-15m", "timeTo": "now", "refreshInterval": {"pause": False, "value": 5000},
-        "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps({"query": {"query": "", "language": "kuery"}, "filter": []})}}, "references": refs})
+    # the real-device demo (2026-09-30): the lab attacker 10.10.1.10, through the FortiGate (its denies) and on the same wire
+    # to Suricata (its alerts) — ONE query, OCSF field names, both devices
+    objs.append({"type": "search", "id": "ulpf-lab-attacker", "attributes": {"title": "One attacker, every device — 10.10.1.10 (FortiGate and Suricata)",
+                 "description": "src_endpoint.ip is OCSF's name for the source address, whatever the device called it (srcip, src_ip).",
+                 "columns": ["metadata.product.vendor_name", "src_endpoint.port", "dst_endpoint.ip", "dst_endpoint.port", "action_id", "message", "_lineage.event_id"],
+                 "sort": [["_lineage.ingest_time", "desc"]], "version": 1,
+                 "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps({"query": {"query": 'src_endpoint.ip:"10.10.1.10"', "language": "kuery"}, "filter": [], "indexRefName": "kibanaSavedObjectMeta.searchSourceJSON.index"})}},
+                 "references": [{"name": "kibanaSavedObjectMeta.searchSourceJSON.index", "type": "index-pattern", "id": "ulpf-ocsf"}]})
+    objs.append(vis("ulpf-by-vendor-time", "Events per device over time — FortiGate and Suricata side by side", "histogram",
+        [count, {"id": "2", "enabled": True, "type": "date_histogram", "schema": "segment", "params": {"field": "_lineage.ingest_time", "interval": "auto", "min_doc_count": 1, "extended_bounds": {}}},
+         {"id": "3", "enabled": True, "type": "terms", "schema": "group", "params": {"field": "metadata.product.vendor_name", "size": 10, "order": "desc", "orderBy": "1"}}],
+        {"type": "histogram", "addTooltip": True, "categoryAxes": [{"id": "CategoryAxis-1", "type": "category", "position": "bottom", "show": True, "labels": {"show": True, "truncate": 100}, "title": {}}],
+         "valueAxes": [{"id": "ValueAxis-1", "name": "LeftAxis-1", "type": "value", "position": "left", "show": True, "labels": {"show": True}, "title": {"text": "events"}}],
+         "seriesParams": [{"show": True, "type": "histogram", "mode": "normal", "data": {"label": "events", "id": "1"}, "valueAxis": "ValueAxis-1"}], "addLegend": True, "legendPosition": "right"}))
+
+    def dashboard(did, title, desc, layout):
+        panels, refs = [], []
+        for i, (vid, typ, x, y, w) in enumerate(layout):
+            panels.append({"panelIndex": str(i + 1), "gridData": {"x": x, "y": y, "w": w, "h": 15, "i": str(i + 1)}, "version": "2.19.2", "panelRefName": f"panel_{i}", "embeddableConfig": {}})
+            refs.append({"name": f"panel_{i}", "type": typ, "id": vid})
+        return {"type": "dashboard", "id": did, "attributes": {
+            "title": title, "description": desc,
+            "panelsJSON": json.dumps(panels), "optionsJSON": json.dumps({"useMargins": True, "hidePanelTitles": False}), "version": 1,
+            "timeRestore": True, "timeFrom": "now-15m", "timeTo": "now", "refreshInterval": {"pause": False, "value": 5000},
+            "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps({"query": {"query": "", "language": "kuery"}, "filter": []})}}, "references": refs}
+    objs.append(dashboard("ulpf-overview", "ULPF — normalized events", "OCSF events delivered by ULPF's bulk encoding; quarantine counts from the ULPF console",
+                          (("ulpf-by-class", "visualization", 0, 0, 24), ("ulpf-quarantine", "visualization", 24, 0, 24), ("ulpf-denies", "visualization", 0, 15, 24),
+                           ("ulpf-top-src", "visualization", 24, 15, 24), ("ulpf-denied-internal", "search", 0, 30, 48))))
+    objs.append(dashboard("ulpf-real-devices", "ULPF — real devices, side by side (FortiGate and Suricata)",
+                          "The licensed FortiGate VM and the Suricata sensor on its wire, normalized by ULPF into one OCSF schema",
+                          (("ulpf-by-vendor-time", "visualization", 0, 0, 24), ("ulpf-by-class", "visualization", 24, 0, 24),
+                           ("ulpf-top-src", "visualization", 0, 15, 24), ("ulpf-denies", "visualization", 24, 15, 24), ("ulpf-lab-attacker", "search", 0, 30, 48))))
     must(call(osd_url, "POST", "/api/saved_objects/_bulk_create?overwrite=true", objs, headers={"osd-xsrf": "true"}), "dashboards saved objects")
     call(osd_url, "POST", "/api/opensearch-dashboards/settings", {"changes": {"defaultIndex": "ulpf-ocsf"}}, headers={"osd-xsrf": "true"})
     # the index pattern needs its field list, or a date histogram on a field that is not the time field cannot be built

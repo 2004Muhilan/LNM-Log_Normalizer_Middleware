@@ -16,7 +16,7 @@ What it removes, in order:
   1. in the Containerlab distro (its own Docker engine): the Suricata sensor (containers fgt-ids and fgt-ids-syslog,
      volume ulpf-ids-log, image ulpf/suricata:alpine3.20 — demo/devices/suricata), the traffic containers fgt-client and
      fgt-server, the FortiGate container clab-fortigate-fgt, the images vrnetlab/vr-fortios:7.4.12 and alpine:3.20, the
-     keep-alive process;
+     keep-alive processes (in the distro, and the hidden Windows-side session ulpf-clab-keepalive that keeps it up);
   2. the Containerlab WSL distro itself (`wsl --unregister Containerlab`): the distro, its virtual disk, containerlab,
      vrnetlab, the lab directory and the backups;
   3. the Windows portproxy rule 127.0.0.1:8443 -> the distro (the FortiGate web UI);
@@ -52,7 +52,7 @@ if ($present) {
     if ($LASTEXITCODE -ne 0) { Write-Host "backup copy FAILED — stopping, nothing removed"; exit 1 }
   }
   Write-Host "1. containers and images in the $distro engine"
-  wsl -d $distro -- bash -c "pkill -f ulpf-fortigate-keepalive; docker rm -f fgt-ids fgt-ids-syslog fgt-client fgt-server clab-fortigate-fgt 2>&1; docker volume rm ulpf-ids-log 2>&1; docker rmi -f ulpf/suricata:alpine3.20 vrnetlab/vr-fortios:7.4.12 alpine:3.20 2>&1; sudo -n ip link del ulpf-cli1 2>/dev/null; true"
+  wsl -d $distro -- bash -c "pkill -f ulpf-fortigate-keepalive; pkill -f ulpf-clab-keepalive; docker rm -f fgt-ids fgt-ids-syslog fgt-client fgt-server clab-fortigate-fgt 2>&1; docker volume rm ulpf-ids-log 2>&1; docker rmi -f ulpf/suricata:alpine3.20 vrnetlab/vr-fortios:7.4.12 alpine:3.20 2>&1; sudo -n ip link del ulpf-cli1 2>/dev/null; true"
   Write-Host "2. the $distro WSL distro"
   wsl --terminate $distro
   wsl --unregister $distro

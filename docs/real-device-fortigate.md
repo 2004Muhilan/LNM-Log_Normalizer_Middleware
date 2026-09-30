@@ -477,3 +477,17 @@ is promoted at once; the rest is withheld (carried unmapped) and asked.
 
 The first attempt of this run failed on a syntax slip in the new CLI line. The second ran with the old drift path, which
 asked for all fields when any was open; it was changed to heal in part as above. The run reported here is the third.
+
+## The final demo (2026-09-30)
+
+The FortiGate is now driven from the System page (`bash demo/start-demo.sh devices`):
+- connect / disconnect its syslog;
+- a live format switch;
+- admin logins.
+
+Every action goes through `demo/devices/lab.sh` (SSH with the key; the `y` after `end` is always sent). The pre-flight
+checks the licence and reconnects its syslog automatically. The hidden `ulpf-clab-keepalive` session keeps the distro up
+without a window; teardown stops it.
+
+Routing is now among the packs bound to the sending device, so its JSON heal no longer collides with Suricata's.
+See `docs/laptop-branch.md` §19.

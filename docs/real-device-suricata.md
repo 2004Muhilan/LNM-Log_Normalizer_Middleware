@@ -169,3 +169,10 @@ Suricata was re-onboarded with the same answers, still as Network Activity. `tim
 **The rehearsal found a routing collision** (`docs/laptop-branch.md` §18). A drafted Suricata JSON family and a drafted
 FortiGate JSON family share one routing key, so both quarantine as `routing_ambiguous`. The workaround is to roll back
 the FortiGate JSON heal. Raised.
+
+## The final demo (2026-09-30)
+
+Suricata is connected on stage from the System page: its rsyslog forwarder is started or stopped by
+`demo/devices/lab.sh`. It is onboarded live from unknown, with five or six ambiguity certificates and the operator's
+answers. It keeps parsing while the FortiGate drifts to JSON, because routing is among each device's own packs.
+See `docs/laptop-branch.md` §19.

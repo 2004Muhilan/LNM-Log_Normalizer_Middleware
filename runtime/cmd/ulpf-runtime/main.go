@@ -121,6 +121,7 @@ func main() {
 		commitWait := fs.Duration("commit-wait", 10*time.Millisecond, "group commit (invariant 3): commit the evidence batch when its oldest frame has waited this long; no frame is parsed or delivered before its batch is durable")
 		var listens packList
 		fs.Var(&listens, "listen", "listener instead of --input: udp::5514, tcp::6514 (RFC 6587 octet counting, newline fallback), http::8514 (POST bodies); tcp: and http: may be given TOGETHER (repeat the flag): one runtime, two ingress connectors, each frame's evidence record names the connector it arrived on")
+		bindingsFile := fs.String("bindings", "", "the operator's source binding: a JSON file {\"peer host\": [\"pack_id\", ...]}; a line from a bound host routes ONLY among those packs (an unbound host: every pack, structure-only). Read when the pipeline is live and on every SIGHUP; each change is a binding_activated record in the evidence log. Trusts the sender's address: sound for TCP, spoofable for UDP")
 		packsFile := fs.String("packs-file", "", "a file listing further pack directories, one per line; re-read on SIGHUP: packs are loaded by the same fail-closed loader and swapped in between two frames without a restart; every change is a pack_activated record in the evidence log")
 		maxFrames := fs.Int("max-frames", 0, "with --listen: stop after N frames (0 = until SIGINT)")
 		pullDir := fs.String("pull-dir", "", "P7: directory-drop collector; files are ingested in name order and renamed .done")
@@ -202,8 +203,35 @@ func main() {
 		setLive := func(p *pipeline.Pipeline) { liveOnce.Do(func() { live <- p }) }
 		hup := make(chan os.Signal, 1)
 		signal.Notify(hup, syscall.SIGHUP)
+		loadBindings := func() (map[string][]string, error) {
+			out := map[string][]string{}
+			if *bindingsFile == "" {
+				return out, nil
+			}
+			b, err := os.ReadFile(*bindingsFile)
+			if os.IsNotExist(err) {
+				return out, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			if len(strings.TrimSpace(string(b))) == 0 {
+				return out, nil
+			}
+			return out, json.Unmarshal(b, &out)
+		}
+		applyBindings := func(p *pipeline.Pipeline, why string) {
+			b, err := loadBindings()
+			if err == nil {
+				err = p.SetBindings(b, why)
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "bindings NOT applied, the previous ones stay: %v\n", err)
+			}
+		}
 		go func() {
 			livePipe := <-live
+			applyBindings(livePipe, "bindings at start")
 			for range hup {
 				next, err := loadAll()
 				if err == nil {
@@ -219,6 +247,7 @@ func main() {
 					livePipe.Refused(what, err.Error()) // the refusal is an evidence-log record (pack_refused)
 					continue
 				}
+				applyBindings(livePipe, "SIGHUP reload of --bindings")
 				fmt.Fprintf(os.Stderr, "reloaded: %d pack(s)\n", len(next))
 			}
 		}()

@@ -17,7 +17,127 @@ figures are in [demo-machine-setup.md](demo-machine-setup.md) — prepare the ma
 Measured here: the GTX 1650 laptop, WSL2 at its default 7.7 GB cap, driver 616.64, twice in a row on
 2026-09-07 (§5).
 
-## The demo with pages (laptop branch) — what to say
+## The final demo — real devices, real destinations (2026-09-30)
+
+Two real devices in the lab:
+- **the licensed FortiGate 7.4.12 VM;**
+- **Suricata 7.0.7,** on the FortiGate's own wire.
+
+Two real destinations: **OpenSearch** and the **Parquet lake**. The pages are the same (System, Data lake, SIEM); the first
+tab now reads **1 Devices** and opens the Devices panel on the System page. The presenter never needs a terminal.
+
+**The generator demo is the FALLBACK** (`bash demo/start-demo.sh`, unchanged below), and the gate runs on it. The gate
+cannot depend on the licensed VM.
+
+### Before the judges walk in (T-30 min)
+
+1. Model: `bash demo/llama-server.sh start`.
+2. `bash demo/start-demo.sh devices`. It runs the **device pre-flight** first, and stops if any of it fails:
+   - the Containerlab distro is kept up **without a window**: a hidden Windows-side `wsl.exe` session named
+     `ulpf-clab-keepalive`, started once;
+   - the **FortiGate licence reads Valid**. If not, STOP: never redeploy, one evaluation per account;
+   - every lab container is running, and a stopped one is started;
+   - the traffic loop runs;
+   - **both devices really reach ULPF's syslog port**: a throwaway listener on :6515. A FortiGate that does not send is
+     **reconnected automatically** (its syslog setting is re-committed);
+   - then both are disconnected again for the first step.
+3. The demo then starts with **the devices disconnected, OpenSearch stopped and no lake writer**. Everything is connected
+   on stage.
+4. Open the System page, the Data lake page, and in the SIEM tab the dashboard **"ULPF — real devices, side by side"**.
+
+`ULPF_SKIP_DEVICE_PREFLIGHT=1` starts without the check. Don't, unless you know why.
+
+### The seven steps — what to press, what to say
+
+**1. Connect ingress.**
+- **Press:** Devices panel → FortiGate **Connect to ULPF**, then Suricata **Connect to ULPF**.
+- **Seen:** each device's syslog connector turns ON. Within seconds both appear under *Applications sending logs*, as
+  *Syslog over TCP* on `tcp:0.0.0.0:6515`, with the REAL DEVICE tag, the FortiOS version and the serial.
+- **Say:** "Two real devices. The firewall is a licensed FortiGate VM; the IDS is Suricata watching the firewall's own
+  wire. Each connects through ULPF's syslog ingress connector, over TCP. ULPF only sees a channel and a peer; the
+  inventory says which device sits behind which address."
+- **If** the FortiGate does not appear within ~20 s: the page reconnects it by itself (a second attempt, shown in the
+  action log). The watchdog also re-commits its syslog if it goes silent for 60 s while ON.
+
+**2. Connect egress.**
+- **Press:** **Start / connect OpenSearch**, then **Connect the lake (start its writers)**.
+- **Seen:** both destination blocks turn **UP**. *Ahead by* — what ULPF kept in its spool while they were not there —
+  falls to 0.
+- **Say:** "Destinations are a list: a transport and an encoding each. Each has its own cursor over one bounded spool.
+  What arrived before they were connected was kept and is delivered now, from each cursor."
+
+**3. Onboarding.**
+- **FortiGate:** it is parsed at once (`fortigate-traffic`), recognised by its **existing pack**, built from the vendor's
+  documentation. Its row reads *bound: routed only among its source's 1 pack*.
+- **Suricata:** it is unknown, so every alert is quarantined, bytes kept. **Press:** its onboarding job → **Onboard this
+  application's format**.
+  - The local model proposes, and **ambiguity certificates** appear. Every run had five or six:
+    - `timestamp`: *temporal role* — `time` or `end_time` or `metadata.logged_time`;
+    - `src_ip`, `src_port`, `dest_ip`, `dest_port`: *endpoint orientation* — is this the source or the destination?
+    - sometimes `action`: *action outcome*.
+  - The operator answers each field on the page: `timestamp` → time, the addresses and ports, `proto`, `action` →
+    `action_id` with the value map `allowed=1, blocked=2`, `signature` → message. Then **Promote**.
+  - The pack is signed, logged in the transparency log, verified by the Go engine and hot-loaded; Suricata's alerts
+    parse from then on.
+- **Say:** "The model proposes; it never decides. Where the samples cannot tell two meanings apart, ULPF issues a
+  certificate and asks for evidence. Here it asks the operator, and records who answered what."
+- **Note:** an extra "New family of a known source" job can appear for the FortiGate: every device action logs an admin
+  in over SSH, and those login events are a family no pack owns. Leave it (it waits for a click), or onboard it as a bonus.
+
+**4. Flow.**
+- **Press:** Lab traffic → **Attack traffic**, then the SIEM tab.
+- **Seen:**
+  - *Events per device over time*: FortiGate and Suricata side by side.
+  - The link **Saved search: one attacker, every device** (`src_endpoint.ip: 10.10.1.10`) returns the FortiGate's denies
+    AND Suricata's alerts for the same connections.
+  - The Data lake page: the same events in Parquet, one schema.
+- **Say:** "One query, OCSF field names, two vendors: FortiGate called it `srcip`, Suricata `src_ip`; the SIEM only knows
+  `src_endpoint.ip`."
+
+**5. Egress outage.**
+- **Press:** **Stop OpenSearch (outage)**.
+- **Seen:** the OpenSearch block goes DOWN and its *ahead by* climbs, while the lake's stays near 0.
+- **Press:** **Start / connect OpenSearch**. The backlog arrives from its cursor.
+- **Say:** "No duplicates: the document id is the event id, so a redelivered event overwrites."
+
+**6. Drift.**
+- **Press:** Devices panel → FortiGate log format **JSON**. The device itself switches, live.
+- **Seen:** a DRIFT alert on the FortiGate (bound source). Most fields **heal automatically**: 44–47 of 50–53 in the
+  runs, carried over by name from the answers ULPF already has for this device. The unknown ones are **asked**: 6–7, the
+  interim-update counters, `app`, sometimes `dstcountry`. The healed pack loads, and the JSON parses.
+- **Honest detail:** a few JSON lines carry keys the 12 samples did not show (2–6 of the next 30 in the runs). They are
+  quarantined, bytes kept, and would drive the next heal. Say so if a judge spots them.
+- **Suricata keeps parsing throughout.** Each line is routed only among the packs of the device that sent it, so the
+  FortiGate's JSON family and Suricata's JSON family never collide.
+- **Say:** "Same device, new format: nothing guessed. What the device names the same way carries over; what is new is
+  asked."
+- **After:** switch the format back to **Default**.
+
+**7. Prove it, then the certificate.**
+- **Press:** click Suricata (or the FortiGate) in *Applications* → an event → **Prove it** in its detail.
+- **Seen:** the SIEM document, the original bytes re-hashed from the evidence log or archive, the signed checkpoint, the
+  Merkle proof, **Proof of Derivation** (the exact logged pack, re-run, reproduces the SIEM's document), and the same
+  event in the lake.
+- **Then:** **BSA §63(4) certificate — DRAFT**.
+- **Say:** "Part A is filled from ULPF's records; the declaration and Part B are for people to complete and sign. It is
+  never presented as complete, and it is not legal advice."
+
+### "allowed" and "deny" for the same connection
+
+Suricata watches a copy of the traffic and blocks nothing, so its alerts say `action: allowed`: "the sensor let it pass".
+The FortiGate is what denied it.
+- **Say:** "The IDS saw the attempt; the firewall stopped it."
+- **Don't say:** that Suricata's "allowed" means the attack got through.
+
+### What not to say
+
+- **That the binding authenticates a device.** It trusts the sender's address: sound over TCP (the handshake), spoofable
+  over UDP.
+- **That Suricata's class was chosen by evidence.** Network Activity is what the model proposed and the operator kept.
+- **That alerts quarantined before the pack existed were re-derived.** They stay quarantined with their bytes.
+- **That the witness is independent.** It runs on the same machine.
+
+## The demo with pages (laptop branch) — the generator FALLBACK — what to say
 
 **Before (T-30 min, network still available once):** `pip install -r learning/requirements.txt` (DuckDB); pull the SIEM
 images (`docker pull opensearchproject/opensearch:2.19.2 opensearchproject/opensearch-dashboards:2.19.2`); then offline:
@@ -290,12 +410,12 @@ writes is under `~/ulpf-demo/live`. **About 3 min at 20 layers, about 2 min at 3
 |---|---|---|
 | **System** — http://localhost:8765/live.html (the main screen) | two status blocks, **Generators** and **Consumer**, UP / DOWN in very large type (the whole block turns red when down); the list of phases A–I, each pending / running / done, advancing by itself; and **only what the running phase needs**: A the quarantined / parsed / guessed counters and the *onboard* button; B and F the certificate cards and one row per column (dropdowns when interactive); C two counters; D "ULPF is ahead of the database by N" and the outage records; E parse success and the ALERT; G–H the three numbers of the accounting; I the whitespace case. When a phase ends its detail goes away | all the time |
 | **Generator** — http://localhost:8765/generator.html | the raw lines as they are produced, scrolling, each prefixed with the connector it leaves through (`syslog TCP` / `HTTP POST`). Nothing else. At the drift the lines visibly change shape (a number where `tcp` was, a zone at the end) | phase A ("this is what arrives: no labels anywhere") and phase E ("firmware 2.0") |
-| **Database** — http://127.0.0.1:8790/ (served by the consumer app itself; loads once the sequence has started) | a row count and the latest events, newest first, typed. During the outage the page itself says DOWN and the rows stop; after the restart they resume and the count jumps — no chart, the stopping and resuming is the picture | phases C, D, G |
+| ~~**Database**~~ — **gone.** The SQLite consumer and its page were removed; on :8790 the sequence now runs the SIEM stand-in (`demo/siem/fake_bulk.py`), and the pages demo shows OpenSearch Dashboards and the Data lake page instead | — | — |
 
 Nothing on these pages drives the sequence: `run-live.sh` advances the phases exactly as before. The only controls are the two that already existed — the *onboard* button and the dropdowns + *promote* — and they only exist in an interactive run.
 
 ```
-flowtap sensor A --syslog/TCP (RFC 6587)--\                          /--HTTP POST (NDJSON)--> sink: SQLite + its own page
+flowtap sensor A --syslog/TCP (RFC 6587)--\                          /--bulk HTTP--> SIEM stand-in :8790 (the SQLite sink is gone)
 flowtap sensor B --HTTP POST---------------+--> ONE ULPF runtime ----+
                                                 evidence log           \--stdout-------------> a file (any pipe)
 ```
@@ -437,13 +557,9 @@ once, while online. The ruleset is local only.
 - At ULPF's output, each Suricata alert matches the FortiGate's log of the same connection (same source and destination
   port).
 
-**Order matters (found in the 2026-09-30 rehearsal):**
-- Do not leave the FortiGate's JSON heal loaded while showing Suricata. Two drafted JSON families from two devices share
-  one routing key, and both then quarantine as `routing_ambiguous`: ULPF refuses to guess.
-- After the FortiGate `json` moment, switch it back to `default` and press **Roll back** on that heal's alert. Suricata
-  parses again within about a minute.
-- Suricata's onboarding job waits for the operator from the moment the demo starts; answer it when you reach this
-  section.
+**Order no longer matters.** The 2026-09-30 rehearsal found the FortiGate's and Suricata's JSON families sharing one
+routing key. Since the routing change, each device's lines are routed only among its own source's packs, so both parse
+side by side (`docs/laptop-branch.md` §19).
 
 **Show, after it is onboarded (2026-09-30):**
 - Its alerts are in OpenSearch (`ulpf-ocsf-4001`) and the lake.

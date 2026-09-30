@@ -105,6 +105,7 @@ def test_one_onboarding_learns_one_family(tmp_path, pack):
     split = [e for e in s.state["timeline"] if e["step"] == "family_split"]
     assert s.state["family"] == "type=traffic" and split and split[0]["left"] == {"type=event": 3}
     assert s.state["sample_count"] == 12 and len(s.state["propagated"]) == 44
+    assert not s.state["verdict"]["blockers"]   # acceptance judges the kept family only (the left lines are not its samples)
 
 
 def test_the_seeded_json_family_promotes_and_loads_in_the_go_engine(tmp_path, pack):

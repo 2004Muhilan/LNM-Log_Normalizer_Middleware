@@ -1,0 +1,2992 @@
+{
+ "what": "the final demo (bash demo/start-demo.sh devices) walked end to end by demo/devices/final_demo.py through the System page's APIs; each run a fresh start with the device pre-flight",
+ "runs": {
+  "1": {
+   "started": "2026-09-30T01:49:17",
+   "steps": [
+    {
+     "step": "1. connect ingress: FortiGate and Suricata through ULPF's syslog ingress connectors; both appear as sources",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "before": {
+      "apps": [],
+      "fgt_syslog": null,
+      "ids_forwarder": null
+     },
+     "ok": true,
+     "fortigate": {
+      "name": "FortiGate firewall (real device, Containerlab)",
+      "events": 6,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": [
+       "fortigate-fw-01"
+      ],
+      "real_device": {
+       "product": "FortiGate-VM64-KVM",
+       "version": "FortiOS 7.4.12 build 2902",
+       "serial": "FGVMEVXFB-07ZH02",
+       "lab": "demo/devices/fortigate (Containerlab, evaluation licence)"
+      }
+     },
+     "suricata": {
+      "name": "Suricata IDS (real sensor, Docker)",
+      "events": 1,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": []
+     },
+     "device_actions": [
+      {
+       "at": "01:49:17",
+       "action": "fgt-connect",
+       "args": [
+        "default"
+       ],
+       "rc": 0,
+       "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+       "seconds": 0.3
+      },
+      {
+       "at": "01:49:20",
+       "action": "ids-connect (checked)",
+       "rc": 0,
+       "output": "sending to ULPF \u2014 attempts: 1",
+       "seconds": null
+      }
+     ],
+     "seconds": 3.5
+    },
+    {
+     "step": "2. connect egress: OpenSearch and the Parquet lake as destinations, per-destination status",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "before": {
+      "SIEM \u2014 OpenSearch": [
+       false,
+       4
+      ],
+      "Data lake \u2014 OCSF Parquet": [
+       false,
+       4
+      ]
+     },
+     "after": [
+      [
+       "SIEM \u2014 OpenSearch",
+       true,
+       22,
+       0,
+       0
+      ],
+      [
+       "Data lake \u2014 OCSF Parquet",
+       true,
+       0,
+       22,
+       0
+      ]
+     ],
+     "lake_writers": 2,
+     "seconds": 19.5
+    },
+    {
+     "step": "3. onboarding: FortiGate recognised by its existing pack; Suricata onboarded live from unknown (certificates, operator answers)",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "certificates_before_answers": [
+      {
+       "id": "cert_suricata-lab-01_pos1",
+       "field": "timestamp",
+       "status": "ambiguous",
+       "ambiguity": "temporal_role",
+       "candidates": [
+        "time",
+        "end_time",
+        "metadata.logged_time",
+        "metadata.modified_time"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos5",
+       "field": "src_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.ip",
+        "dst_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos6",
+       "field": "src_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.port",
+        "dst_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos7",
+       "field": "dest_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.ip",
+        "src_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos8",
+       "field": "dest_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.port",
+        "src_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      }
+     ],
+     "model_proposed": {
+      "timestamp": [
+       "time",
+       "time"
+      ],
+      "flow_id": [],
+      "in_iface": [],
+      "event_type": [],
+      "src_ip": [
+       "src_endpoint.ip",
+       "src_endpoint.ip"
+      ],
+      "src_port": [
+       "src_endpoint.port",
+       "src_endpoint.port"
+      ],
+      "dest_ip": [
+       "dst_endpoint.ip",
+       "dst_endpoint.ip"
+      ],
+      "dest_port": [
+       "dst_endpoint.port",
+       "dst_endpoint.port"
+      ],
+      "proto": [
+       "app_name",
+       "app_name"
+      ],
+      "pkt_src": [],
+      "action": [],
+      "gid": [],
+      "signature_id": [],
+      "rev": [],
+      "signature": [],
+      "category": [],
+      "severity": [
+       "severity",
+       "severity"
+      ],
+      "direction": [],
+      "tx_id": [],
+      "app_proto": [
+       "app_name",
+       "app_name"
+      ]
+     },
+     "ok": true,
+     "fortigate_outcomes": {
+      "fortigate-traffic": 22,
+      "in flight": 3
+     },
+     "suricata_job": {
+      "id": "job-1",
+      "kind": "onboard",
+      "state": "done",
+      "event_class_uid": 4001,
+      "pack": {
+       "pack_id": "suricata-lab-01-rfc3164-json-20-alert",
+       "pack_version": "1.0",
+       "sha256": "sha256:f9de15ed24237b8d29138f8476f34ad076c2f9a182076a5078dcd6d537532f02",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": []
+      },
+      "certificates": [
+       {
+        "id": "cert_suricata-lab-01_pos1",
+        "field": "timestamp",
+        "status": "resolved",
+        "ambiguity": "temporal_role",
+        "candidates": [
+         "time",
+         "end_time",
+         "metadata.logged_time",
+         "metadata.modified_time"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos5",
+        "field": "src_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.ip",
+         "dst_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos6",
+        "field": "src_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.port",
+         "dst_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos7",
+        "field": "dest_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.ip",
+         "src_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos8",
+        "field": "dest_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.port",
+         "src_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       }
+      ]
+     },
+     "answered_by_this_script_as_operator": {
+      "timestamp": "time",
+      "src_ip": "src_endpoint.ip",
+      "src_port": "src_endpoint.port",
+      "dest_ip": "dst_endpoint.ip",
+      "dest_port": "dst_endpoint.port",
+      "proto": "connection_info.protocol_name",
+      "action": "action_id",
+      "signature": "message"
+     },
+     "suricata_outcomes": {
+      "rfc3164-json-20": 3,
+      "in flight": 13,
+      "quarantined: format drift of Suricata IDS (real sensor, Docker) (bound source)": 14
+     },
+     "seconds": 69.0
+    },
+    {
+     "step": "4. flow: both vendors side by side in OpenSearch Dashboards, the saved cross-vendor search, the lake view",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "opensearch_by_vendor": {
+      "Fortinet": 166,
+      "OISF": 55
+     },
+     "saved_search": "One attacker, every device \u2014 10.10.1.10 (FortiGate and Suricata)",
+     "saved_search_query_by_vendor": {
+      "Fortinet": 166,
+      "OISF": 55
+     },
+     "dashboard": "ULPF \u2014 real devices, side by side (FortiGate and Suricata)",
+     "lake_rows_from_attacker_by_vendor": {
+      "Fortinet": 161,
+      "OISF": 47
+     },
+     "lake_page_sources": [
+      "ulpf_network_activity"
+     ],
+     "seconds": 64.0
+    },
+    {
+     "step": "5. egress outage: stop OpenSearch; the lake keeps flowing; restart; the backlog delivers with no duplicates",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "during": {
+      "siem_ahead": 72,
+      "lake_ahead": 0,
+      "lake_up": true
+     },
+     "documents": 343,
+     "distinct_event_ids": 343,
+     "duplicates": 0,
+     "seconds": 50.4
+    },
+    {
+     "step": "6. drift: FortiGate -> JSON live; most fields heal automatically, the unknown ones ask; Suricata keeps parsing throughout",
+     "result": "FAILED",
+     "nudges": [],
+     "notes": [],
+     "ok": false,
+     "job": null,
+     "alert": "",
+     "fortigate_outcomes_after": {
+      "in flight": 3,
+      "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 27
+     },
+     "suricata_samples_during": [
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "in flight": 1,
+       "rfc3164-json-20": 11
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      }
+     ],
+     "suricata_quarantined_during": 0,
+     "seconds": 533.1
+    },
+    {
+     "step": "7. Prove it on a real event, then the certificate draft",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "event_id": "ev_06GF02QYTX4SW4H6S73MXBDYKC",
+     "preview": "<174>Sep 30 02:00:47 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-30T02:00:47.574840+0000\",\"flow_id\":1860995456158977,\"in_iface",
+     "trace": [
+      [
+       "SIEM document",
+       true
+      ],
+      [
+       "raw bytes in the evidence log",
+       true
+      ],
+      [
+       "commit",
+       true
+      ],
+      [
+       "export",
+       true
+      ],
+      [
+       "Merkle proof verified",
+       true
+      ],
+      [
+       "Proof of Derivation",
+       true
+      ],
+      [
+       "the same event in the lake",
+       true
+      ]
+     ],
+     "certificate_draft_not_complete": true,
+     "seconds": 90.6
+    }
+   ],
+   "finished": "2026-09-30T02:03:08",
+   "device_history": [
+    {
+     "at": "01:49:17",
+     "action": "fgt-connect",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    },
+    {
+     "at": "01:49:19",
+     "action": "fgt-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "01:49:20",
+     "action": "ids-connect",
+     "args": [],
+     "rc": 0,
+     "output": "ids_forwarder=running",
+     "seconds": 1.3
+    },
+    {
+     "at": "01:49:20",
+     "action": "ids-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "01:51:06",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 16.6
+    },
+    {
+     "at": "01:52:12",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 16.6
+    },
+    {
+     "at": "01:52:44",
+     "action": "fgt-format",
+     "args": [
+      "json"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=json",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:03:08",
+     "action": "fgt-format",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    }
+   ]
+  },
+  "2": {
+   "started": "2026-09-30T02:05:25",
+   "steps": [
+    {
+     "step": "1. connect ingress: FortiGate and Suricata through ULPF's syslog ingress connectors; both appear as sources",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "before": {
+      "apps": [],
+      "fgt_syslog": null,
+      "ids_forwarder": null
+     },
+     "ok": true,
+     "fortigate": {
+      "name": "FortiGate firewall (real device, Containerlab)",
+      "events": 6,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": [
+       "fortigate-fw-01"
+      ],
+      "real_device": {
+       "product": "FortiGate-VM64-KVM",
+       "version": "FortiOS 7.4.12 build 2902",
+       "serial": "FGVMEVXFB-07ZH02",
+       "lab": "demo/devices/fortigate (Containerlab, evaluation licence)"
+      }
+     },
+     "suricata": {
+      "name": "Suricata IDS (real sensor, Docker)",
+      "events": 2,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": []
+     },
+     "device_actions": [
+      {
+       "at": "02:05:25",
+       "action": "fgt-connect",
+       "args": [
+        "default"
+       ],
+       "rc": 0,
+       "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+       "seconds": 0.3
+      },
+      {
+       "at": "02:05:27",
+       "action": "ids-connect (checked)",
+       "rc": 0,
+       "output": "sending to ULPF \u2014 attempts: 1",
+       "seconds": null
+      }
+     ],
+     "seconds": 3.5
+    },
+    {
+     "step": "2. connect egress: OpenSearch and the Parquet lake as destinations, per-destination status",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "before": {
+      "SIEM \u2014 OpenSearch": [
+       false,
+       4
+      ],
+      "Data lake \u2014 OCSF Parquet": [
+       false,
+       4
+      ]
+     },
+     "after": [
+      [
+       "SIEM \u2014 OpenSearch",
+       true,
+       24,
+       0,
+       0
+      ],
+      [
+       "Data lake \u2014 OCSF Parquet",
+       true,
+       0,
+       24,
+       0
+      ]
+     ],
+     "lake_writers": 2,
+     "seconds": 19.5
+    },
+    {
+     "step": "3. onboarding: FortiGate recognised by its existing pack; Suricata onboarded live from unknown (certificates, operator answers)",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "certificates_before_answers": [
+      {
+       "id": "cert_suricata-lab-01_pos1",
+       "field": "timestamp",
+       "status": "ambiguous",
+       "ambiguity": "temporal_role",
+       "candidates": [
+        "time",
+        "end_time",
+        "metadata.logged_time",
+        "metadata.modified_time"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos5",
+       "field": "src_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.ip",
+        "dst_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos6",
+       "field": "src_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.port",
+        "dst_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos7",
+       "field": "dest_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.ip",
+        "src_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos8",
+       "field": "dest_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.port",
+        "src_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      }
+     ],
+     "model_proposed": {
+      "timestamp": [
+       "time",
+       "time"
+      ],
+      "flow_id": [],
+      "in_iface": [],
+      "event_type": [],
+      "src_ip": [
+       "src_endpoint.ip",
+       "src_endpoint.ip"
+      ],
+      "src_port": [
+       "src_endpoint.port",
+       "src_endpoint.port"
+      ],
+      "dest_ip": [
+       "dst_endpoint.ip",
+       "dst_endpoint.ip"
+      ],
+      "dest_port": [
+       "dst_endpoint.port",
+       "dst_endpoint.port"
+      ],
+      "proto": [
+       "app_name",
+       "app_name"
+      ],
+      "pkt_src": [],
+      "tx_id": [],
+      "action": [],
+      "gid": [],
+      "signature_id": [],
+      "rev": [],
+      "signature": [],
+      "category": [],
+      "severity": [
+       "severity",
+       "severity"
+      ],
+      "app_proto": [
+       "app_name",
+       "app_name"
+      ],
+      "direction": []
+     },
+     "ok": true,
+     "fortigate_outcomes": {
+      "fortigate-traffic": 24,
+      "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 4
+     },
+     "suricata_job": {
+      "id": "job-1",
+      "kind": "onboard",
+      "state": "done",
+      "event_class_uid": 4001,
+      "pack": {
+       "pack_id": "suricata-lab-01-rfc3164-json-20-alert",
+       "pack_version": "1.0",
+       "sha256": "sha256:cb3f174bfc788a680f90c0a1ea3ca1a71311109357894609267b5f28b56c015f",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": []
+      },
+      "certificates": [
+       {
+        "id": "cert_suricata-lab-01_pos1",
+        "field": "timestamp",
+        "status": "resolved",
+        "ambiguity": "temporal_role",
+        "candidates": [
+         "time",
+         "end_time",
+         "metadata.logged_time",
+         "metadata.modified_time"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos5",
+        "field": "src_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.ip",
+         "dst_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos6",
+        "field": "src_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.port",
+         "dst_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos7",
+        "field": "dest_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.ip",
+         "src_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos8",
+        "field": "dest_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.port",
+         "src_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       }
+      ]
+     },
+     "answered_by_this_script_as_operator": {
+      "timestamp": "time",
+      "src_ip": "src_endpoint.ip",
+      "src_port": "src_endpoint.port",
+      "dest_ip": "dst_endpoint.ip",
+      "dest_port": "dst_endpoint.port",
+      "proto": "connection_info.protocol_name",
+      "action": "action_id",
+      "signature": "message"
+     },
+     "suricata_outcomes": {
+      "rfc3164-json-20": 2,
+      "in flight": 1,
+      "quarantined: format drift of Suricata IDS (real sensor, Docker) (bound source)": 27
+     },
+     "seconds": 69.1
+    },
+    {
+     "step": "4. flow: both vendors side by side in OpenSearch Dashboards, the saved cross-vendor search, the lake view",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "opensearch_by_vendor": {
+      "Fortinet": 165,
+      "OISF": 53
+     },
+     "saved_search": "One attacker, every device \u2014 10.10.1.10 (FortiGate and Suricata)",
+     "saved_search_query_by_vendor": {
+      "Fortinet": 165,
+      "OISF": 53
+     },
+     "dashboard": "ULPF \u2014 real devices, side by side (FortiGate and Suricata)",
+     "lake_rows_from_attacker_by_vendor": {
+      "OISF": 49,
+      "Fortinet": 160
+     },
+     "lake_page_sources": [
+      "ulpf_network_activity"
+     ],
+     "seconds": 62.9
+    },
+    {
+     "step": "5. egress outage: stop OpenSearch; the lake keeps flowing; restart; the backlog delivers with no duplicates",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "during": {
+      "siem_ahead": 67,
+      "lake_ahead": 0,
+      "lake_up": true
+     },
+     "documents": 341,
+     "distinct_event_ids": 341,
+     "duplicates": 0,
+     "seconds": 50.4
+    },
+    {
+     "step": "6. drift: FortiGate -> JSON live; most fields heal automatically, the unknown ones ask; Suricata keeps parsing throughout",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "job": {
+      "id": "job-2",
+      "kind": "drift",
+      "state": "asking",
+      "family": "type=traffic",
+      "pack": {
+       "pack_id": "fortigate-lab-01-rfc3164-json-53-traffic",
+       "pack_version": "1.0",
+       "sha256": "sha256:37b3e20bff3fec8c638888dc0960f6ba47f3caccbba91817c1e79d7681841b35",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": [
+        "/home/g2con/ulpf-demo/app/jobs/job-1/pack-1.0"
+       ]
+      }
+     },
+     "alert": "healed automatically in part: 47 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 6 withheld (carried unmapped) \u2014 the operator is asked for those: app, sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta",
+     "fortigate_outcomes_after": {
+      "rfc3164-json-53": 27,
+      "in flight": 1,
+      "quarantined: parse": 2
+     },
+     "suricata_samples_during": [
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      }
+     ],
+     "suricata_quarantined_during": 0,
+     "seconds": 136.4
+    },
+    {
+     "step": "7. Prove it on a real event, then the certificate draft",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "event_id": "ev_06GF04XM6HTVES5JVA1YSZTFXC",
+     "preview": "<174>Sep 30 02:10:18 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-30T02:10:18.291642+0000\",\"flow_id\":300287772082475,\"in_iface\"",
+     "trace": [
+      [
+       "SIEM document",
+       true
+      ],
+      [
+       "raw bytes in the evidence log",
+       true
+      ],
+      [
+       "commit",
+       true
+      ],
+      [
+       "export",
+       true
+      ],
+      [
+       "Merkle proof verified",
+       true
+      ],
+      [
+       "Proof of Derivation",
+       true
+      ],
+      [
+       "the same event in the lake",
+       true
+      ]
+     ],
+     "certificate_draft_not_complete": true,
+     "seconds": 31.2
+    }
+   ],
+   "finished": "2026-09-30T02:11:39",
+   "device_history": [
+    {
+     "at": "02:05:25",
+     "action": "fgt-connect",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:05:27",
+     "action": "fgt-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:05:27",
+     "action": "ids-connect",
+     "args": [],
+     "rc": 0,
+     "output": "ids_forwarder=running",
+     "seconds": 1.3
+    },
+    {
+     "at": "02:05:27",
+     "action": "ids-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:07:13",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 16.6
+    },
+    {
+     "at": "02:08:19",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 16.7
+    },
+    {
+     "at": "02:08:50",
+     "action": "fgt-format",
+     "args": [
+      "json"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=json",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:11:38",
+     "action": "fgt-format",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    }
+   ]
+  },
+  "3": {
+   "started": "2026-09-30T02:12:48",
+   "steps": [
+    {
+     "step": "1. connect ingress: FortiGate and Suricata through ULPF's syslog ingress connectors; both appear as sources",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "before": {
+      "apps": [],
+      "fgt_syslog": null,
+      "ids_forwarder": null
+     },
+     "ok": true,
+     "fortigate": {
+      "name": "FortiGate firewall (real device, Containerlab)",
+      "events": 11,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": [
+       "fortigate-fw-01"
+      ],
+      "real_device": {
+       "product": "FortiGate-VM64-KVM",
+       "version": "FortiOS 7.4.12 build 2902",
+       "serial": "FGVMEVXFB-07ZH02",
+       "lab": "demo/devices/fortigate (Containerlab, evaluation licence)"
+      }
+     },
+     "suricata": {
+      "name": "Suricata IDS (real sensor, Docker)",
+      "events": 3,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": []
+     },
+     "device_actions": [
+      {
+       "at": "02:12:49",
+       "action": "fgt-connect",
+       "args": [
+        "default"
+       ],
+       "rc": 0,
+       "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+       "seconds": 1.4
+      },
+      {
+       "at": "02:12:51",
+       "action": "ids-connect",
+       "args": [],
+       "rc": 0,
+       "output": "ids_forwarder=running",
+       "seconds": 1.2
+      }
+     ],
+     "seconds": 6.6
+    },
+    {
+     "step": "2. connect egress: OpenSearch and the Parquet lake as destinations, per-destination status",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "before": {
+      "SIEM \u2014 OpenSearch": [
+       false,
+       8
+      ],
+      "Data lake \u2014 OCSF Parquet": [
+       false,
+       8
+      ]
+     },
+     "after": [
+      [
+       "SIEM \u2014 OpenSearch",
+       true,
+       0,
+       26,
+       0
+      ],
+      [
+       "Data lake \u2014 OCSF Parquet",
+       true,
+       0,
+       26,
+       0
+      ]
+     ],
+     "lake_writers": 2,
+     "seconds": 18.3
+    },
+    {
+     "step": "3. onboarding: FortiGate recognised by its existing pack; Suricata onboarded live from unknown (certificates, operator answers)",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "certificates_before_answers": [
+      {
+       "id": "cert_suricata-lab-01_pos1",
+       "field": "timestamp",
+       "status": "ambiguous",
+       "ambiguity": "temporal_role",
+       "candidates": [
+        "time",
+        "end_time",
+        "metadata.logged_time",
+        "metadata.modified_time"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos5",
+       "field": "src_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.ip",
+        "dst_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos6",
+       "field": "src_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.port",
+        "dst_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos7",
+       "field": "dest_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.ip",
+        "src_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos8",
+       "field": "dest_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.port",
+        "src_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos11",
+       "field": "action",
+       "status": "ambiguous",
+       "ambiguity": "action_outcome",
+       "candidates": [
+        "action",
+        "disposition",
+        "status"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      }
+     ],
+     "model_proposed": {
+      "timestamp": [
+       "time",
+       "time"
+      ],
+      "flow_id": [],
+      "in_iface": [],
+      "event_type": [],
+      "src_ip": [
+       "src_endpoint.ip",
+       "src_endpoint.ip"
+      ],
+      "src_port": [
+       "src_endpoint.port",
+       "src_endpoint.port"
+      ],
+      "dest_ip": [
+       "dst_endpoint.ip",
+       "dst_endpoint.ip"
+      ],
+      "dest_port": [
+       "dst_endpoint.port",
+       "dst_endpoint.port"
+      ],
+      "proto": [
+       "app_name",
+       "app_name"
+      ],
+      "pkt_src": [],
+      "action": [
+       "action",
+       "action"
+      ],
+      "gid": [],
+      "signature_id": [],
+      "rev": [],
+      "signature": [],
+      "category": [],
+      "severity": [
+       "severity",
+       "severity"
+      ],
+      "direction": [],
+      "tx_id": [],
+      "app_proto": []
+     },
+     "ok": true,
+     "fortigate_outcomes": {
+      "fortigate-traffic": 25,
+      "in flight": 2,
+      "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 3
+     },
+     "suricata_job": {
+      "id": "job-1",
+      "kind": "onboard",
+      "state": "done",
+      "event_class_uid": 4001,
+      "pack": {
+       "pack_id": "suricata-lab-01-rfc3164-json-20-alert",
+       "pack_version": "1.0",
+       "sha256": "sha256:1c08a2561c1ac01cc50bb2053b3e7d54b31048d69b4d387e04d8c23601cf6df7",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": []
+      },
+      "certificates": [
+       {
+        "id": "cert_suricata-lab-01_pos1",
+        "field": "timestamp",
+        "status": "resolved",
+        "ambiguity": "temporal_role",
+        "candidates": [
+         "time",
+         "end_time",
+         "metadata.logged_time",
+         "metadata.modified_time"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos5",
+        "field": "src_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.ip",
+         "dst_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos6",
+        "field": "src_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.port",
+         "dst_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos7",
+        "field": "dest_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.ip",
+         "src_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos8",
+        "field": "dest_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.port",
+         "src_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos11",
+        "field": "action",
+        "status": "ambiguous",
+        "ambiguity": "action_outcome",
+        "candidates": [
+         "action",
+         "disposition",
+         "status"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": null
+       }
+      ]
+     },
+     "answered_by_this_script_as_operator": {
+      "timestamp": "time",
+      "src_ip": "src_endpoint.ip",
+      "src_port": "src_endpoint.port",
+      "dest_ip": "dst_endpoint.ip",
+      "dest_port": "dst_endpoint.port",
+      "proto": "connection_info.protocol_name",
+      "action": "action_id",
+      "signature": "message"
+     },
+     "suricata_outcomes": {
+      "rfc3164-json-20": 4,
+      "in flight": 2,
+      "quarantined: format drift of Suricata IDS (real sensor, Docker) (bound source)": 24
+     },
+     "seconds": 104.9
+    },
+    {
+     "step": "4. flow: both vendors side by side in OpenSearch Dashboards, the saved cross-vendor search, the lake view",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "opensearch_by_vendor": {
+      "Fortinet": 202,
+      "OISF": 57
+     },
+     "saved_search": "One attacker, every device \u2014 10.10.1.10 (FortiGate and Suricata)",
+     "saved_search_query_by_vendor": {
+      "Fortinet": 202,
+      "OISF": 57
+     },
+     "dashboard": "ULPF \u2014 real devices, side by side (FortiGate and Suricata)",
+     "lake_rows_from_attacker_by_vendor": {
+      "OISF": 54,
+      "Fortinet": 198
+     },
+     "lake_page_sources": [
+      "ulpf_network_activity"
+     ],
+     "seconds": 66.4
+    },
+    {
+     "step": "5. egress outage: stop OpenSearch; the lake keeps flowing; restart; the backlog delivers with no duplicates",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "during": {
+      "siem_ahead": 71,
+      "lake_ahead": 0,
+      "lake_up": true
+     },
+     "documents": 383,
+     "distinct_event_ids": 383,
+     "duplicates": 0,
+     "seconds": 50.2
+    },
+    {
+     "step": "6. drift: FortiGate -> JSON live; most fields heal automatically, the unknown ones ask; Suricata keeps parsing throughout",
+     "result": "FAILED",
+     "nudges": [],
+     "notes": [],
+     "ok": false,
+     "job": {
+      "id": "job-2",
+      "kind": "drift",
+      "state": "answering",
+      "family": "type=traffic",
+      "pack": null
+     },
+     "alert": "asked the operator: the new format's 7 field(s) have no evidence yet (46 carried over) \u2014 earlier answers carry over by name only for a self-describing format (JSON, key=value) of the same source and family with the same value class; anything else keeps the structure key (same source, same L1\u2013L3)",
+     "fortigate_outcomes_after": {
+      "in flight": 4,
+      "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 26
+     },
+     "suricata_samples_during": [
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      }
+     ],
+     "suricata_quarantined_during": 0,
+     "seconds": 523.9
+    },
+    {
+     "step": "7. Prove it on a real event, then the certificate draft",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "event_id": "ev_06GF088Q707QTZP0HHRD6QRY3W",
+     "preview": "<174>Sep 30 02:24:55 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-30T02:24:55.603247+0000\",\"flow_id\":2022981654518249,\"in_iface",
+     "trace": [
+      [
+       "SIEM document",
+       true
+      ],
+      [
+       "raw bytes in the evidence log",
+       true
+      ],
+      [
+       "commit",
+       true
+      ],
+      [
+       "export",
+       true
+      ],
+      [
+       "Merkle proof verified",
+       true
+      ],
+      [
+       "Proof of Derivation",
+       true
+      ],
+      [
+       "the same event in the lake",
+       true
+      ]
+     ],
+     "certificate_draft_not_complete": true,
+     "seconds": 91.8
+    }
+   ],
+   "finished": "2026-09-30T02:27:11",
+   "device_history": [
+    {
+     "at": "02:12:49",
+     "action": "fgt-connect",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 1.4
+    },
+    {
+     "at": "02:12:51",
+     "action": "fgt-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:12:51",
+     "action": "ids-connect",
+     "args": [],
+     "rc": 0,
+     "output": "ids_forwarder=running",
+     "seconds": 1.2
+    },
+    {
+     "at": "02:12:53",
+     "action": "ids-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:15:13",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 15.4
+    },
+    {
+     "at": "02:16:23",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 15.4
+    },
+    {
+     "at": "02:16:54",
+     "action": "fgt-format",
+     "args": [
+      "json"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=json",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:27:10",
+     "action": "fgt-format",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    }
+   ]
+  },
+  "4": {
+   "started": "2026-09-30T02:30:18",
+   "steps": [
+    {
+     "step": "1. connect ingress: FortiGate and Suricata through ULPF's syslog ingress connectors; both appear as sources",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "before": {
+      "apps": [],
+      "fgt_syslog": null,
+      "ids_forwarder": null
+     },
+     "ok": true,
+     "fortigate": {
+      "name": "FortiGate firewall (real device, Containerlab)",
+      "events": 5,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": [
+       "fortigate-fw-01"
+      ],
+      "real_device": {
+       "product": "FortiGate-VM64-KVM",
+       "version": "FortiOS 7.4.12 build 2902",
+       "serial": "FGVMEVXFB-07ZH02",
+       "lab": "demo/devices/fortigate (Containerlab, evaluation licence)"
+      }
+     },
+     "suricata": {
+      "name": "Suricata IDS (real sensor, Docker)",
+      "events": 1,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": []
+     },
+     "device_actions": [
+      {
+       "at": "02:30:18",
+       "action": "fgt-connect",
+       "args": [
+        "default"
+       ],
+       "rc": 0,
+       "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+       "seconds": 0.3
+      },
+      {
+       "at": "02:30:20",
+       "action": "ids-connect",
+       "args": [],
+       "rc": 0,
+       "output": "ids_forwarder=running",
+       "seconds": 1.5
+      }
+     ],
+     "seconds": 3.5
+    },
+    {
+     "step": "2. connect egress: OpenSearch and the Parquet lake as destinations, per-destination status",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "before": {
+      "SIEM \u2014 OpenSearch": [
+       false,
+       4
+      ],
+      "Data lake \u2014 OCSF Parquet": [
+       false,
+       4
+      ]
+     },
+     "after": [
+      [
+       "SIEM \u2014 OpenSearch",
+       true,
+       24,
+       0,
+       0
+      ],
+      [
+       "Data lake \u2014 OCSF Parquet",
+       true,
+       0,
+       24,
+       0
+      ]
+     ],
+     "lake_writers": 2,
+     "seconds": 19.5
+    },
+    {
+     "step": "3. onboarding: FortiGate recognised by its existing pack; Suricata onboarded live from unknown (certificates, operator answers)",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "certificates_before_answers": [
+      {
+       "id": "cert_suricata-lab-01_pos1",
+       "field": "timestamp",
+       "status": "ambiguous",
+       "ambiguity": "temporal_role",
+       "candidates": [
+        "time",
+        "end_time",
+        "metadata.logged_time",
+        "metadata.modified_time"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos5",
+       "field": "src_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.ip",
+        "dst_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos6",
+       "field": "src_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.port",
+        "dst_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos7",
+       "field": "dest_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.ip",
+        "src_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos8",
+       "field": "dest_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.port",
+        "src_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      }
+     ],
+     "model_proposed": {
+      "timestamp": [
+       "time",
+       "time"
+      ],
+      "flow_id": [],
+      "in_iface": [],
+      "event_type": [],
+      "src_ip": [
+       "src_endpoint.ip",
+       "src_endpoint.ip"
+      ],
+      "src_port": [
+       "src_endpoint.port",
+       "src_endpoint.port"
+      ],
+      "dest_ip": [
+       "dst_endpoint.ip",
+       "dst_endpoint.ip"
+      ],
+      "dest_port": [
+       "dst_endpoint.port",
+       "dst_endpoint.port"
+      ],
+      "proto": [
+       "app_name",
+       "app_name"
+      ],
+      "pkt_src": [],
+      "action": [],
+      "gid": [],
+      "signature_id": [],
+      "rev": [],
+      "signature": [],
+      "category": [],
+      "severity": [
+       "severity",
+       "severity"
+      ],
+      "direction": [],
+      "tx_id": [],
+      "app_proto": [
+       "app_name",
+       "app_name"
+      ]
+     },
+     "ok": true,
+     "fortigate_outcomes": {
+      "fortigate-traffic": 24,
+      "in flight": 3
+     },
+     "suricata_job": {
+      "id": "job-1",
+      "kind": "onboard",
+      "state": "done",
+      "event_class_uid": 4001,
+      "pack": {
+       "pack_id": "suricata-lab-01-rfc3164-json-20-alert",
+       "pack_version": "1.0",
+       "sha256": "sha256:dc52779347a9c7220fbaa8c318558e54294db91a7b5957007a1f4abef53c344d",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": []
+      },
+      "certificates": [
+       {
+        "id": "cert_suricata-lab-01_pos1",
+        "field": "timestamp",
+        "status": "resolved",
+        "ambiguity": "temporal_role",
+        "candidates": [
+         "time",
+         "end_time",
+         "metadata.logged_time",
+         "metadata.modified_time"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos5",
+        "field": "src_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.ip",
+         "dst_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos6",
+        "field": "src_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.port",
+         "dst_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos7",
+        "field": "dest_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.ip",
+         "src_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos8",
+        "field": "dest_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.port",
+         "src_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       }
+      ]
+     },
+     "answered_by_this_script_as_operator": {
+      "timestamp": "time",
+      "src_ip": "src_endpoint.ip",
+      "src_port": "src_endpoint.port",
+      "dest_ip": "dst_endpoint.ip",
+      "dest_port": "dst_endpoint.port",
+      "proto": "connection_info.protocol_name",
+      "action": "action_id",
+      "signature": "message"
+     },
+     "suricata_outcomes": {
+      "rfc3164-json-20": 1,
+      "in flight": 10,
+      "quarantined: format drift of Suricata IDS (real sensor, Docker) (bound source)": 19
+     },
+     "seconds": 66.2
+    },
+    {
+     "step": "4. flow: both vendors side by side in OpenSearch Dashboards, the saved cross-vendor search, the lake view",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "opensearch_by_vendor": {
+      "Fortinet": 164,
+      "OISF": 53
+     },
+     "saved_search": "One attacker, every device \u2014 10.10.1.10 (FortiGate and Suricata)",
+     "saved_search_query_by_vendor": {
+      "Fortinet": 162,
+      "OISF": 53
+     },
+     "dashboard": "ULPF \u2014 real devices, side by side (FortiGate and Suricata)",
+     "lake_rows_from_attacker_by_vendor": {
+      "OISF": 45,
+      "Fortinet": 158
+     },
+     "lake_page_sources": [
+      "ulpf_network_activity"
+     ],
+     "seconds": 63.3
+    },
+    {
+     "step": "5. egress outage: stop OpenSearch; the lake keeps flowing; restart; the backlog delivers with no duplicates",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "during": {
+      "siem_ahead": 66,
+      "lake_ahead": 0,
+      "lake_up": true
+     },
+     "documents": 333,
+     "distinct_event_ids": 333,
+     "duplicates": 0,
+     "seconds": 45.8
+    },
+    {
+     "step": "6. drift: FortiGate -> JSON live; most fields heal automatically, the unknown ones ask; Suricata keeps parsing throughout",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "job": {
+      "id": "job-2",
+      "kind": "drift",
+      "state": "asking",
+      "family": "type=traffic",
+      "pack": {
+       "pack_id": "fortigate-lab-01-rfc3164-json-50-traffic",
+       "pack_version": "1.0",
+       "sha256": "sha256:034eac139edebb799aab83a8b9667e108b31cb7bce77f639e82ebdb854465039",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": [
+        "/home/g2con/ulpf-demo/app/jobs/job-1/pack-1.0"
+       ]
+      }
+     },
+     "alert": "healed automatically in part: 44 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 6 withheld (carried unmapped) \u2014 the operator is asked for those: app, sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta",
+     "fortigate_outcomes_after": {
+      "rfc3164-json-50": 23,
+      "in flight": 7
+     },
+     "suricata_samples_during": [
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      }
+     ],
+     "suricata_quarantined_during": 0,
+     "seconds": 316.3
+    },
+    {
+     "step": "7. Prove it on a real event, then the certificate draft",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "event_id": "ev_06GF0B8G2AQYVXCSPD3QQTEDV0",
+     "preview": "<174>Sep 30 02:38:00 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-30T02:38:00.199111+0000\",\"flow_id\":2148156223705740,\"in_iface",
+     "trace": [
+      [
+       "SIEM document",
+       true
+      ],
+      [
+       "raw bytes in the evidence log",
+       true
+      ],
+      [
+       "commit",
+       true
+      ],
+      [
+       "export",
+       true
+      ],
+      [
+       "Merkle proof verified",
+       true
+      ],
+      [
+       "Proof of Derivation",
+       true
+      ],
+      [
+       "the same event in the lake",
+       true
+      ]
+     ],
+     "certificate_draft_not_complete": true,
+     "seconds": 79.6
+    }
+   ],
+   "finished": "2026-09-30T02:40:13",
+   "device_history": [
+    {
+     "at": "02:30:18",
+     "action": "fgt-connect",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:30:20",
+     "action": "fgt-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:30:20",
+     "action": "ids-connect",
+     "args": [],
+     "rc": 0,
+     "output": "ids_forwarder=running",
+     "seconds": 1.5
+    },
+    {
+     "at": "02:30:22",
+     "action": "ids-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:32:04",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 16.7
+    },
+    {
+     "at": "02:33:09",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 16.6
+    },
+    {
+     "at": "02:33:37",
+     "action": "fgt-format",
+     "args": [
+      "json"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=json",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:40:12",
+     "action": "fgt-format",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    }
+   ]
+  },
+  "5": {
+   "started": "2026-09-30T02:41:13",
+   "steps": [
+    {
+     "step": "1. connect ingress: FortiGate and Suricata through ULPF's syslog ingress connectors; both appear as sources",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "before": {
+      "apps": [],
+      "fgt_syslog": null,
+      "ids_forwarder": null
+     },
+     "ok": true,
+     "fortigate": {
+      "name": "FortiGate firewall (real device, Containerlab)",
+      "events": 6,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": [
+       "fortigate-fw-01"
+      ],
+      "real_device": {
+       "product": "FortiGate-VM64-KVM",
+       "version": "FortiOS 7.4.12 build 2902",
+       "serial": "FGVMEVXFB-07ZH02",
+       "lab": "demo/devices/fortigate (Containerlab, evaluation licence)"
+      }
+     },
+     "suricata": {
+      "name": "Suricata IDS (real sensor, Docker)",
+      "events": 1,
+      "connector": "Syslog over TCP",
+      "channel": "tcp:0.0.0.0:6515",
+      "bound_packs": []
+     },
+     "device_actions": [
+      {
+       "at": "02:41:13",
+       "action": "fgt-connect",
+       "args": [
+        "default"
+       ],
+       "rc": 0,
+       "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+       "seconds": 0.3
+      },
+      {
+       "at": "02:41:15",
+       "action": "ids-connect",
+       "args": [],
+       "rc": 0,
+       "output": "ids_forwarder=running",
+       "seconds": 1.4
+      }
+     ],
+     "seconds": 3.5
+    },
+    {
+     "step": "2. connect egress: OpenSearch and the Parquet lake as destinations, per-destination status",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "before": {
+      "SIEM \u2014 OpenSearch": [
+       false,
+       4
+      ],
+      "Data lake \u2014 OCSF Parquet": [
+       false,
+       4
+      ]
+     },
+     "after": [
+      [
+       "SIEM \u2014 OpenSearch",
+       true,
+       24,
+       0,
+       0
+      ],
+      [
+       "Data lake \u2014 OCSF Parquet",
+       true,
+       0,
+       24,
+       0
+      ]
+     ],
+     "lake_writers": 2,
+     "seconds": 19.6
+    },
+    {
+     "step": "3. onboarding: FortiGate recognised by its existing pack; Suricata onboarded live from unknown (certificates, operator answers)",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "certificates_before_answers": [
+      {
+       "id": "cert_suricata-lab-01_pos1",
+       "field": "timestamp",
+       "status": "ambiguous",
+       "ambiguity": "temporal_role",
+       "candidates": [
+        "time",
+        "end_time",
+        "metadata.logged_time",
+        "metadata.modified_time"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos5",
+       "field": "src_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.ip",
+        "dst_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos6",
+       "field": "src_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "src_endpoint.port",
+        "dst_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos7",
+       "field": "dest_ip",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.ip",
+        "src_endpoint.ip"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos8",
+       "field": "dest_port",
+       "status": "ambiguous",
+       "ambiguity": "endpoint_orientation",
+       "candidates": [
+        "dst_endpoint.port",
+        "src_endpoint.port"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      },
+      {
+       "id": "cert_suricata-lab-01_pos11",
+       "field": "action",
+       "status": "ambiguous",
+       "ambiguity": "action_outcome",
+       "candidates": [
+        "action",
+        "disposition",
+        "status"
+       ],
+       "request": "operator_assertion",
+       "resolved_by": null
+      }
+     ],
+     "model_proposed": {
+      "timestamp": [
+       "time",
+       "time"
+      ],
+      "flow_id": [],
+      "in_iface": [],
+      "event_type": [],
+      "src_ip": [
+       "src_endpoint.ip",
+       "src_endpoint.ip"
+      ],
+      "src_port": [
+       "src_endpoint.port",
+       "src_endpoint.port"
+      ],
+      "dest_ip": [
+       "dst_endpoint.ip",
+       "dst_endpoint.ip"
+      ],
+      "dest_port": [
+       "dst_endpoint.port",
+       "dst_endpoint.port"
+      ],
+      "proto": [
+       "app_name",
+       "app_name"
+      ],
+      "pkt_src": [],
+      "action": [
+       "action",
+       "action"
+      ],
+      "gid": [],
+      "signature_id": [],
+      "rev": [],
+      "signature": [],
+      "category": [],
+      "severity": [
+       "severity",
+       "severity"
+      ],
+      "direction": [],
+      "tx_id": [],
+      "app_proto": [
+       "app_name",
+       "app_name"
+      ]
+     },
+     "ok": true,
+     "fortigate_outcomes": {
+      "fortigate-traffic": 24,
+      "quarantined: format drift of FortiGate firewall (real device, Containerlab) (bound source)": 4
+     },
+     "suricata_job": {
+      "id": "job-1",
+      "kind": "onboard",
+      "state": "done",
+      "event_class_uid": 4001,
+      "pack": {
+       "pack_id": "suricata-lab-01-rfc3164-json-20-alert",
+       "pack_version": "1.0",
+       "sha256": "sha256:c58fa622e377f03beae45dbaa31170646283fd0d3773d2fe2d2d427161e42aea",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": []
+      },
+      "certificates": [
+       {
+        "id": "cert_suricata-lab-01_pos1",
+        "field": "timestamp",
+        "status": "resolved",
+        "ambiguity": "temporal_role",
+        "candidates": [
+         "time",
+         "end_time",
+         "metadata.logged_time",
+         "metadata.modified_time"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos5",
+        "field": "src_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.ip",
+         "dst_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos6",
+        "field": "src_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "src_endpoint.port",
+         "dst_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos7",
+        "field": "dest_ip",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.ip",
+         "src_endpoint.ip"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos8",
+        "field": "dest_port",
+        "status": "resolved",
+        "ambiguity": "endpoint_orientation",
+        "candidates": [
+         "dst_endpoint.port",
+         "src_endpoint.port"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": "operator_assertion"
+       },
+       {
+        "id": "cert_suricata-lab-01_pos11",
+        "field": "action",
+        "status": "ambiguous",
+        "ambiguity": "action_outcome",
+        "candidates": [
+         "action",
+         "disposition",
+         "status"
+        ],
+        "request": "operator_assertion",
+        "resolved_by": null
+       }
+      ]
+     },
+     "answered_by_this_script_as_operator": {
+      "timestamp": "time",
+      "src_ip": "src_endpoint.ip",
+      "src_port": "src_endpoint.port",
+      "dest_ip": "dst_endpoint.ip",
+      "dest_port": "dst_endpoint.port",
+      "proto": "connection_info.protocol_name",
+      "action": "action_id",
+      "signature": "message"
+     },
+     "suricata_outcomes": {
+      "rfc3164-json-20": 3,
+      "in flight": 5,
+      "quarantined: format drift of Suricata IDS (real sensor, Docker) (bound source)": 22
+     },
+     "seconds": 85.6
+    },
+    {
+     "step": "4. flow: both vendors side by side in OpenSearch Dashboards, the saved cross-vendor search, the lake view",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "opensearch_by_vendor": {
+      "Fortinet": 184,
+      "OISF": 53
+     },
+     "saved_search": "One attacker, every device \u2014 10.10.1.10 (FortiGate and Suricata)",
+     "saved_search_query_by_vendor": {
+      "Fortinet": 182,
+      "OISF": 53
+     },
+     "dashboard": "ULPF \u2014 real devices, side by side (FortiGate and Suricata)",
+     "lake_rows_from_attacker_by_vendor": {
+      "OISF": 52,
+      "Fortinet": 177
+     },
+     "lake_page_sources": [
+      "ulpf_network_activity"
+     ],
+     "seconds": 65.8
+    },
+    {
+     "step": "5. egress outage: stop OpenSearch; the lake keeps flowing; restart; the backlog delivers with no duplicates",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "during": {
+      "siem_ahead": 68,
+      "lake_ahead": 0,
+      "lake_up": true
+     },
+     "documents": 357,
+     "distinct_event_ids": 357,
+     "duplicates": 0,
+     "seconds": 48.3
+    },
+    {
+     "step": "6. drift: FortiGate -> JSON live; most fields heal automatically, the unknown ones ask; Suricata keeps parsing throughout",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "job": {
+      "id": "job-2",
+      "kind": "drift",
+      "state": "asking",
+      "family": "type=traffic",
+      "pack": {
+       "pack_id": "fortigate-lab-01-rfc3164-json-53-traffic",
+       "pack_version": "1.0",
+       "sha256": "sha256:0bc8dfcb872c8ae3b0c4bc7685f4cb6e6c7537884a39704182bf5c38e7efa8fc",
+       "signed_by": "ulpf-pack-authority-dev",
+       "previous_packs": [
+        "/home/g2con/ulpf-demo/app/jobs/job-1/pack-1.0"
+       ]
+      }
+     },
+     "alert": "healed automatically in part: 46 field(s) carried over on earlier evidence (by name, from fortigate-fw-01/fortigate-traffic), 7 withheld (carried unmapped) \u2014 the operator is asked for those: dstcountry, app, sentdelta, rcvddelta, durationdelta, sentpktdelta, rcvdpktdelta",
+     "fortigate_outcomes_after": {
+      "in flight": 2,
+      "rfc3164-json-53": 22,
+      "quarantined: parse": 6
+     },
+     "suricata_samples_during": [
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      },
+      {
+       "rfc3164-json-20": 12
+      }
+     ],
+     "suricata_quarantined_during": 0,
+     "seconds": 158.3
+    },
+    {
+     "step": "7. Prove it on a real event, then the certificate draft",
+     "result": "WORKED",
+     "nudges": [],
+     "notes": [],
+     "ok": true,
+     "event_id": "ev_06GF0D95SN12VTJA39VW8ZTCD0",
+     "preview": "<174>Sep 30 02:46:50 suricata-ids suricata[1]: {\"timestamp\":\"2026-09-30T02:46:50.055918+0000\",\"flow_id\":393928055287266,\"in_iface\"",
+     "trace": [
+      [
+       "SIEM document",
+       true
+      ],
+      [
+       "raw bytes in the evidence log",
+       true
+      ],
+      [
+       "commit",
+       true
+      ],
+      [
+       "export",
+       true
+      ],
+      [
+       "Merkle proof verified",
+       true
+      ],
+      [
+       "Proof of Derivation",
+       true
+      ],
+      [
+       "the same event in the lake",
+       true
+      ]
+     ],
+     "certificate_draft_not_complete": true,
+     "seconds": 51.6
+    }
+   ],
+   "finished": "2026-09-30T02:48:27",
+   "device_history": [
+    {
+     "at": "02:41:13",
+     "action": "fgt-connect",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:41:15",
+     "action": "fgt-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:41:15",
+     "action": "ids-connect",
+     "args": [],
+     "rc": 0,
+     "output": "ids_forwarder=running",
+     "seconds": 1.4
+    },
+    {
+     "at": "02:41:17",
+     "action": "ids-connect (checked)",
+     "rc": 0,
+     "output": "sending to ULPF \u2014 attempts: 1",
+     "seconds": null
+    },
+    {
+     "at": "02:43:17",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 15.5
+    },
+    {
+     "at": "02:44:25",
+     "action": "attack",
+     "args": [],
+     "rc": 0,
+     "output": "attack=sent",
+     "seconds": 15.4
+    },
+    {
+     "at": "02:44:56",
+     "action": "fgt-format",
+     "args": [
+      "json"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=json",
+     "seconds": 0.3
+    },
+    {
+     "at": "02:48:26",
+     "action": "fgt-format",
+     "args": [
+      "default"
+     ],
+     "rc": 0,
+     "output": "syslog_server=172.20.20.1 \nsyslog_mode=reliable \nsyslog_port=6515\nsyslog_format=default",
+     "seconds": 0.4
+    }
+   ]
+  }
+ },
+ "reported": "runs 4 and 5 (consecutive, after every fix); runs 1 and 3 each failed step 6 and found a bug (fixed); run 2 passed between them"
+}

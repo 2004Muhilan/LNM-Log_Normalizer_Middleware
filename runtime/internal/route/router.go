@@ -12,6 +12,13 @@
 // APPLICATION envelope (CEF, LEEF) — that envelope names the format; only a relay's syslog header imposes nothing.
 // L2 detection collapses `positional`, `template` and `mixed` into one surface class (whitespace tokens); the
 // anchors and the L4 sketch separate them.
+//
+// CHANGE TO THE SETTLED ROUTING RULE (laptop branch, 2026-09-30, the user's decision): routing was structure-only over
+// every loaded pack. A line from a peer the operator's source binding ties to a source is now routed ONLY among that
+// source's packs (RouteChainAmong); an unbound peer keeps structure-only routing over all packs, so onboarding a new
+// source is unchanged. Found on the real devices: a drafted FortiGate JSON family and a drafted Suricata JSON family
+// share one L1–L4 key, and both quarantined as routing_ambiguous. The binding TRUSTS THE SENDER'S ADDRESS: sound for
+// TCP (the handshake proves the address can receive), spoofable for UDP.
 package route
 
 import (
@@ -372,6 +379,21 @@ func (r *Router) Route(payload []byte, env *frame.Envelope) Decision {
 // relays rewrite 3164 as 5424, P6 decision); a `cef` family needs the CEF application envelope.
 // Anchors and envelope-sourced fields read the innermost envelope, the device's own header.
 func (r *Router) RouteChain(payload []byte, ch frame.Chain) Decision {
+	return r.RouteChainAmong(payload, ch, nil, "")
+}
+
+// RouteChainAmong is RouteChain restricted to the families of the packs in `allowed` (nil: every pack). The pipeline
+// passes the packs bound to the sending peer; `note` (who the peer is bound to) is added to a quarantine reason, so a
+// bound source's unknown line reads as that source's, never as another pack's ambiguity.
+func (r *Router) RouteChainAmong(payload []byte, ch frame.Chain, allowed map[string]bool, note string) Decision {
+	d := r.routeChain(payload, ch, allowed)
+	if d.Family == nil && note != "" {
+		d.Reason += " — " + note
+	}
+	return d
+}
+
+func (r *Router) routeChain(payload []byte, ch frame.Chain, allowed map[string]bool) Decision {
 	env := ch.Innermost()
 	kinds := ch.Kinds()
 	l1 := "raw"
@@ -395,6 +417,9 @@ func (r *Router) RouteChain(payload []byte, ch frame.Chain) Decision {
 	for _, f := range r.fams {
 		if f.l2 != s.l2 {
 			continue
+		}
+		if allowed != nil && !allowed[f.pack.PackID] {
+			continue // the peer is bound to a source: only that source's packs may own its lines
 		}
 		switch f.family.Routing.L1 {
 		case "raw":

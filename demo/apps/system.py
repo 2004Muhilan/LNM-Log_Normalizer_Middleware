@@ -137,8 +137,18 @@ class System:
         self.a = a
         self.procs = [Proc(i, self.dir, a) for i in range(1, a.processes + 1)]
         self.ev, self.run = self.procs[0].ev, self.procs[0].run   # process 1 (the single-process names)
-        self.policy = {"auto_onboard": True, "prepared_answers": True, "operator": "op-014", "heal_policy": POLICY_VERSION,
-                       "vendor_relay": bool(a.vendor_capture and Path(a.vendor_capture).exists())}
+        self.started = time.time()
+        self.mode = a.mode   # generator (the fallback, and the gate) | devices (the final demo: the real FortiGate and Suricata)
+        # devices mode: auto-onboard starts OFF — an unknown source's onboarding waits for the presenter's "Onboard" click on stage
+        self.policy = {"auto_onboard": a.mode != "devices", "prepared_answers": True, "operator": "op-014", "heal_policy": POLICY_VERSION,
+                       "vendor_relay": bool(a.vendor_capture and Path(a.vendor_capture).exists()) and a.mode != "devices"}
+        self.devices = None
+        if a.mode == "devices":
+            sys.path.insert(0, str(ROOT / "demo" / "apps"))
+            from devices import Devices
+            self.devices = Devices(Path(a.state) / "devices.log")
+            threading.Thread(target=self.devices_watch, daemon=True).start()
+        self.lake_writers = {}   # devices mode: process i -> the lake writer this console started ("Connect the lake")
         self.relay_sent = 0
         self.inventory = json.loads((ROOT / "demo" / "apps" / "inventory.json").read_text())
         self.events, self.order = {}, []          # event_id -> record; arrival order
@@ -175,6 +185,7 @@ class System:
     def start_runtime(self):
         for p in self.procs:
             p.packs.write_text("")
+        self.write_bindings()
         for p in self.procs:
             self.start_proc(p)
 
@@ -183,7 +194,7 @@ class System:
         a = self.a
         vendor = [x for v in ("cisco-asa", "panos", "fortigate") if a.vendor_packs and (Path(a.vendor_packs) / v / "pack.json").exists() for x in ("--pack", str(Path(a.vendor_packs) / v))]
         self.vendors_loaded = len(vendor) // 2
-        cmd = [a.rt, "run", "--pack", a.golden, *vendor, "--packs-file", str(p.packs), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
+        cmd = [a.rt, "run", "--pack", a.golden, *vendor, "--packs-file", str(p.packs), "--bindings", str(self.dir / "bindings.json"), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
                "--idle-timeout", "3600s", "--evidence", str(p.ev), "--out", str(p.run / "out.jsonl"), "--quarantine", str(p.run / "q.jsonl"),
                "--spool", str(p.spool), "--spool-cap", a.spool_cap, "--forward-stall-after", "2s", "--forward-drain", "5s"]
         if len(self.procs) > 1:
@@ -199,6 +210,23 @@ class System:
     def err_text(self):
         return "".join(p.err_text() for p in self.procs)
 
+    def write_bindings(self):
+        """The operator's source binding, for the RUNTIME (2026-09-30, the user's decision): each inventory host -> the
+        LOADED packs that belong to its source (the packs this console onboarded for it, and the vendor packs of the vendor
+        the inventory declares). A line from a bound host routes only among these; a host with none stays unbound
+        (structure-only routing — a new source is onboarded exactly as before). Trusts the sender's address."""
+        loaded = set(self.pack_vendor) | {v["pack_id"] for v in self.active.values()}
+        out = {}
+        for host, inv in self.inventory.items():
+            if isinstance(inv, dict) and not host.startswith("_"):
+                ids = sorted(pid for pid in loaded if self.belongs(pid, inv))
+                if ids:
+                    out[host] = ids
+        tmp = self.dir / "bindings.json.tmp"
+        tmp.write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, self.dir / "bindings.json")
+        self.runtime_bindings = out
+
     def reload(self):
         """Every process reloads the same packs (SIGHUP); each must confirm, or the refusal is reported."""
         before = {p.i: p.err_text().count("\nreloaded:") + p.err_text().startswith("reloaded:") for p in self.procs}
@@ -206,6 +234,7 @@ class System:
         dirs = [v["pack"] for v in self.active.values()]
         for p in self.procs:
             tmp = p.packs.with_suffix(".tmp"); tmp.write_text("".join(d + "\n" for d in dirs)); os.replace(tmp, p.packs)
+        self.write_bindings()   # the runtime re-reads it on the same SIGHUP, after the packs
         for p in self.procs:
             p.runtime.send_signal(signal.SIGHUP)
         waiting = {p.i for p in self.procs}
@@ -458,6 +487,82 @@ class System:
             evs = [self.events[i] for i in self.order if not self.events[i].get("record")]
         return {"frames": len(evs), "usable": sum(1 for e in evs if e.get("ok") is True), "quarantined": sum(1 for e in evs if e.get("ok") is False)}
 
+    # ------------------------------------------------------------------ the real devices (final demo)
+    def devices_watch(self):
+        """Every 20 s: the lab's status for the page, and the WATCHDOG — a FortiGate whose syslog is ON but which has sent
+        nothing for 60 s is reconnected automatically (re-committing its syslog setting restarts FortiOS's backed-off
+        reliable-syslog connection); at most once every 2 minutes, and said so on the page."""
+        last_fix = 0.0
+        while True:
+            try:
+                st = self.devices.refresh()
+                if (st.get("fgt_syslog_on") and not self.devices.busy and time.time() - last_fix > 120 and time.time() - self.started > 60
+                        and not self.sending(self.devices.FGT, 60)):
+                    last_fix = time.time()
+                    self.devices.act("fgt-connect", self.devices.format)
+                    with self.devices.lock:
+                        self.devices.history.append({"at": time.strftime("%H:%M:%S"), "action": "watchdog: FortiGate silent for 60 s with syslog ON — reconnected automatically", "rc": 0, "output": "", "seconds": None})
+            except Exception as ex:   # noqa: BLE001 — the lab being unreachable is shown on the page, not fatal
+                print("devices:", ex, file=sys.stderr, flush=True)
+            time.sleep(20)
+
+    def sending(self, host, within_s=30):
+        """The device's lines are arriving (a real device sends at its own pace: the FortiGate ~1/s, Suricata in bursts)."""
+        with LOCK:
+            for i in reversed(self.order[-3000:]):
+                e = self.events[i]
+                if not e.get("record") and self.host_of(e) == host:
+                    return time.time() * 1000 - (e["rec"].get("ingest_time") or 0) < within_s * 1000
+        return False
+
+    def device_action(self, action, arg=None):
+        """A device-side action from the System page — run in the Containerlab distro (demo/devices/lab.sh), never a terminal."""
+        if not self.devices:
+            raise ValueError("not in devices mode (bash demo/start-demo.sh devices)")
+        allowed = {"fgt-connect", "fgt-disconnect", "fgt-format", "fgt-logins", "ids-connect", "ids-disconnect", "attack"}
+        if action not in allowed or (action == "fgt-format" and arg not in ("default", "json", "csv", "cef")):
+            raise ValueError("unknown device action")
+        if self.devices.busy:
+            raise ValueError(f"a device action is running: {self.devices.busy}")
+
+        def run():
+            try:
+                if action in ("fgt-connect", "ids-connect"):
+                    host = self.devices.FGT if action == "fgt-connect" else self.devices.IDS
+                    r = self.devices.ensure_connected(host, lambda h: self.sending(h, 20))
+                    with self.devices.lock:
+                        self.devices.history.append({"at": time.strftime("%H:%M:%S"), "action": action + " (checked)", "rc": 0 if r["connected"] else 1,
+                                                     "output": ("sending to ULPF" if r["connected"] else "NOT sending after two attempts") + f" — attempts: {r['attempts']}", "seconds": None})
+                else:
+                    self.devices.act(action, *([str(arg)] if arg is not None else []))
+            except Exception as ex:   # noqa: BLE001 — shown on the page with the action
+                with self.devices.lock:
+                    self.devices.history.append({"at": time.strftime("%H:%M:%S"), "action": action, "rc": 1, "output": str(ex)[-300:], "seconds": None})
+        threading.Thread(target=run, daemon=True).start()
+
+    def lake_control(self, action):
+        """Devices mode: the lake's writers are started from the page ("Connect the lake") and stopped the same way — one per
+        runtime process, exactly as start-demo.sh starts them in the generator demo."""
+        if action == "connect":
+            for pr in self.procs:
+                if pr.i in self.lake_writers and self.lake_writers[pr.i].poll() is None:
+                    continue
+                self.lake_writers[pr.i] = subprocess.Popen(
+                    [self.a.python, str(ROOT / "adapters" / "lake" / "lakewriter.py"), "--lake", self.a.lake, "--listen", f"127.0.0.1:{pr.lake_port}", "--writer-id", str(pr.i),
+                     "--rotate-bytes", "8MiB", "--rotate-seconds", os.environ.get("ULPF_LAKE_ROTATE_SECONDS", "10")],
+                    stdout=open(self.dir / f"lakewriter-{pr.i}.log", "ab"), stderr=subprocess.STDOUT, cwd=str(ROOT), start_new_session=True)
+        elif action == "disconnect":
+            for w in self.lake_writers.values():
+                if w.poll() is None:
+                    w.terminate()
+            for w in self.lake_writers.values():
+                try:
+                    w.wait(20)   # the writer flushes what it staged before it exits
+                except subprocess.TimeoutExpired:
+                    w.kill()
+        else:
+            raise ValueError("connect | disconnect")
+
     def siem_control(self, action):
         if action not in ("outage", "recover") or self.siem_action:
             raise ValueError("outage | recover, one at a time")
@@ -674,7 +779,17 @@ class System:
                            # a carried answer may be "carried unmapped under its name" — the evidence named it so; that is an answer too
                            "evidenced": (bool(cats) and all(x not in ("model_proposal", "fixture_proposal") for x in cats)) or (sl["index"] in prop and bool(p.get("unmapped_name"))),
                            "ambiguity": c and c["evidence"]["discriminator"].get("ambiguity_class"), "candidates": [r["attribute"] for r in c["ranked_candidates"]] if c else p["candidates"]})
+        # every ambiguity certificate of the session, resolved or not: what was ambiguous, between which candidates, what
+        # evidence the library asked for, and who resolved it — the page shows them beside the fields
+        cert_list = []
+        for cid, c in s["certificates"].items():
+            sl = next((x for x in s["plan"]["slots"] if x["index"] == c["context"]["slot_index"]), None)
+            cert_list.append({"id": cid, "field": sl["parts"][0]["field"] if sl else c["context"]["slot_index"], "status": c["status"],
+                              "ambiguity": c["evidence"]["discriminator"].get("ambiguity_class"), "candidates": [r["attribute"] for r in c.get("ranked_candidates", [])][:4],
+                              "request": ((c.get("request") or {}).get("selected") or {}).get("discriminator_id"),
+                              "resolved_by": next((r.get("discriminator_id") for r in s.get("resolutions", []) if cid in (r.get("certificate_ids") or [])), None)})
         with LOCK:
+            job["certificates"] = cert_list
             job["fields"], job["blockers"] = fields, s["verdict"]["blockers"]
             job["event_class_uid"], job["provider"] = s["proposal"]["event_class_uid"], s["proposal"]["provider"]
         return s
@@ -748,7 +863,13 @@ class System:
         else:
             if job["kind"] == "onboard":
                 self.step(job, f"NEW FORMAT from {inv['name']}: {fmt} — every line quarantined, bytes kept, nothing parsed, nothing guessed", "sampling")
-            if self.policy["auto_onboard"]:
+            if job["kind"] == "drift":
+                # a changed format of a KNOWN, BOUND source is a heal, governed by the heal policy — never held behind the
+                # auto-onboard switch, which is about unknown sources and new event families (2026-09-30, the final demo:
+                # with auto-onboard off for Suricata's on-stage "Onboard", the FortiGate's JSON drift waited for a click)
+                job["decision"] = {"decision": "heal", "tier": 1, "by": f"heal policy {POLICY_VERSION}: drift of a bound source", "at": time.strftime("%H:%M:%S"), "quarantined_when_decided": len(mine)}
+                self.step(job, f"healing started BY POLICY ({POLICY_VERSION}: the format of a bound source changed; what is not evidenced will be asked)")
+            elif self.policy["auto_onboard"]:
                 job["decision"] = {"decision": "onboard", "tier": 1, "by": "policy auto_onboard (set by " + self.policy["operator"] + ")", "at": time.strftime("%H:%M:%S"), "quarantined_when_decided": len(mine)}
                 self.step(job, "onboarding started BY POLICY (auto-onboard is on; set by " + self.policy["operator"] + ")")
             else:
@@ -940,7 +1061,8 @@ class System:
                 a["real_device"] = inv.get("real_device")   # declared by the operator (inventory.json): a physical/virtual appliance, not a generator
                 a["connector"] = {"tcp": "Syslog over TCP", "http": "HTTP POST"}.get((a.get("channel") or "").split(":")[0], a.get("channel"))
                 a["idle_s"] = round((now_ms - a["last_ms"]) / 1000, 1)
-                a["connected"] = a["idle_s"] < 3
+                a["connected"] = a["idle_s"] < (30 if a["real_device"] else 3)   # a real device sends at its own pace (Suricata: in bursts)
+                a["bound_packs"] = (getattr(self, "runtime_bindings", {}) or {}).get(h, [])
                 a["alert"] = any(j.get("host") == h and j["state"] not in ("done", "failed") for j in self.jobs)
                 a["processes"], a["connections"] = sorted(a["processes"]), len(a.pop("peers"))
             recent = [e for e in (self.events[i] for i in self.order[-200:]) if not e.get("record") and e.get("ok") is not None and self.learnable(e)][-40:]   # the applications being onboarded
@@ -969,7 +1091,9 @@ class System:
                 procs.append({"process": pr.i, "pid": pr.runtime.pid if pr.runtime else None, "up": pr.runtime is not None and pr.runtime.poll() is None, "store_id": pr.store_id(),
                               "evidence": str(pr.ev), "lake_port": pr.lake_port, "events": sum(1 for i in self.order if (self.events[i]["rec"].get("_proc") or 1) == pr.i and not self.events[i].get("record")),
                               "applications": sorted(h for h, a in apps.items() if pr.i in a["processes"])})
-            return {"policy": self.policy, "processes": procs,
+            return {"policy": self.policy, "processes": procs, "mode": self.mode,
+                    "devices": self.devices.view() if self.devices else None,
+                    "lake_writers": sum(1 for w in self.lake_writers.values() if w.poll() is None) if self.mode == "devices" else None,
                     "runtime": {"up": all(x["up"] for x in procs), "processes": len(procs), "ingress": [{"label": "Syslog over TCP" + (" — also real devices, on the Containerlab bridge 172.20.20.1" if self.a.in_tcp.startswith("0.0.0.0:") else ""), "addr": self.a.in_tcp},
                                 {"label": "HTTP POST", "addr": self.a.in_http}],
                                                        "packs": [{"pack_id": v["pack_id"], "pack_version": v["pack_version"], "family": v["family"]} for v in self.active.values()], "reloads": self.reloads,
@@ -1090,6 +1214,10 @@ def handler(sysm):
                     sysm.rollback(d.get("alert"))
                 elif self.path == "/api/siem":
                     sysm.siem_control(d.get("action"))
+                elif self.path == "/api/device":
+                    sysm.device_action(d.get("action"), d.get("arg"))
+                elif self.path == "/api/lake-control":
+                    sysm.lake_control(d.get("action"))
                 elif self.path == "/api/push-unlogged":
                     res = sysm.push_unlogged(d.get("process", 1))
                     return self._send(200, json.dumps(res).encode())
@@ -1117,6 +1245,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="ULPF demo: the system console")
     ap.add_argument("--state", required=True); ap.add_argument("--listen", default="127.0.0.1:8765")
     ap.add_argument("--rt", default=str(ROOT / "runtime" / "bin" / "ulpf-runtime")); ap.add_argument("--golden", default=str(ROOT / "contracts" / "golden" / "squid-native"))
+    ap.add_argument("--mode", choices=["generator", "devices"], default="generator", help="devices: the final demo with the real FortiGate and Suricata (start-demo.sh devices)")
     ap.add_argument("--in-tcp", default="127.0.0.1:6515"); ap.add_argument("--in-http", default="127.0.0.1:8516"); ap.add_argument("--destinations", default=str(ROOT / "demo" / "apps" / "destinations.json"))
     ap.add_argument("--vendor-packs", help="source packs of the four-vendor relay (demo/reset.sh builds them: $STATE/p6/source-packs)")
     ap.add_argument("--vendor-capture", help="the recorded four-vendor mixed capture ($STATE/p6/mixed.log)"); ap.add_argument("--relay-rate", type=float, default=8)
