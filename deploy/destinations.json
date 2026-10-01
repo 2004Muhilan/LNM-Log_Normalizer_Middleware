@@ -1,0 +1,7 @@
+[
+  {"name": "SIEM — OpenSearch", "kind": "siem", "url": "bulk+$ULPF_OS_URL",
+   "health": "$ULPF_OS_URL/_cluster/health", "metrics": "$ULPF_OS_URL/ulpf-metrics/_doc", "findings": "$ULPF_OS_URL",
+   "ui": "$ULPF_OSD_URL/app/dashboards#/view/ulpf-overview"},
+  {"name": "Data lake — OCSF Parquet", "kind": "lake", "url": "http://127.0.0.1:{lake_port}/ingest?batch=1000",
+   "health": "http://127.0.0.1:{lake_port}/status", "ui": "/lake"}
+]

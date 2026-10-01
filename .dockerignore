@@ -10,3 +10,7 @@ keys/dev/
 **/__pycache__/
 **/.pytest_cache/
 spike/results/
+# the release PRIVATE key never enters a build context (deploy/Dockerfile copies only the public key and the signed packs)
+keys/release/
+deploy/dist/
+deploy/.env

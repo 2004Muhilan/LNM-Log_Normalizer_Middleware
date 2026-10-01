@@ -33,6 +33,18 @@ ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "runtime" / "bin"
 
 
+def immutable(path):
+    """The kernel's FS_IMMUTABLE_FL on a local segment file: True, False, or None (no local file, or no inode flags)."""
+    try:
+        import fcntl
+        import struct
+        with open(path, "rb") as f:
+            flags = struct.unpack("l", fcntl.ioctl(f.fileno(), 0x80086601, struct.pack("l", 0)))[0]   # FS_IOC_GETFLAGS
+        return bool(flags & 0x10)
+    except (OSError, ImportError):
+        return None
+
+
 def http_json(url, body=None):
     r = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, method="POST" if body is not None else "GET",
                                headers={"Content-Type": "application/json"})
@@ -158,7 +170,10 @@ def trace(event_id, ev_dir, lake_dir, os_url, work, archive=None, commit_dir=Non
             if ck:
                 break
             time.sleep(0.5)
-        step("commit", bool(ck), f"{idx['segment_id']} is covered by the signed checkpoint {ck} (the always-running committer; development seam: SEALED, not kernel-IMMUTABLE — said so)" if ck
+        imm = immutable(os.path.join(ev_dir, idx["segment_id"] + ".raw"))
+        seam = ("the segment carries the kernel's IMMUTABLE flag, set by the store (the container deployment)" if imm else
+                "development seam: SEALED, not kernel-IMMUTABLE — said so" if imm is False else "its local copy is gone (shipped to the archive), so its flag cannot be read")
+        step("commit", bool(ck), f"{idx['segment_id']} is covered by the signed checkpoint {ck} (the always-running committer; {seam})" if ck
              else f"no checkpoint covers {idx['segment_id']} after 30 s: is the committer running? ({commit_dir})")
         if not ck:
             return {"event_id": event_id, "ok": False, "steps": steps}

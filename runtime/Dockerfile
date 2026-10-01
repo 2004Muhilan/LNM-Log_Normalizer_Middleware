@@ -14,7 +14,7 @@ COPY drafts ./drafts
 COPY runtime ./runtime
 RUN cd runtime && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-runtime ./cmd/ulpf-runtime \
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-committer ./cmd/ulpf-committer \
- && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-verify ./cmd/ulpf-verify
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-verify ./cmd/ulpf-verify  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-tlog ./cmd/ulpf-tlog  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ulpf-witness ./cmd/ulpf-witness
 
 FROM build AS test
 # The suite loads the SIGNED golden pack (P5), so the trust store must be in the image: keys/trust holds
@@ -50,3 +50,15 @@ FROM gcr.io/distroless/static-debian12:nonroot AS verify
 COPY --from=build /out/ulpf-verify /ulpf-verify
 USER nonroot
 ENTRYPOINT ["/ulpf-verify"]
+
+# The transparency log's witness (2026-10-01, the container deployment): cosigns the log's checkpoints after checking each
+# is a consistent extension of the last. Its key and state are mounted; nothing else is inside.
+FROM gcr.io/distroless/static-debian12:nonroot AS witness
+COPY --from=build /out/ulpf-witness /ulpf-witness
+USER nonroot
+ENTRYPOINT ["/ulpf-witness"]
+
+# Every Go binary, for the images that call them as tools (deploy/Dockerfile: the console verifies packs, appends to the
+# log, exports and verifies bundles; the init container generates keys)
+FROM scratch AS binaries
+COPY --from=build /out/ /

@@ -39,3 +39,10 @@ demo/replay/capture/
 demo/replay/state-real/
 ulpf-demo/
 ulpf-demo-capture/
+
+# the container deployment (2026-10-01): the release PRIVATE key never enters git; the shipped packs are signed with it and
+# travel inside the images (scripts/release-packs.sh, deploy/ulpf.sh)
+keys/release/
+packs/release/
+deploy/.env
+deploy/dist/

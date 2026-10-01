@@ -10,9 +10,12 @@ restarts FortiOS's backed-off reliable-syslog connection.
 """
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +35,12 @@ class Devices:
         self.format = "default"
 
     def run(self, *args, timeout=180) -> tuple[int, str]:
+        agent = os.environ.get("ULPF_LAB_AGENT")
+        if agent:   # the container deployment: a container cannot run wsl.exe — the lab agent runs lab.sh (demo/devices/agent)
+            req = urllib.request.Request(agent.rstrip("/") + "/run", data=json.dumps({"args": list(args), "timeout": timeout}).encode(), method="POST")
+            with urllib.request.urlopen(req, timeout=timeout + 10) as r:
+                d = json.loads(r.read())
+            return d.get("rc", 1), (d.get("out") or d.get("error") or "").replace("\r", "").strip()
         r = subprocess.run(["wsl.exe", "-d", "Containerlab", "--", "bash", LAB, *args], capture_output=True, text=True, timeout=timeout)
         out = (r.stdout + r.stderr).replace("\r", "").strip()
         return r.returncode, out
@@ -39,7 +48,7 @@ class Devices:
     def refresh(self) -> dict:
         try:
             rc, out = self.run("status", timeout=60)
-        except (OSError, subprocess.TimeoutExpired) as ex:
+        except (OSError, subprocess.TimeoutExpired, ValueError) as ex:
             rc, out = 1, f"{type(ex).__name__}: {ex}"
         st = {"reachable": rc == 0 and "fgt_License_Status" in out, "raw_error": None if rc == 0 else out[-300:]}
         for line in out.splitlines():

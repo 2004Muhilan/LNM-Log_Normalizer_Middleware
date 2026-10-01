@@ -17,6 +17,34 @@ figures are in [demo-machine-setup.md](demo-machine-setup.md) — prepare the ma
 Measured here: the GTX 1650 laptop, WSL2 at its default 7.7 GB cap, driver 616.64, twice in a row on
 2026-09-07 (§5).
 
+## The final demo FROM CONTAINERS (2026-10-01) — the same pages, the same seven steps
+
+ULPF now runs as containers ([container-deployment.md](container-deployment.md)): each runtime process is its own
+container, with a committer and a lake writer beside it. Everything below ("The final demo") is unchanged; only the start
+differs, and the runtime block on the System page has two more buttons.
+
+**T-30 min** (the lab and the model as before; the stack runs on the Linux Docker Engine of the `Containerlab` distro):
+
+```bash
+python3 demo/devices/preflight.py                                       # in Ubuntu: licence, containers, both devices reach :6515
+wsl -d Containerlab -- bash demo/devices/agent/start.sh                 # the lab agent (lab.sh behind HTTP: the console's device buttons)
+wsl -d Containerlab -- env ULPF_LAB_AGENT=http://127.0.0.1:8799 bash deploy/ulpf.sh up devices
+```
+
+**The extra moment — after step 4 (flow), or whenever a judge asks "does it scale?":**
+- **Press:** runtime block → **Add a process**. **Seen:** in about a second a third row, *running*, with its own container
+  name and its own evidence store; the limit line says how many are allowed (one per CPU Docker reports).
+- **Say:** "Each runtime process is a container. Adding one is a button: a new container with its own evidence store, every
+  active parser loaded, on the same ingress port — the kernel spreads new connections over the processes."
+- **Press:** **Remove a process**. **Seen:** *draining*, then *retired*, and the outcome line: "0 parsed event(s) not
+  delivered, 0 segment(s) not shipped". The devices go on parsing.
+- **Say:** "Removing one loses nothing: it waits until every destination has what that process parsed, stops it — it seals
+  its evidence — waits until its evidence is shipped to the archive, and only then removes it. Its events stay provable."
+- **Don't say:** that an open connection moves without a reconnect (it closes; the device reconnects to another process),
+  or that Docker Desktop is supported (a published port rewrites the sender's address — the page warns).
+
+The generator demo in containers: `bash deploy/ulpf.sh up generator`. The host-process demo (`start-demo.sh`) stays as it was.
+
 ## The final demo — real devices, real destinations (2026-09-30)
 
 Two real devices in the lab:

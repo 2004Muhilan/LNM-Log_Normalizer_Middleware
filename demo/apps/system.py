@@ -36,6 +36,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -61,6 +63,11 @@ SHEET_V2 = {2: ("connection_info.protocol_num", "firmware 2.0 writes the IANA pr
 # other's. Before, the sheet was applied by column position to whatever was being onboarded — on the real FortiGate it
 # asserted "position 1 is time" on a CEF line; only the acceptance policy kept that pack out.
 PREPARED_SHEETS = {"flowtap-01": {"author": "op-014", "for": "the flowtap sensor's columns", "by_slot": SHEET, "v2": SHEET_V2}}
+# Adding a runtime process (container deployment): at most one per CPU Docker reports, and not below this much free memory
+# (a process's three containers measured ~170 MiB together: runtime ~20, lake writer ~130, committer ~10 — docs/laptop-branch.md §7)
+MIN_FREE_BYTES = 512 << 20
+# a Docker bridge gateway: what a sender's address becomes through a published port (measured 2026-10-01: 172.17.0.1)
+DOCKER_GATEWAY = re.compile(r"^172\.(1[7-9]|2\d|3[01])\.0\.1$")
 
 
 class Tail:
@@ -93,11 +100,58 @@ class Tail:
         self.off += pos
 
 
+class Scaler:
+    """The container deployment (deploy/, 2026-10-01): the console ASKS deploy/scaler.py — the only container with the
+    Docker socket — to start, stop and signal the containers of a runtime process. The scaler owns the template (image,
+    mounts, user, capability, network); the console chooses the unit number and its program's arguments."""
+    def __init__(self, url):
+        self.url = url.rstrip("/")
+        self._info, self._at = None, 0.0
+
+    def call(self, method, path, body=None, timeout=60, text=False):
+        req = urllib.request.Request(self.url + path, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = r.read()
+        except urllib.error.HTTPError as ex:
+            raise RuntimeError(f"scaler {path}: {ex.read()[:300].decode(errors='replace')}") from None
+        return data.decode("utf-8", "replace") if text else json.loads(data)
+
+    def info(self, max_age=1.0):
+        if self._info is None or time.time() - self._at > max_age:
+            self._info, self._at = self.call("GET", "/info", timeout=10), time.time()
+        return self._info
+
+    def state_of(self, unit, part):
+        try:
+            return next((u["state"] for u in self.info()["units"] if u["unit"] == unit and u["part"] == part), "absent")
+        except Exception:   # noqa: BLE001 — the scaler unreachable is a state the page shows
+            return "unknown"
+
+    def start(self, unit, part, args):
+        self._info = None
+        return self.call("POST", "/start", {"unit": unit, "part": part, "args": [str(x) for x in args]})
+
+    def stop(self, unit, part, timeout=20):
+        self._info = None
+        return self.call("POST", "/stop", {"unit": unit, "part": part, "timeout": timeout}, timeout=timeout + 60)
+
+    def signal(self, unit, part, sig="HUP"):
+        return self.call("POST", "/signal", {"unit": unit, "part": part, "signal": sig})
+
+    def logs(self, unit, part):
+        return self.call("GET", f"/logs?unit={unit}&part={part}", timeout=20, text=True)
+
+
 class Proc:
     """One ULPF runtime process of N (scale-out). Its own evidence directory (its own store_id), outputs, spool, commit
     tree and lake writer; shared: the ingress addresses (SO_REUSEPORT), the packs, the evidence archive, the SIEM, the lake
-    root. Process 1 keeps the single-process names (ev, run-1, spool, commit)."""
-    def __init__(self, i, base, a):
+    root. Process 1 keeps the single-process names (ev, run-1, spool, commit).
+    Two ways to run it: a child process of this console (start-demo.sh: the number is fixed at start), or — the container
+    deployment — a UNIT of containers (runtime, committer, lake writer) through the scaler, added and removed while running.
+    `state`: starting | running | draining | retired (a retired process's evidence stays readable: Prove it still works)."""
+    def __init__(self, i, base, a, ctl=None):
         sfx = "" if i == 1 else f"-{i}"
         self.i = i
         self.ev, self.run, self.spool = base / ("ev" + sfx), base / f"run-{i}", base / ("spool" + sfx)
@@ -105,12 +159,43 @@ class Proc:
         self.lake_port = a.lake_port + i - 1
         self.packs = base / ("packs.txt" if i == 1 else f"packs-{i}.txt")
         self.runtime = None
+        self.ctl = ctl
+        self.state = "starting"
+        self.final_log = None   # a removed runtime container's last log (its log goes with the container)
 
     def err_text(self):
+        if self.ctl:
+            if self.final_log is not None:
+                return self.final_log
+            try:
+                return self.ctl.logs(self.i, "runtime")
+            except Exception:   # noqa: BLE001 — not started yet, or the scaler is unreachable
+                return ""
         try:
             return (self.run / "runtime.err").read_text(errors="replace")
         except OSError:
             return ""
+
+    def alive(self):
+        if self.ctl:
+            return self.state != "retired" and self.ctl.state_of(self.i, "runtime") == "running"
+        return self.runtime is not None and self.runtime.poll() is None
+
+    def hup(self):
+        if self.ctl:
+            self.ctl.signal(self.i, "runtime", "HUP")
+        else:
+            self.runtime.send_signal(signal.SIGHUP)
+
+    def ident(self):
+        if self.ctl:
+            if self.state == "retired":
+                return "container removed"
+            try:
+                return "container " + next(u["name"] for u in self.ctl.info()["units"] if u["unit"] == self.i and u["part"] == "runtime")
+            except Exception:   # noqa: BLE001
+                return "container —"
+        return f"pid {self.runtime.pid}" if self.runtime else "—"
 
     def store_id(self):
         try:
@@ -135,7 +220,11 @@ class System:
     def __init__(self, a):
         self.dir = Path(a.state)
         self.a = a
-        self.procs = [Proc(i, self.dir, a) for i in range(1, a.processes + 1)]
+        self.scaler = Scaler(a.scaler) if a.scaler else None   # the container deployment: processes can be added and removed
+        self.procs = [Proc(i, self.dir, a, self.scaler) for i in range(1, a.processes + 1)]
+        self.scale_busy, self.scale_history = None, []
+        self.proc_lock = threading.Lock()   # a reload and the start of an added process never interleave
+        self.lake_on = a.mode != "devices"   # devices mode: the lake's writers start on "Connect the lake"
         self.ev, self.run = self.procs[0].ev, self.procs[0].run   # process 1 (the single-process names)
         self.started = time.time()
         self.mode = a.mode   # generator (the fallback, and the gate) | devices (the final demo: the real FortiGate and Suricata)
@@ -160,7 +249,8 @@ class System:
         self.ignore = {}                          # trigger key -> event id: quarantines at or before it are history
         self.reloads = 0
         self.tick_lock = threading.Lock()
-        self.destinations = json.loads(Path(a.destinations).read_text())
+        # $VARIABLES in the list are the deployment's (deploy/destinations.json: the SIEM's port is a setting)
+        self.destinations = [{k: os.path.expandvars(v) if isinstance(v, str) else v for k, v in d.items()} for d in json.loads(Path(a.destinations).read_text())]
         self.health = {}                          # destination name -> (up, detail, checked_at)
         self.siem_action = None                   # outage / recover in progress
         self.traces = {}                          # event id -> the round trip's result
@@ -183,11 +273,18 @@ class System:
 
     # ------------------------------------------------------------------ runtime
     def start_runtime(self):
+        if self.scaler:
+            self.scaler.call("POST", "/reset")   # no unit container of an earlier run survives
         for p in self.procs:
             p.packs.write_text("")
         self.write_bindings()
         for p in self.procs:
             self.start_proc(p)
+            p.state = "running"
+
+    def live(self):
+        """The processes that run (not being removed, not retired): they reload, get lake writers, are probed."""
+        return [p for p in self.procs if p.state in ("starting", "running")]
 
     def start_proc(self, p):
         p.run.mkdir(parents=True, exist_ok=True)
@@ -197,15 +294,32 @@ class System:
         cmd = [a.rt, "run", "--pack", a.golden, *vendor, "--packs-file", str(p.packs), "--bindings", str(self.dir / "bindings.json"), "--source-id", "live-ingress-01", "--listen", f"tcp:{a.in_tcp}", "--listen", f"http:{a.in_http}",
                "--idle-timeout", "3600s", "--evidence", str(p.ev), "--out", str(p.run / "out.jsonl"), "--quarantine", str(p.run / "q.jsonl"),
                "--spool", str(p.spool), "--spool-cap", a.spool_cap, "--forward-stall-after", "2s", "--forward-drain", "5s"]
-        if len(self.procs) > 1:
-            cmd += ["--reuse-port"]   # N processes on the same addresses; the kernel keeps each connection on one
+        if len(self.procs) > 1 or self.scaler:
+            cmd += ["--reuse-port"]   # N processes on the same addresses; the kernel keeps each connection on one (and a process can be added)
         # the evidence archive: the local evidence directory is a short buffer; the committer (started beside this console)
         # ships, the runtime deletes a shipped segment when every condition holds
         cmd += (["--evidence-archive", a.archive, "--commit-dir", p.commit, "--evidence-grace", a.evidence_grace, "--evidence-buffer-cap", a.evidence_buffer_cap]
                 if a.archive else ["--dev-no-evidence-archive"])
         for d in self.destinations:   # N destinations, any kind: the list decides, not the code
             cmd += ["--forward", dest_for(d, p)["url"]]
+        if self.scaler:
+            # a UNIT of containers: the runtime (root + CAP_LINUX_IMMUTABLE only, host network), its committer (nonroot, no
+            # network, no capability — the P5 boundary, now one container each) and its lake writer
+            if p.commit:
+                Path(p.commit).mkdir(parents=True, exist_ok=True)
+                os.chown(p.commit, 65532, 65532)   # the committer runs as the distroless nonroot user
+            self.scaler.start(p.i, "runtime", cmd[1:])
+            if a.archive:
+                self.scaler.start(p.i, "committer", ["commit", "--evidence", str(p.ev), "--commit", p.commit, "--key", "/keys/ulpf-committer-dev.json",
+                                                     "--every", os.environ.get("ULPF_COMMIT_EVERY", "5s"), "--archive", a.archive])
+            if self.lake_on:
+                self.start_lake(p)
+            return
         p.runtime = subprocess.Popen(cmd, stdout=open(p.run / "egress-stdout.ndjson", "wb"), stderr=open(p.run / "runtime.err", "wb"), cwd=str(ROOT))
+
+    def start_lake(self, p):
+        self.scaler.start(p.i, "lake", ["--lake", self.a.lake, "--listen", f"127.0.0.1:{p.lake_port}", "--writer-id", str(p.i), "--rotate-bytes", "8MiB",
+                                         "--rotate-seconds", os.environ.get("ULPF_LAKE_ROTATE_SECONDS", "10")])
 
     def err_text(self):
         return "".join(p.err_text() for p in self.procs)
@@ -229,17 +343,22 @@ class System:
 
     def reload(self):
         """Every process reloads the same packs (SIGHUP); each must confirm, or the refusal is reported."""
-        before = {p.i: p.err_text().count("\nreloaded:") + p.err_text().startswith("reloaded:") for p in self.procs}
-        refused = {p.i: p.err_text().count("reload REFUSED") for p in self.procs}
+        with self.proc_lock:
+            return self._reload()
+
+    def _reload(self):
+        procs = self.live()
+        before = {p.i: p.err_text().count("\nreloaded:") + p.err_text().startswith("reloaded:") for p in procs}
+        refused = {p.i: p.err_text().count("reload REFUSED") for p in procs}
         dirs = [v["pack"] for v in self.active.values()]
-        for p in self.procs:
+        for p in self.procs:   # a retired process's packs file too: it is what it would load if it ran again
             tmp = p.packs.with_suffix(".tmp"); tmp.write_text("".join(d + "\n" for d in dirs)); os.replace(tmp, p.packs)
         self.write_bindings()   # the runtime re-reads it on the same SIGHUP, after the packs
-        for p in self.procs:
-            p.runtime.send_signal(signal.SIGHUP)
-        waiting = {p.i for p in self.procs}
+        for p in procs:
+            p.hup()
+        waiting = {p.i for p in procs}
         for _ in range(150):
-            for p in self.procs:
+            for p in procs:
                 if p.i not in waiting:
                     continue
                 t = p.err_text()
@@ -255,6 +374,152 @@ class System:
 
     def proc_of(self, rec):
         return self.procs[(rec.get("_proc") or 1) - 1]
+
+    # ------------------------------------------------------------------ adding and removing a runtime process
+    def scaling_view(self, apps):
+        v = {"available": bool(self.scaler), "busy": self.scale_busy, "history": self.scale_history[-6:], "live": len(self.live())}
+        if not self.scaler:
+            v["why"] = "fixed at start here (start-demo.sh): adding and removing processes is the container deployment's (deploy/ulpf.sh up)"
+            return v
+        try:
+            info = self.scaler.info(5)
+        except Exception as ex:   # noqa: BLE001
+            v.update(available=False, why=f"the scaler does not answer: {ex}")
+            return v
+        v.update(limit=int(info.get("ncpu") or 1), mem_available=info.get("memavailable"), engine=f"Docker {info.get('engine')} on {info.get('os')}")
+        gw = sorted(h for h in apps if DOCKER_GATEWAY.match(h))
+        if gw:
+            v["address_warning"] = (f"senders arrive from {', '.join(gw)}, a Docker gateway: the sender's real address is being rewritten (a published port, or "
+                                    "Docker Desktop), so the inventory and the source binding cannot tell devices apart. Run on Linux with Docker Engine.")
+        return v
+
+    def scale(self, action):
+        if not self.scaler:
+            raise ValueError("the processes are fixed at start here (start-demo.sh); adding and removing them needs the container deployment (deploy/ulpf.sh up)")
+        if action not in ("add", "remove"):
+            raise ValueError("add | remove")
+        with LOCK:
+            if self.scale_busy:
+                raise ValueError(f"one change at a time: {self.scale_busy}")
+            live = self.live()
+            if action == "add":
+                info = self.scaler.info(0)
+                cap = int(info.get("ncpu") or 1)
+                if len(live) >= cap:
+                    raise ValueError(f"{len(live)} processes already: the limit is one per CPU, and Docker reports {cap}")
+                if (info.get("memavailable") or MIN_FREE_BYTES) < MIN_FREE_BYTES:
+                    raise ValueError(f"only {info['memavailable'] >> 20} MiB of memory available: adding a process needs {MIN_FREE_BYTES >> 20} MiB")
+            elif len(live) <= 1:
+                raise ValueError("one process is the minimum: removing the last one would stop ingestion")
+            self.scale_busy = f"{action}: starting"
+        threading.Thread(target=self._scale, args=(action,), daemon=True).start()
+
+    def _scale(self, action):
+        t0 = time.time()
+        rec = {"at": time.strftime("%H:%M:%S"), "action": action}
+        try:
+            rec.update(self.add_proc() if action == "add" else self.remove_proc())
+            rec["ok"] = True
+        except Exception as ex:   # noqa: BLE001 — shown on the page
+            rec.update(ok=False, outcome=str(ex)[:400])
+        rec["seconds"] = round(time.time() - t0, 1)
+        print(f"scale {action}: {rec}", flush=True)
+        with LOCK:
+            self.scale_history.append(rec)
+            self.scale_busy = None
+
+    def add_proc(self):
+        """One more runtime process: a new unit (runtime, committer, lake writer) with its OWN evidence store, loaded with every
+        pack active now, on the same ingress ports. The kernel spreads NEW connections over the processes; a connection
+        already open stays where it is."""
+        with self.proc_lock:
+            with self.tick_lock:
+                i = len(self.procs) + 1
+                p = Proc(i, self.dir, self.a, self.scaler)
+                p.packs.write_text("".join(v["pack"] + "\n" for v in self.active.values()))
+                self.procs.append(p)
+            self.scale_busy = f"add: starting process {i} (runtime, committer, lake writer containers)"
+            self.start_proc(p)
+            for _ in range(120):
+                if "listening for" in p.err_text():
+                    break
+                if self.scaler.state_of(i, "runtime") == "exited":
+                    p.state = "retired"
+                    raise RuntimeError(f"process {i}'s runtime exited: {p.err_text()[-300:]}")
+                time.sleep(0.5)
+            else:
+                raise RuntimeError(f"process {i}'s runtime did not start listening in 60 s")
+            p.state = "running"
+        return {"process": i, "outcome": f"process {i} running: {p.ident()}, its own evidence store {p.store_id() or '(created on its first event)'}, "
+                                         f"{len(self.active) + 1 + self.vendors_loaded} packs loaded"}
+
+    def proc_ahead(self, p):
+        """What process p parsed that a destination does not have yet (the most behind destination)."""
+        with LOCK:
+            usable = sum(1 for i in self.order if self.events[i].get("ok") is True and (self.events[i]["rec"].get("_proc") or 1) == p.i)
+        curs = {}
+        for f in p.spool.glob("cursor-*.json"):
+            try:
+                c = json.loads(f.read_text()); curs[c["sink"]] = c.get("delivered_events", 0)
+            except (OSError, ValueError, KeyError):
+                pass
+        return max([0] + [usable - curs.get(sink_name(dest_for(d, p)["url"]), 0) for d in self.destinations])
+
+    def proc_pending(self, p):
+        """Process p's sealed local segments the committer has not shipped to the archive yet."""
+        sid = p.store_id()
+        if not (sid and self.a.archive):
+            return 0
+        shipped = {Path(x).stem for x in glob.glob(str(Path(self.a.archive) / sid / "receipts" / "seg_*.json"))}
+        return sum(1 for x in glob.glob(str(p.ev / "seg_*.seal.json")) if Path(x).name[:-len(".seal.json")] not in shipped)
+
+    def remove_proc(self):
+        """One process less, without losing what it holds: (1) wait until every destination has what it parsed, (2) stop its
+        runtime — it drains its spool for a last moment and SEALS its open segment, (3) wait until its committer has shipped
+        every sealed segment to the archive, (4) stop the committer and the lake writer. The process stays on the page as
+        RETIRED: its evidence store is kept, Prove it still works on its events. Its open connections close; the senders
+        reconnect, and the kernel puts them on another process."""
+        p = self.live()[-1]
+        down = [d["name"] for d in self.destinations if not self.health.get(d["name"], (False,))[0]]
+        if down:
+            raise RuntimeError(f"{', '.join(down)} is down: process {p.i} would be removed with events still in its spool — reconnect it first")
+        with self.proc_lock:
+            p.state = "draining"   # no reload goes to it from now on
+        self.scale_busy = f"remove: process {p.i} — waiting until every destination has what it parsed"
+        end = time.time() + 45
+        while time.time() < end and self.proc_ahead(p) > 0:
+            time.sleep(1)
+        self.scale_busy = f"remove: stopping process {p.i}'s runtime (it drains and seals its open segment)"
+        r = self.scaler.stop(p.i, "runtime", 30)
+        p.final_log = r.get("log_tail") or ""
+        self.scale_busy = f"remove: process {p.i} — waiting until its committer has shipped every sealed segment"
+        end = time.time() + 120
+        while time.time() < end and self.proc_pending(p) > 0:
+            time.sleep(2)
+        # what is left behind, by the RUNTIME's own final accounting (its exit summary: events emitted, and per destination
+        # delivered events and undelivered spool bytes) — the console's own count can lag the last cursor write
+        summary = None
+        for line in reversed(p.final_log.splitlines()):
+            if line.startswith("{") and '"egress"' in line:
+                try:
+                    summary = json.loads(line)
+                    break
+                except ValueError:
+                    pass
+        pending = self.proc_pending(p)
+        if summary is not None:
+            ahead = max(0, summary.get("emitted", 0) - min((e.get("delivered_events", 0) for e in summary["egress"]), default=summary.get("emitted", 0)))
+            ahead = ahead if ahead or not sum(e.get("undelivered_bytes", 0) for e in summary["egress"]) else 1
+        else:
+            ahead = self.proc_ahead(p)
+        self.scaler.stop(p.i, "committer", 20)
+        if self.scaler.state_of(p.i, "lake") != "absent":
+            self.scaler.stop(p.i, "lake", 30)
+        p.state = "retired"
+        return {"process": p.i, "accounting": "the runtime's exit summary" if summary is not None else "the console's count", "emitted": (summary or {}).get("emitted"),
+                "outcome": f"process {p.i} retired (runtime exit {r.get('exit_code')}): {ahead} parsed event(s) not delivered"
+                                           f"{' — kept in its spool' if ahead else ''}, {pending} segment(s) not shipped{' — kept locally' if pending else ''}; "
+                                           "its evidence stays readable"}
 
     # ------------------------------------------------------------------ monitor
     def raw(self, rec):
@@ -301,10 +566,12 @@ class System:
                         "deleted_segments": len(glob.glob(str(pr.ev / "catalog" / "seg_*.ids"))),
                         "archived_bytes": size([x for x in glob.glob(str(base / "segments" / "seg_*")) if not x.endswith(".part")]) if base else 0,
                         "checkpoints": len(glob.glob(os.path.join(pr.commit, "checkpoints", "ckpt_*.json"))) if pr.commit else 0,
-                        "committer": bool(subprocess.run(["pgrep", "-f", f"ulpf-committer commit --evidence {pr.ev} "], capture_output=True).stdout.strip())})
+                        "state": pr.state,
+                        "committer": (pr.state == "retired" or self.scaler.state_of(pr.i, "committer") == "running") if self.scaler else
+                                     bool(subprocess.run(["pgrep", "-f", f"ulpf-committer commit --evidence {pr.ev} "], capture_output=True).stdout.strip())})
         tot = {k: sum(x[k] for x in per) for k in ("local_segments", "local_bytes", "shipped_segments", "pending_segments", "deleted_segments", "archived_bytes", "checkpoints")}
         cap = parse_bytes(a.evidence_buffer_cap)
-        return {"configured": True, "archive": a.archive, "store_id": per[0]["store_id"], "grace": a.evidence_grace, "cap": cap * len(self.procs), "cap_per_process": cap, **tot,
+        return {"configured": True, "archive": a.archive, "store_id": per[0]["store_id"], "grace": a.evidence_grace, "cap": cap * len(self.live()), "cap_per_process": cap, **tot,
                 "buffer_event": getattr(self, "buffer_event", None), "committer": all(x["committer"] for x in per), "processes": per}
 
     def tick(self):
@@ -465,12 +732,12 @@ class System:
         import urllib.request
         for d in self.destinations:
             ups, why = [], "HTTP 200"
-            for pr in (self.procs if "{lake_port}" in d.get("health", "") else self.procs[:1]):
+            for pr in (self.live() if "{lake_port}" in d.get("health", "") else self.procs[:1]):
                 try:
                     with urllib.request.urlopen(dest_for(d, pr)["health"], timeout=1.5) as r:
                         ups.append(r.status < 500); why = f"HTTP {r.status}"
                 except Exception as ex:
-                    ups.append(False); why = type(ex).__name__ + (f" (process {pr.i})" if len(self.procs) > 1 else "")
+                    ups.append(False); why = type(ex).__name__ + (f" (process {pr.i})" if len(self.live()) > 1 else "")
             self.health[d["name"]] = (all(ups), why, time.time())
         siem = next((d for d in self.destinations if d.get("kind") == "siem" and d.get("metrics")), None)
         if siem and self.health.get(siem["name"], (False,))[0] and time.time() - getattr(self, "_metrics_at", 0) >= 5:
@@ -543,6 +810,16 @@ class System:
     def lake_control(self, action):
         """Devices mode: the lake's writers are started from the page ("Connect the lake") and stopped the same way — one per
         runtime process, exactly as start-demo.sh starts them in the generator demo."""
+        if self.scaler:
+            if action not in ("connect", "disconnect"):
+                raise ValueError("connect | disconnect")
+            self.lake_on = action == "connect"
+            for pr in self.live():
+                if self.lake_on and self.scaler.state_of(pr.i, "lake") != "running":
+                    self.start_lake(pr)
+                elif not self.lake_on:
+                    self.scaler.stop(pr.i, "lake", 20)   # the writer flushes what it staged before it exits
+            return
         if action == "connect":
             for pr in self.procs:
                 if pr.i in self.lake_writers and self.lake_writers[pr.i].poll() is None:
@@ -569,6 +846,17 @@ class System:
         def run():
             self.siem_action = action
             try:
+                if self.scaler:   # the SIEM container is the scaler's to stop and start (the outage step)
+                    print(f"siem {action}: {self.scaler.call('POST', '/siem', {'action': action})}", flush=True)
+                    if action == "recover":
+                        siem = next((d for d in self.destinations if d.get("kind") == "siem"), {})
+                        for _ in range(180):
+                            try:
+                                urllib.request.urlopen(siem.get("health", ""), timeout=2).read()
+                                break
+                            except Exception:   # noqa: BLE001
+                                time.sleep(1)
+                    return
                 r = subprocess.run(["bash", str(ROOT / "demo" / "siem" / "siem.sh"), action], capture_output=True, text=True, timeout=240)
                 print(f"siem {action}: {(r.stdout + r.stderr).strip()[-200:]}", flush=True)
             finally:
@@ -584,7 +872,7 @@ class System:
         out = {"sources": [], "latest": [], "lookup": None, "writer": None}
         try:
             import urllib.request
-            ws = [json.loads(urllib.request.urlopen(f"http://127.0.0.1:{pr.lake_port}/status", timeout=1).read()) for pr in self.procs]
+            ws = [json.loads(urllib.request.urlopen(f"http://127.0.0.1:{pr.lake_port}/status", timeout=1).read()) for pr in self.live()]
             out["writer"] = ws[0] if len(ws) == 1 else {**ws[0], "writers": len(ws), **{k: sum(w.get(k) or 0 for w in ws) for k in ("rows_written", "files_written", "staged_rows", "received_rows", "duplicate_rows_ignored")}}
         except Exception:
             pass
@@ -653,7 +941,7 @@ class System:
         (its packs file + SIGHUP). The runtime refuses it — the running packs stay — and the refusal is a `pack_refused`
         record in that process's evidence log."""
         import shutil
-        pr = self.procs[max(1, min(int(proc_i), len(self.procs))) - 1]
+        pr = next((x for x in self.live() if x.i == int(proc_i)), None) or self.live()[0]
         src = Path(next(iter(self.active.values()))["pack"]) if self.active else Path(self.a.golden)
         n = len(list((self.dir / "rogue").glob("pack-*"))) + 1 if (self.dir / "rogue").exists() else 1
         dst = self.dir / "rogue" / f"pack-{n}"
@@ -669,7 +957,7 @@ class System:
         before = len(self.tlog_refusals)
         dirs = [v["pack"] for v in self.active.values()] + [str(dst)]
         tmp = pr.packs.with_suffix(".tmp"); tmp.write_text("".join(d + "\n" for d in dirs)); os.replace(tmp, pr.packs)
-        pr.runtime.send_signal(signal.SIGHUP)
+        pr.hup()
         for _ in range(100):
             if pr.err_text().count("reload REFUSED") > refused:
                 break
@@ -1088,13 +1376,15 @@ class System:
             jobs = [{k: v for k, v in j.items() if k not in ("go", "promote")} for j in self.jobs]
             procs = []
             for pr in self.procs:
-                procs.append({"process": pr.i, "pid": pr.runtime.pid if pr.runtime else None, "up": pr.runtime is not None and pr.runtime.poll() is None, "store_id": pr.store_id(),
+                procs.append({"process": pr.i, "pid": pr.ident(), "up": pr.alive(), "state": pr.state, "store_id": pr.store_id(),
                               "evidence": str(pr.ev), "lake_port": pr.lake_port, "events": sum(1 for i in self.order if (self.events[i]["rec"].get("_proc") or 1) == pr.i and not self.events[i].get("record")),
                               "applications": sorted(h for h, a in apps.items() if pr.i in a["processes"])})
             return {"policy": self.policy, "processes": procs, "mode": self.mode,
                     "devices": self.devices.view() if self.devices else None,
-                    "lake_writers": sum(1 for w in self.lake_writers.values() if w.poll() is None) if self.mode == "devices" else None,
-                    "runtime": {"up": all(x["up"] for x in procs), "processes": len(procs), "ingress": [{"label": "Syslog over TCP" + (" — also real devices, on the Containerlab bridge 172.20.20.1" if self.a.in_tcp.startswith("0.0.0.0:") else ""), "addr": self.a.in_tcp},
+                    "lake_writers": (sum(1 for pr in self.live() if self.scaler.state_of(pr.i, "lake") == "running") if self.scaler else
+                                     sum(1 for w in self.lake_writers.values() if w.poll() is None)) if self.mode == "devices" else None,
+                    "scaling": self.scaling_view(apps),
+                    "runtime": {"up": all(x["up"] for x in procs if x["state"] in ("starting", "running")), "processes": sum(1 for x in procs if x["state"] in ("starting", "running")), "ingress": [{"label": "Syslog over TCP" + (" — also real devices, on the Containerlab bridge 172.20.20.1" if self.a.in_tcp.startswith("0.0.0.0:") else ""), "addr": self.a.in_tcp},
                                 {"label": "HTTP POST", "addr": self.a.in_http}],
                                                        "packs": [{"pack_id": v["pack_id"], "pack_version": v["pack_version"], "family": v["family"]} for v in self.active.values()], "reloads": self.reloads,
                                                        "provider": self.a.provider, "pack_records": self.pack_records[-6:], "vendor_packs": getattr(self, "vendors_loaded", 0),
@@ -1218,6 +1508,8 @@ def handler(sysm):
                     sysm.device_action(d.get("action"), d.get("arg"))
                 elif self.path == "/api/lake-control":
                     sysm.lake_control(d.get("action"))
+                elif self.path == "/api/scale":
+                    sysm.scale(d.get("action"))
                 elif self.path == "/api/push-unlogged":
                     res = sysm.push_unlogged(d.get("process", 1))
                     return self._send(200, json.dumps(res).encode())
@@ -1257,6 +1549,8 @@ def main() -> int:
     ap.add_argument("--archive", help="the evidence archive (start-demo.sh: $APP/evidence-archive); without it the runtime runs with --dev-no-evidence-archive")
     ap.add_argument("--commit-dir", help="the always-running committer's commit tree (start-demo.sh: $APP/commit)")
     ap.add_argument("--evidence-grace", default="60s"); ap.add_argument("--evidence-buffer-cap", default="64MiB")
+    ap.add_argument("--scaler", help="the container deployment (deploy/): each runtime process is a unit of containers, started, stopped and "
+                                     "signalled through this scaler — and processes can be added and removed while running")
     a = ap.parse_args()
     s = System(a)
     s.start_runtime()
@@ -1272,6 +1566,13 @@ def main() -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        if s.scaler:   # the container deployment: each runtime drains and seals; then its committer and lake writer stop
+            for pr in s.live():
+                for part, t in (("runtime", 30), ("committer", 15), ("lake", 30)):
+                    try:
+                        s.scaler.stop(pr.i, part, t)
+                    except Exception as ex:   # noqa: BLE001
+                        print(f"stop {part} {pr.i}: {ex}", file=sys.stderr, flush=True)
         for pr in s.procs:
             if pr.runtime and pr.runtime.poll() is None:
                 pr.runtime.terminate()

@@ -34,7 +34,10 @@ stop() {
   for f in generator system lakewriter fakesiem committer witness; do [ -f "$APP/$f.pid" ] && kill "$(cat "$APP/$f.pid")" 2>/dev/null; rm -f "$APP/$f.pid"; done
   for _ in $(seq 1 30); do pgrep -f "demo/apps/[gs][a-z]*.py|adapters/lake/[l]akewriter.py --lake $APP/" > /dev/null || break; sleep 0.5; done   # the console drains the runtime, the lake writer flushes
   pkill -9 -f "demo/apps/[gs][a-z]*.py" 2>/dev/null; pkill -f "adapters/lake/[l]akewriter.py --lake $APP/" 2>/dev/null; pkill -f "demo/siem/[f]ake_bulk.py --listen 127.0.0.1:9200" 2>/dev/null
-  pkill -f "[p]acks-file $APP/packs.txt" 2>/dev/null; pkill -f "[u]lpf-committer commit --evidence $APP/" 2>/dev/null; pkill -f "[u]lpf-witness .*--listen 127.0.0.1:8796" 2>/dev/null; return 0
+  pkill -f "[p]acks-file $APP/packs.txt" 2>/dev/null; pkill -f "[u]lpf-committer commit --evidence $APP/" 2>/dev/null; pkill -f "[u]lpf-witness .*--listen 127.0.0.1:8796" 2>/dev/null
+  # every runtime process of THIS state directory, not only process 1 (2026-10-01: a process-2 runtime outlived its console
+  # once, under load, and held the ingress port for the next start)
+  pkill -f "[u]lpf-runtime run .*--evidence $APP/ev" 2>/dev/null; return 0
 }
 MODE=generator; [ "${1:-}" = "devices" ] && { MODE=devices; export ULPF_REAL_DEVICES=1; }
 if [ "${1:-start}" = "stop" ]; then stop; [ "${ULPF_SIEM:-opensearch}" = "fake" ] || bash demo/siem/siem.sh stop > /dev/null; echo "stopped"; exit 0; fi

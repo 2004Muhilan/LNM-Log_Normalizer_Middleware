@@ -31,6 +31,11 @@ was tried and rejected, and what the next phase inherits.
 
 **Scale-out:** N runtime processes on the same ports (SO_REUSEPORT; `ULPF_PROCESSES=N bash demo/start-demo.sh`), each with its own evidence store, committer and lake writer — measured in [docs/throughput.md](docs/throughput.md).
 
+**Containers (2026-10-01):** `bash deploy/ulpf.sh build && bash deploy/ulpf.sh up generator|devices` on a Linux host
+with Docker Engine — every part a container, each runtime process its own container (with a committer and a lake writer
+beside it), added and removed from the System page while events flow; `deploy/ulpf.sh export` writes an offline install
+bundle. [docs/container-deployment.md](docs/container-deployment.md).
+
 **The gate, one command:** `bash scripts/gate.sh` — every check, the demo check with the real SIEM, and six steps + the live
 sequence twice on both model configurations, in parallel lanes: 12.7 min on the desktop (`--laptop` on the laptop).
 

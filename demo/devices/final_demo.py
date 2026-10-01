@@ -5,6 +5,8 @@ the scripted button press was needed — named) or FAILED. Standard library + Du
 
     bash demo/llama-server.sh start ; bash demo/start-demo.sh devices
     python3 demo/devices/final_demo.py --out ~/ulpf-final-demo-1.json
+    # the container deployment (deploy/): run it in the app image, with the state volume read-only, and the scaling step
+    docker run --rm --network host -v ulpf-state:/state:ro -v "$PWD:/out" -v "$PWD/demo/devices:/drv:ro" ulpf-app python /drv/final_demo.py --lake /state/app/lake --scale --out /out/final-demo.json
 
 Operator answers (Suricata's fields) are given by this script through the page's API, on the operator's behalf, and say so.
 """
@@ -22,6 +24,7 @@ SHEET = {"timestamp": ("time", None), "src_ip": ("src_endpoint.ip", None), "src_
          "dest_port": ("dst_endpoint.port", None), "proto": ("connection_info.protocol_name", None), "action": ("action_id", {"allowed": 1, "blocked": 2}),
          "signature": ("message", None)}
 R = {"started": time.strftime("%Y-%m-%dT%H:%M:%S"), "steps": []}
+LAKE = os.path.expanduser("~/ulpf-demo/app/lake")
 
 
 def http(url, data=None, timeout=60, raw=False, headers=None):
@@ -157,12 +160,35 @@ def s4(rec):
     ss = http(OSD + "/api/saved_objects/search/ulpf-lab-attacker", headers={"osd-xsrf": "true"})
     db = http(OSD + "/api/saved_objects/dashboard/ulpf-real-devices", headers={"osd-xsrf": "true"})
     import duckdb
-    fs = [f for f in glob.glob(os.path.expanduser("~/ulpf-demo/app/lake/**/*.parquet"), recursive=True) if "network" in f]
+    fs = [f for f in glob.glob(LAKE + "/**/*.parquet", recursive=True) if "network" in f]
     lake = dict(duckdb.connect().execute(f"select metadata.product.vendor_name, count(*) from read_parquet({fs!r}, union_by_name=true) where src_endpoint.ip='{ATTACKER}' group by 1").fetchall()) if fs else {}
     lv = http(S + "/api/lake")
     return {"ok": {"Fortinet", "OISF"} <= set(att) and {"Fortinet", "OISF"} <= set(lake) and bool(ss) and bool(db), "opensearch_by_vendor": vend,
             "saved_search": ss and ss["attributes"]["title"], "saved_search_query_by_vendor": att, "dashboard": db and db["attributes"]["title"],
             "lake_rows_from_attacker_by_vendor": lake, "lake_page_sources": [x.get("source") for x in (lv or {}).get("sources", [])]}
+
+
+@step("4b. scale: a runtime process ADDED while both devices send, then REMOVED; nothing left behind; both devices go on parsing")
+def s4b(rec):
+    def scale(action):
+        n0 = len(st()["scaling"]["history"])
+        http(S + "/api/scale", {"action": action})
+        return wait(lambda: (lambda c: c["history"][-1] if len(c["history"]) > n0 and not c["busy"] else None)(st()["scaling"]), 300, 2)
+    where = lambda: {h: app(h).get("processes") for h in (FGT, IDS)}
+    rec["before"] = where()
+    add = scale("add") or {}
+    device("attack")
+    n = {h: app(h).get("events", 0) for h in (FGT, IDS)}
+    rem = scale("remove") or {}
+    rec["devices_on_processes_during"] = where()
+    flowing = wait(lambda: all(app(h).get("events", 0) > n[h] for h in (FGT, IDS)) or None, 120, 3)
+    device("attack")
+    time.sleep(10)
+    good = {h: [k for k in outcomes(h, 12) if not k.startswith("quarantined")] for h in (FGT, IDS)}
+    procs = [(p["process"], p["state"], p["events"]) for p in st()["processes"]]
+    return {"ok": bool(add.get("ok") and rem.get("ok") and " 0 parsed event(s) not delivered" in rem.get("outcome", "")
+                       and " 0 segment(s) not shipped" in rem.get("outcome", "") and flowing and all(good.values())),
+            "add": add, "remove": rem, "processes": procs, "after": where(), "parsed_after": good}
 
 
 @step("5. egress outage: stop OpenSearch; the lake keeps flowing; restart; the backlog delivers with no duplicates")
@@ -218,9 +244,13 @@ def s7(rec):
 
 
 def main():
+    global LAKE
     ap = argparse.ArgumentParser(); ap.add_argument("--out", required=True)
+    ap.add_argument("--lake", default=LAKE, help="the lake root (the container deployment: /state/app/lake, the state volume mounted)")
+    ap.add_argument("--scale", action="store_true", help="step 4b: add a runtime process while the devices send, then remove it (container deployment)")
     a = ap.parse_args()
-    for fn in (s1, s2, s3, s4, s5, s6, s7):
+    LAKE = a.lake
+    for fn in (s1, s2, s3, s4) + ((s4b,) if a.scale else ()) + (s5, s6, s7):
         fn()
     try:   # after the run: the FortiGate back to its default format (not a demo step)
         device("fgt-format", "default")

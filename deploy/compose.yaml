@@ -1,0 +1,160 @@
+# ULPF — the container deployment (2026-10-01). Use deploy/ulpf.sh (build | up | down | scale | export | import | status);
+# it sets the profile, waits for each part and prints where everything is.
+#
+# Supported platform: Linux with Docker Engine (Compose v2). The runtime's ingress needs HOST networking: the source
+# binding and the inventory identify a sender by its address, and a published port rewrites it (measured 2026-10-01: a lab
+# sender at 172.20.20.50 arrived as 172.17.0.1). Docker Desktop: evaluation only — the System page warns when every sender
+# arrives from Docker's gateway.
+#
+# The runtime PROCESSES are not services here: each is a unit of containers (runtime, committer, lake writer) the console
+# starts and stops through the SCALER, the only container with the Docker socket. Compose starts the fixed parts.
+#
+# DEMO ONLY: the OpenSearch security plugin is disabled (no TLS, no authentication) to save memory.
+name: ${ULPF_PROJECT:-ulpf}
+
+x-app: &app
+  image: ulpf-app:${ULPF_VERSION:-latest}
+  network_mode: host
+  environment: &env
+    ULPF_ROOT: /ulpf
+    ULPF_MODE: ${ULPF_MODE:-generator}
+    ULPF_PROCESSES: ${ULPF_PROCESSES:-2}
+    ULPF_PROVIDER: ${ULPF_PROVIDER:-model}
+    ULPF_MODEL_URL: ${ULPF_MODEL_URL:-http://127.0.0.1:8081}
+    ULPF_MODEL_ID: ${ULPF_MODEL_ID:-qwen3.5-4b-q4_k_m}
+    ULPF_MODEL_BACKEND: ${ULPF_MODEL_BACKEND:-llama.cpp}
+    ULPF_TCP_PORT: ${ULPF_TCP_PORT:-6515}
+    ULPF_HTTP_PORT: ${ULPF_HTTP_PORT:-8516}
+    ULPF_CONSOLE_PORT: ${ULPF_CONSOLE_PORT:-8765}
+    ULPF_LAKE_PORT: ${ULPF_LAKE_PORT:-8792}
+    ULPF_WITNESS_PORT: ${ULPF_WITNESS_PORT:-8796}
+    ULPF_SCALER_PORT: ${ULPF_SCALER_PORT:-8797}
+    ULPF_OS_PORT: ${ULPF_OS_PORT:-9200}
+    ULPF_OSD_PORT: ${ULPF_OSD_PORT:-5601}
+    ULPF_DASHBOARDS: ${ULPF_DASHBOARDS:-1}
+    ULPF_LAB_AGENT: ${ULPF_LAB_AGENT:-}
+    ULPF_LAKE_ROTATE_SECONDS: ${ULPF_LAKE_ROTATE_SECONDS:-10}
+    ULPF_EVIDENCE_GRACE: ${ULPF_EVIDENCE_GRACE:-60s}
+    ULPF_FRESH: ${ULPF_FRESH:-0}
+
+services:
+  init:
+    <<: *app
+    network_mode: none
+    user: "0"
+    cap_add: [LINUX_IMMUTABLE]
+    command: ["bash", "deploy/init.sh"]
+    volumes:
+      - state:/state
+      - packs:/ulpf/packs
+      - keys:/ulpf/keys/dev
+      - trust:/ulpf/keys/trust
+      - tlog:/ulpf/tlog
+
+  witness:
+    image: ulpf-witness:${ULPF_VERSION:-latest}
+    network_mode: host
+    command: ["--key", "/keys/ulpf-witness-dev.json", "--name", "ulpf-witness-dev", "--trust", "/trust", "--state", "/state/witness",
+              "--listen", "127.0.0.1:${ULPF_WITNESS_PORT:-8796}"]
+    volumes:
+      - keys:/keys:ro
+      - trust:/trust:ro
+      - state:/state
+    depends_on:
+      init: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+  scaler:
+    image: ulpf-scaler:${ULPF_VERSION:-latest}
+    network_mode: host
+    environment:
+      ULPF_PROJECT: ${ULPF_PROJECT:-ulpf}
+      ULPF_SCALER_LISTEN: 127.0.0.1:${ULPF_SCALER_PORT:-8797}
+      ULPF_VOL_STATE: ${ULPF_PROJECT:-ulpf}-state
+      ULPF_VOL_PACKS: ${ULPF_PROJECT:-ulpf}-packs
+      ULPF_VOL_KEYS: ${ULPF_PROJECT:-ulpf}-keys
+      ULPF_VOL_TRUST: ${ULPF_PROJECT:-ulpf}-trust
+      ULPF_VOL_TLOG: ${ULPF_PROJECT:-ulpf}-tlog
+      ULPF_IMAGE_RUNTIME: ulpf-runtime:${ULPF_VERSION:-latest}
+      ULPF_IMAGE_COMMITTER: ulpf-committer:${ULPF_VERSION:-latest}
+      ULPF_IMAGE_APP: ulpf-app:${ULPF_VERSION:-latest}
+      ULPF_SIEM_CONTAINER: ${ULPF_PROJECT:-ulpf}-opensearch
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  opensearch:
+    image: opensearchproject/opensearch:${ULPF_OPENSEARCH_VERSION:-2.19.2}
+    container_name: ${ULPF_PROJECT:-ulpf}-opensearch
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms${ULPF_OS_HEAP:-512m} -Xmx${ULPF_OS_HEAP:-512m}
+      bootstrap.memory_lock: "false"
+      action.auto_create_index: "true"
+    ports: ["127.0.0.1:${ULPF_OS_PORT:-9200}:9200"]
+    volumes:
+      - siem:/usr/share/opensearch/data
+
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:${ULPF_OPENSEARCH_VERSION:-2.19.2}
+    profiles: [dashboards]
+    environment:
+      OPENSEARCH_HOSTS: '["http://${ULPF_PROJECT:-ulpf}-opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+      NODE_OPTIONS: --max-old-space-size=${ULPF_OSD_NODE_MB:-512}
+    ports: ["127.0.0.1:${ULPF_OSD_PORT:-5601}:5601"]
+    depends_on: [opensearch]
+
+  siem-setup:
+    <<: *app
+    command: ["bash", "deploy/siem-setup.sh"]
+    depends_on: [opensearch]
+
+  console:
+    <<: *app
+    command: ["bash", "deploy/console.sh"]
+    stop_grace_period: 90s
+    volumes:
+      - state:/state
+      # the model's weights, read-only: the learning plane records the digest it COMPUTES from the file, never one it is told
+      - ${ULPF_MODELS_DIR:-./models}:/ulpf/models/cache:ro
+      - packs:/ulpf/packs
+      - keys:/ulpf/keys/dev
+      - trust:/ulpf/keys/trust
+      - tlog:/ulpf/tlog
+    depends_on:
+      init: {condition: service_completed_successfully}
+      siem-setup: {condition: service_completed_successfully}
+      witness: {condition: service_started}
+      scaler: {condition: service_started}
+
+  generator:
+    <<: *app
+    profiles: [generator]
+    command: ["sh", "-c", "exec python demo/apps/generator.py --tcp 127.0.0.1:${ULPF_TCP_PORT:-6515} --http 127.0.0.1:${ULPF_HTTP_PORT:-8516} --listen 127.0.0.1:${ULPF_GENERATOR_PORT:-8780} --rate ${ULPF_LIVE_RATE:-6}"]
+    depends_on: [console]
+
+  # The local model, for a host whose Docker can reach its GPU (NVIDIA Container Toolkit). Elsewhere, run the model where the
+  # GPU is and point ULPF_MODEL_URL at it, or ULPF_PROVIDER=fixture (team-authored proposals, the generator demo only).
+  model:
+    image: ${ULPF_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    profiles: [model]
+    command: ["-m", "/models/${ULPF_MODEL_FILE:-Qwen3.5-4B-Q4_K_M.gguf}", "--parallel", "1", "--ctx-size", "8192", "--seed", "0",
+              "--n-gpu-layers", "${ULPF_LLAMA_NGL:-20}", "--jinja", "--no-warmup"]
+    ports: ["127.0.0.1:8081:8080"]
+    volumes:
+      - ${ULPF_MODELS_DIR:-./models}:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+
+volumes:
+  state: {name: "${ULPF_PROJECT:-ulpf}-state"}
+  packs: {name: "${ULPF_PROJECT:-ulpf}-packs"}
+  keys: {name: "${ULPF_PROJECT:-ulpf}-keys"}
+  trust: {name: "${ULPF_PROJECT:-ulpf}-trust"}
+  tlog: {name: "${ULPF_PROJECT:-ulpf}-tlog"}
+  siem: {name: "${ULPF_PROJECT:-ulpf}-siem"}

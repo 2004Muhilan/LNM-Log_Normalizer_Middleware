@@ -927,3 +927,81 @@ the licensed VM):
 - **apps-check, once.** It waited 40 × 1 s for the "Prove it" trace, which under the full load took longer. It now waits
   up to 180 s and returns the moment the trace lands; the check on the trace is unchanged.
 
+
+## 20. The container deployment: each runtime process a container, added and removed while running (2026-10-01)
+
+The problem statement: "the solution may be packaged in a container for making it platform independent". The parts had
+images; the demo ran them as host processes. **The user's decisions** (raised as a plan, approved): Linux with Docker
+Engine and host networking for the runtime; a separate **scaler** container holds the Docker socket, never the console;
+shipped packs signed by a **release key**, installations generate their own keys and log the shipped packs in their own
+transparency log. Everything: [container-deployment.md](container-deployment.md).
+
+**Measured first** (the decision it settled): a lab sender at 172.20.20.50 reached a host-networked container intact; through
+a published port it arrived as **172.17.0.1** (on the Linux engine and on Docker Desktop alike); Docker Desktop's host
+network was not reachable from the lab at all. The binding identifies a device by its address, so ULPF's containers use host
+networking on a Linux engine — here the `Containerlab` distro's (Docker 27.5.1; only `docker build`/`run` there, never
+`containerlab deploy`/`destroy`). The System page warns when senders arrive from a Docker gateway.
+
+**Built:**
+- `deploy/`: `compose.yaml` (init, witness, scaler, opensearch, dashboards, siem-setup, console, generator; a `model`
+  profile for a GPU-capable engine), `Dockerfile` (`ulpf-app`, `ulpf-scaler`), `scaler.py`, `init.sh`, `console.sh`,
+  `siem-setup.sh`, `destinations.json`, `ulpf.sh` (build | up generator|devices | scale add|remove | status | down |
+  purge | export | import), `check.sh` + `check.py`, `env.example`. `runtime/Dockerfile` gains `witness` and `binaries`.
+- **A runtime process is a unit of three containers** the scaler creates from a fixed template: `runtime-i` (distroless,
+  13 MB; root with `CAP_LINUX_IMMUTABLE` only; host network; `SO_REUSEPORT`), `committer-i` (distroless, nonroot, NO
+  network, no capability), `lake-i`. The console chooses the unit number and the program's arguments, nothing else.
+  The P5 boundary is now one container each, and the kernel immutable flag is real: the committer runs WITHOUT
+  `ULPF_COMMIT_SEALED=1` (measured: sealed segments carry `i`), and "Prove it" says which of the two it saw.
+- **System page:** *Add a process* / *Remove a process* in the runtime block; a state per process (starting, running,
+  draining, retired) and its container. Limits: one per CPU Docker reports (16 here); 512 MiB available; never below one.
+  Remove = refused while a destination is down → wait until every destination has what it parsed → stop the runtime
+  (drains, seals its open segment) → wait until its committer shipped every sealed segment → stop committer and lake
+  writer → RETIRED (evidence kept, Prove it works). The host-process demo (`start-demo.sh`) is unchanged; there the page
+  says the number is fixed at start.
+- `scripts/release-packs.sh`: the golden Squid pack and the three vendor packs, signed by `ulpf-pack-release` (private key
+  `keys/release/`, git-ignored; public key committed). **Found on the way:** the pack contract requires every referenced
+  certificate, and certificates carry corpus values in `field.sample_values` (174 values over 37 certificates) — the
+  release ships them with that optional field removed; `samples/` never ships. The packs and signatures travel inside the
+  image, not in git.
+- `init`: generates the installation's keys into a volume (never an image), logs each shipped pack in the installation's
+  transparency log (`hand-written` / `vendor-onboarded`), verifies proof and signature (`signature verified by
+  ulpf-pack-release`).
+- Devices: `demo/devices/agent/` — the **lab agent**, `lab.sh` behind HTTP on the lab's engine (lab equipment, not ULPF;
+  host network, host PID, the Docker socket, the lab user's SSH key read-only); `devices.py` calls it when
+  `ULPF_LAB_AGENT` is set. `final_demo.py --lake --scale`: step 4b adds a process while both devices send and removes it.
+- The learning plane computes the model's digest from the file on every onboarding: the console mounts the weights
+  read-only (`ULPF_MODELS_DIR`; found when the first containerised run failed every model call with "missing: …gguf").
+- Gate: lane **C** — images rebuilt, then `deploy/check.sh`, its own installation (project `ulpf-check`, own ports and
+  volumes) beside the other lanes.
+
+**Measured (desktop):**
+- `deploy/check.sh`: **PASS in 140 s** — 2 processes; onboarding live; a 3rd process added in 0.9 s, connections reach it,
+  it REFUSES an unlogged pack; processes 3 and 2 removed (7.3 s, 4.7 s), each "0 parsed event(s) not delivered, 0
+  segment(s) not shipped"; ingestion goes on; removing the last refused; accounting 365 parsed = 365 SIEM documents = 365
+  lake rows (365 distinct), 0 rejected; Prove it on an event of RETIRED process 3 with Proof of Derivation; sealed
+  segments immutable; no key file or `private_key` field in the app image; nothing left after purge.
+- **The final demo from containers, twice, all eight steps WORKED, no nudge** (`docs/metrics/final-demo-containers-{1,2}.json`):
+  step 4b added process 3 in 0.7 s / 1.2 s and retired it in 4.8 s / 5.0 s with nothing left behind; drift healed 45 / 47
+  fields by name, asked 7 / 6; Suricata's five certificates answered by the operator. In run 1 both devices' connections
+  sat on process 1 (process 2 idle); in run 2 the FortiGate was on process 1 and Suricata on process 2 — the kernel's hash
+  decides, per connection.
+
+**Stated limits:** Linux with Docker Engine only (Docker Desktop: the page warns); the model runs on Docker Desktop here (the
+Linux engine has no GPU runtime), reached at 127.0.0.1:8081; the scaler is unauthenticated on loopback; removal takes the
+highest-numbered process, and its open connections close (senders reconnect elsewhere); a kept state across restarts
+(`KEEP=1`) is not exercised; the installation's pack authority keeps the id `ulpf-pack-authority-dev`; nothing here ran on
+the laptop.
+
+**The gate after this change** (desktop): **PASS in 923 s** (run 3), all five lanes — A, D (apps-check accounting 4613 =
+4613 = 4613), G20, G33, and C (`deploy/check.sh` PASS in 110 s; twice more alone, both PASS). Two runs before it failed,
+for reasons now fixed, none in the pipeline:
+- **run 1 (563 s):** lane C ran beside the others; three other-lane failures followed — `twice-live.sh` "./../lib.sh: No
+  such file" (the documented transient `/mnt/c` file-not-found), the requirement-(k) image answering with an old flag set,
+  empty bind mounts in the witness test. p5 and p8 passed alone. Lane C now runs AFTER the others (+~2 min).
+- **run 2 (844 s):** (a) a process-2 runtime of run 1's host-process demo had outlived its console and held :6515, so
+  apps-check could not start — `start-demo.sh stop` now stops every runtime of its state directory; (b) lane C: removing
+  a process reported "2 parsed event(s) not delivered" while that runtime exited 0 (exit 3 means "left in the spool") —
+  the console's own count against the cursor files lagged. The removal now reports from the runtime's own exit summary
+  (events emitted, delivered per destination, undelivered spool bytes); the end-to-end accounting (SIEM and lake hold
+  every parsed event once) was and is the check that matters.
+- The offline bundle: `deploy/ulpf.sh export` → 1.4 GB (seven images, compose, the script) in 2.5 min; `import` loaded it.

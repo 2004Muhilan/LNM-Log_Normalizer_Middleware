@@ -17,6 +17,11 @@
 #                  p7 flood/relay tests + demo · p8 named tests, coverage replay, connector smoke, requirement (k), container stage
 #   lane D         the demo's destinations: SIEM up, contract check (--limits) against real OpenSearch, apps-check (fixture,
 #                  six formats: onboarding, drift, SIEM outage, lake, a finding proven back to the evidence)
+#   lane C         (after the others) the CONTAINER deployment (2026-10-01): images rebuilt, then deploy/check.sh — its own installation
+#                  (project ulpf-check, own ports and volumes) on a Linux Docker Engine: onboarding live, a process ADDED and
+#                  two REMOVED while events flow, accounting, Prove it on a retired process, immutable evidence. Engine: the
+#                  local one unless it is Docker Desktop (a published port rewrites the sender's address), else the
+#                  `Containerlab` WSL distro's (ULPF_CONTAINER_ENGINE="wsl.exe -d <distro> --" overrides)
 #   lane G20/G33   the acceptance criterion: demo/twice.sh and demo/live/twice-live.sh, each lane with its own state
 #                  directory, ports, model server and witness container (the two model servers share the GPU)
 #
@@ -87,6 +92,22 @@ laneG() { # ngl unpinned port-offset
   return $st
 }
 
+laneC() {
+  local eng="${ULPF_CONTAINER_ENGINE:-}" t
+  if [ -z "$eng" ]; then
+    if docker info --format '{{.OperatingSystem}}' 2>/dev/null | grep -q "Docker Desktop"; then
+      wsl.exe -l -q 2>/dev/null | tr -d '\0\r' | grep -qx Containerlab && eng="wsl.exe -d Containerlab --" || { echo "no Linux Docker Engine for lane C (set ULPF_CONTAINER_ENGINE)"; return 1; }
+    fi
+  fi
+  [ -f packs/release/fortigate/pack.json.sig ] || bash scripts/release-packs.sh > "$G/release-packs.log" 2>&1 || { echo "release packs did not build (scripts/release-packs.sh)"; return 1; }
+  t=$(date +%s); $eng bash "$ROOTDIR/deploy/ulpf.sh" build > "$G/container-build.log" 2>&1 || { echo "image build FAILED"; tail -5 "$G/container-build.log"; return 1; }
+  echo "images built: $(grep -c '^  ulpf-' "$G/container-build.log") $(since $t)s"
+  t=$(date +%s); $eng bash "$ROOTDIR/deploy/check.sh" > "$G/container-check.log" 2>&1; local rc=$?
+  grep -aE "^(start|onboarded live|scale|process 3|transparency|minimum|accounting|Prove it|evidence|  (runtime|committer|lake):|CONTAINER)" "$G/container-check.log" | cut -c1-170 | sed 's/^/  /'
+  echo "container lane: $(tail -1 "$G/container-check.log") $(since $t)s"
+  return $rc
+}
+
 run_lane() { # name function args... -> $G/lane-NAME.{log,rc}
   local name=$1; shift
   ( t=$(date +%s); "$@"; rc=$?; echo "lane $name: $([ $rc = 0 ] && echo PASS || echo FAIL) in $(since $t)s"; echo $rc > "$G/lane-$name.rc" ) > "$G/lane-$name.log" 2>&1
@@ -103,6 +124,10 @@ else
   [ "${ULPF_GATE_DEMO_CHECKS:-1}" = 1 ] && { run_lane D laneD & pids+=($!); }
 fi
 for p in "${pids[@]}"; do wait "$p"; done
+# lane C runs AFTER the others, not beside them (measured 2026-10-01): in parallel, its image build and check — another WSL
+# distro reading the repository through /mnt/c — coincided with three failures in the other lanes (a script not found on
+# /mnt/c, a stale image, empty bind mounts), each of which passed alone. ~3 minutes more, no interaction.
+[ "${ULPF_GATE_CONTAINERS:-1}" = 1 ] && run_lane C laneC
 fail=0
 for f in "$G"/lane-*.log; do
   echo; echo "---- $(basename "$f" .log)"; cat "$f"
