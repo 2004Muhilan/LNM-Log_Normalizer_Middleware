@@ -186,6 +186,11 @@ def apply_operator_assertion(plan: Plan, field: str, attribute: str, operator_id
         transform = {"kind": "lookup", "lookup": table, "default": int(lookup.get("default", 99))}
         note = f"{note} [value map stated by the operator: {', '.join(f'{k}={v}' for k, v in table.items())}; otherwise {transform['default']}]"
     for slot, p in new.parts():
+        if p.field == field and attribute == "unmapped":
+            # the operator says: this field is none of the class's attributes — carry it under OCSF's `unmapped` object by its
+            # own name (what withholding does to a field nobody answered; here it is the operator's decision, 2026-10-02)
+            p.mappings, p.candidates, p.unmapped_name, p.coerce = [], [], p.field, None
+            return new
         if p.field == field:
             p.mappings = [Mapping(attribute, {"category": "operator_assertion", "operator_id": operator_id, "evidence_ref": note}, transform, attribute in mandatory)]
             p.candidates = []

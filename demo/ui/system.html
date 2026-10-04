@@ -1,150 +1,152 @@
-<!doctype html><meta charset=utf-8><title>System — ULPF demo</title><link rel=stylesheet href=theme.css>
-<header><span class=brand>ULPF<small>Universal Log Pre-processing Framework — SIH 2026 · PS 26156</small></span>
-<a class="pill" id=nav1 href="http://127.0.0.1:8780/">1 Generator</a><a class="pill here" href="http://127.0.0.1:8765/">2 System</a><a class="pill" href="http://127.0.0.1:8765/lake">3 Data lake</a><a class=pill href="http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview" target=_blank>4 SIEM ↗</a></header>
+<!doctype html><meta charset=utf-8><title>System — ULPF</title><link rel=stylesheet href=theme.css>
+<header><span class=brand>ULPF<small>System</small></span>
+<a class=pill id=nav1 href="http://127.0.0.1:8780/">Generator</a><a class="pill here" href="/">System</a><a class=pill href="/lake">Data lake</a><a class=pill id=navsiem href="http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview" target=_blank>SIEM ↗</a></header>
 <main>
-<div class=panel id=devsec style="display:none"><h2>Real devices in the lab — the presenter drives them from here (no terminal)</h2><div class=row id=devs></div><div id=devlog class=lab></div></div>
+<div class=row id=devsec style="display:none"></div>
+<div id=needs></div>
 <div id=alerts></div>
 <div class=row>
- <div class=panel><h2>Applications sending logs (ingress)</h2><table><thead><tr><th>application</th><th>connector</th><th>events</th><th></th></tr></thead><tbody id=apps></tbody></table>
-  <p class=lab id=ingress></p></div>
- <div class=panel style="flex:0 0 330px"><h2>ULPF runtime</h2><div id=rt></div>
-  <div class=lab style="margin-top:10px">policy</div><div class=btns style="margin-top:4px"><button id=p1></button><button id=p2></button><button id=p3></button></div></div>
+ <div class=panel><h2>Sources</h2><table><thead><tr><th>source</th><th>events</th><th>status</th></tr></thead><tbody id=apps></tbody></table></div>
+ <div class=panel style="flex:0 0 340px"><h2>Runtime</h2><div id=rt></div></div>
 </div>
-<div class=panel id=tlogsec><h2>Parser transparency log — every pack ULPF may load, and how it was produced</h2><div id=tlog></div></div>
-<div class=panel id=archsec><h2>Evidence archive — ULPF keeps only a short local buffer</h2><div id=arch></div></div>
-<div class=panel><h2>Destinations (egress) — each with its own cursor over one bounded spool</h2><div class=row id=dests></div><div class=btns id=egressbtns style="margin-top:4px"></div>
- <div class=btns id=siembtns style="margin-top:4px"></div></div>
-<div class=panel id=findsec><h2>SIEM findings → the original evidence</h2><p class=lab>A finding in the SIEM names documents by <span class=mono>_id</span> = ULPF's <span class=mono>event_id</span>. <b>Prove it</b> pulls the original bytes from the evidence log, re-hashes them, verifies their Merkle proof under a signed checkpoint, then proves the <b>derivation</b>: the exact parser pack, fetched from the transparency log and its inclusion proof verified, is re-run on those bytes and must reproduce the SIEM's event — checked offline — and finds the same event in the lake.</p>
- <div class=row><div style="flex:1;min-width:320px"><table><thead><tr><th>rule</th><th>when</th><th>event</th><th></th></tr></thead><tbody id=finds></tbody></table></div><div style="flex:1;min-width:360px" id=trace></div></div></div>
-<div id=openjobs></div>
-<div id=logsec style="display:none"><h1 id=logtitle></h1>
- <div class=panel><div class=scroll style="max-height:330px"><table><thead><tr><th>received</th><th>connector</th><th>format</th><th>result</th><th>raw line</th></tr></thead><tbody id=logs></tbody></table></div></div>
+<div class=row id=dests></div>
+<div id=jobs></div>
+<div id=logsec style="display:none">
+ <div class=panel><h2 id=logtitle></h2><div class=scroll style="max-height:300px"><table><thead><tr><th>time</th><th>format</th><th>result</th><th>raw log</th></tr></thead><tbody id=logs></tbody></table></div></div>
  <div class=row id=detail style="display:none">
-  <div class=panel><h2>Raw log — exactly as received</h2><pre class=raw id=d_raw></pre><p class=lab id=d_rawmeta></p><h2 style="margin-top:16px">Detected format</h2><table id=d_fmt></table></div>
-  <div class=panel><h2 id=d_title>Normalized event (OCSF)</h2><div id=d_parsed></div></div>
+  <div class=panel><h2>Raw log</h2><pre class=raw id=d_raw></pre><p class=lab id=d_rawmeta></p><h2 style="margin-top:14px">Format</h2><div id=d_fmt></div></div>
+  <div class=panel><h2 id=d_title>Normalized (OCSF)</h2><div id=d_parsed></div></div>
  </div>
 </div>
-<div id=donejobs></div>
+<div class=row>
+ <div class=panel id=findsec><h2>SIEM findings</h2><table><tbody id=finds></tbody></table></div>
+ <div class=panel id=tracesec style="display:none"><h2>Prove it</h2><div id=trace></div></div>
+</div>
+<details class=panel id=more><summary><h2 style="display:inline">More — parser log, evidence archive, policy</h2></summary>
+ <div id=policy class=btns style="margin:10px 0"></div><div id=arch></div><div id=tlog style="margin-top:12px"></div></details>
 </main>
 <script>
-Object.defineProperty(HTMLElement.prototype,'html',{set(h){if(this._h!==h){this.innerHTML=h;this._h=h}}}); // re-render only what changed: a click must not land on a node that is being replaced
+Object.defineProperty(HTMLElement.prototype,'html',{set(h){if(this._h!==h){this.innerHTML=h;this._h=h}}}); // re-render only what changed
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const post=(p,d)=>fetch(p,{method:'POST',body:JSON.stringify(d)}).then(tick);
-let host=null, sel=null, S=null, picks={}, proving=null, F=[];
-const STATE={starting:'starting',sampling:'taking samples',model:'labelling fields',answering:'waiting for the operator’s answers',promoting:'promoting',waiting_approval:'waiting for the operator',asking:'loaded — operator asked about withheld fields',done:'done',failed:'failed'};
+const post=(p,d)=>fetch(p,{method:'POST',body:JSON.stringify(d)}).then(r=>r.ok?tick():r.text().then(t=>alert(t)));
+let host=null, sel=null, S=null, proving=null, showRetired=false;
+const STATE={starting:'starting',sampling:'sampling',model:'labelling',answering:'needs answers',promoting:'promoting',waiting_approval:'waiting',asking:'needs answers',done:'done',failed:'failed'};
+const KIND={heal:'Self-healing',drift:'Drift',discovery:'New family',onboard:'Onboarding'};
+const lbl=p=>'Process '+(p.label??p.process);
+const vmapNeeded=(f,a)=>!!a&&/_id$/.test(a)&&(f.samples||[]).some(v=>!/^-?\d+$/.test(String(v).trim()));
+const vmapHint=f=>'value map: '+[...new Set(f.samples||[])].slice(0,2).map((v,i)=>v+'='+(i+1)).join(', ');
+const dups=j=>{const c={};for(const a of Object.values(j.answers||{}))if(a&&a!='unmapped')c[a]=(c[a]||0)+1;return Object.keys(c).filter(a=>c[a]>1)};
+const why=j=>{const t=((j.steps||[]).slice(-1)[0]||{}).text||'';return /mapped more than once/.test(t)?'an attribute was used for more than one field':/fail to parse/.test(t)?'answers that do not fit the values':(t.split('\n').filter(l=>l.trim()).pop()||'').replace(/^.*Error: /,'').slice(0,140)};
+const nm=t=>String(t||'').replace(/\s*\(.*\)$/,''), fmtShort=f=>String(f||'').split(' → ').pop();
+const short=t=>{t=String(t||'').split(' — ')[0].replace(/\s*\(.*?\)/g,'');return t.length>110?t.slice(0,107)+'…':t};
+const scaleMsg=x=>!x.ok?x.outcome:x.action=='add'?`Process ${x.label??x.process} added`:`Process ${x.label??x.process} removed`+(/ 0 parsed event\(s\) not delivered, 0 segment/.test(x.outcome)?' — nothing left behind':' — '+x.outcome.split(': ').slice(1).join(': '));
 function jobHtml(j){
  const open=!['done','failed'].includes(j.state), ask=j.state=='answering'||j.state=='asking';
- let h=`<details class=panel ${open?'open':''}><summary><h2 style="display:inline">${j.kind=='heal'?'Self-healing':j.kind=='drift'?'Drift of a known source':j.kind=='discovery'?'New family of a known source':'Onboarding'} · ${esc(j.app||'')} · ${esc(j.format||'')} <span class="tag ${j.state=='done'?'ok':j.state=='failed'?'bad':''}">${STATE[j.state]||j.state}</span></h2>${open?'':' <span class=lab>'+esc(j.pack?j.pack.pack_id+' v'+j.pack.pack_version:'')+' — click to see the steps</span>'}</summary>`;
- if(j.state=='waiting_approval')h+=`<p><button class="go on" onclick="post('/api/approve',{job:'${j.id}'})">Onboard this application’s format</button></p>`;
- h+=`<ol class=steps>${j.steps.map(s=>`<li><span class="dim mono">${s.at}</span> ${esc(s.text)}</li>`).join('')}</ol>`;
- if(j.fields.length&&(open||j.kind=='heal'))h+=`<table style="margin-top:10px"><thead><tr><th>field</th><th>samples</th><th>maps to</th><th>on what evidence</th>${ask?'<th>operator says</th>':''}</tr></thead><tbody>`+j.fields.map(f=>{
-   const need=ask&&!f.evidenced, k=j.id+'/'+f.field;
-   return `<tr><td class=m>${esc(f.field)}</td><td class="m dim">${esc(f.samples.join('  '))}</td><td class=m>${f.evidenced?esc(f.mapped.join(', ')):'<span class=amber>withheld</span> <span class=dim>(proposed: '+esc((f.mapped.concat(f.candidates))[0]||'nothing')+')</span>'}</td>
-   <td>${f.propagated?'<span class="tag ok">carried over</span>':f.evidenced?'<span class="tag blue">'+esc((f.provenance[0]||'').replace(/_/g,' '))+'</span>':f.ambiguity?'<span class=tag>ambiguous: '+esc(f.ambiguity.replace(/_/g,' '))+'</span>':'<span class=tag>proposal only</span>'}</td>
-   ${ask?`<td>${need?`<select onchange="picks['${k}']=this.value;post('/api/answer',{job:'${j.id}',field:'${f.field}',attribute:this.value})"><option value="">choose…</option>${S.attributes.map(a=>`<option ${(picks[k]||j.answers[f.field])==a?'selected':''}>${a}</option>`).join('')}</select>${(j.answers[f.field]||'').endsWith('_id')?`<input class=mono size=18 placeholder="value map: a=1, b=2" onchange="post('/api/answer',{job:'${j.id}',field:'${f.field}',attribute:'${j.answers[f.field]}',lookup:this.value})">`:''}`:''}</td>`:''}</tr>`}).join('')+`</tbody></table>`;
- if((j.certificates||[]).length)h+=`<div style="margin-top:10px"><div class=lab>ambiguity certificates — what could not be told from the samples alone, and what resolved it</div><table><thead><tr><th>certificate</th><th>field</th><th>ambiguous between</th><th>evidence asked for</th><th>status</th></tr></thead><tbody>${j.certificates.map(c=>`<tr><td class="mono lab">${esc(c.id)}</td><td class=m>${esc(c.field)}</td><td class=m>${esc((c.ambiguity||'').replace(/_/g,' '))}: ${esc(c.candidates.join(' | '))}</td><td>${esc((c.request||'').replace(/_/g,' '))}</td><td>${c.status=='resolved'?'<span class="tag ok">resolved'+(c.resolved_by?' by '+esc(c.resolved_by.replace(/_/g,' ')):'')+'</span>':'<span class=tag>open</span>'}</td></tr>`).join('')}</tbody></table></div>`;
- else if(j.fields.length&&open)h+=`<p class=lab style="margin-top:6px">no ambiguity certificate issued: no field had two candidates the samples could not tell apart</p>`;
- if(ask)h+=`<p><button class="go on" onclick="post('/api/promote',{job:'${j.id}'})">${j.state=='asking'?'Apply answers and load the corrected pack':'Promote'}</button></p>`;
+ let h=`<details class=panel id="job-${j.id}" ${open?'open':''}><summary><h2 style="display:inline">${KIND[j.kind]||'Onboarding'} · ${esc(nm(j.app))} · ${esc(fmtShort(j.format))}</h2> <span class="tag ${j.state=='done'?'ok':j.state=='failed'?'bad':''}">${STATE[j.state]||j.state}</span></summary>`;
+ if(j.state=='waiting_approval')h+=`<p><button class=go onclick="post('/api/approve',{job:'${j.id}'})">Onboard this format</button></p>`;
+ const asked=f=>!f.evidenced||(f.field in (j.answers||{})), need=j.fields.filter(f=>!f.evidenced&&!(f.field in (j.answers||{}))), shown=ask?j.fields.filter(asked):j.fields, rest=ask?j.fields.filter(f=>!asked(f)):[];
+ const prop=f=>(f.mapped.concat(f.candidates||[]))[0]||'';
+ const row=f=>{
+   const needs=ask&&asked(f), k=j.id+'/'+f.field;
+   const how=f.propagated?'carried over':f.ambiguity?'ambiguous':f.evidenced?'':'proposed';
+   const twice=dups(j).includes((j.answers||{})[f.field]);
+   return `<tr${twice?' style="background:#2d1214"':''}><td class=m>${esc(f.field)}${twice?' <span class="tag bad">used twice</span>':''}</td><td class="m dim">${esc((f.samples||[])[0]||'')}</td><td class=m>${(j.answers||{})[f.field]=='unmapped'?'<span class=dim>unmapped</span>':f.evidenced?esc(f.mapped.join(', ')):`<span class=amber>?</span>${prop(f)?` <span class=dim>proposed: ${esc(prop(f))}</span>`:''}`}${f.evidenced&&how?` <span class=dim>${how}</span>`:''}</td>
+   ${ask?`<td>${needs?`<select onchange="this.blur();post('/api/answer',{job:'${j.id}',field:'${f.field}',attribute:this.value})"><option value="">choose…</option><option value="unmapped" ${(j.answers||{})[f.field]=='unmapped'?'selected':''}>— leave unmapped —</option>${S.attributes.map(a=>`<option ${(j.answers||{})[f.field]==a?'selected':''}>${a}</option>`).join('')}</select>${vmapNeeded(f,j.answers[f.field])?`<div style="margin-top:4px"><input class=vmap size=24 placeholder="${esc(vmapHint(f))}" title="the value map onto ${esc(j.answers[f.field])}: text value = code" onchange="this.blur();post('/api/answer',{job:'${j.id}',field:'${f.field}',attribute:'${j.answers[f.field]}',lookup:this.value})"></div>`:''}`:''}</td>`:''}</tr>`};
+ const table=(fs,a)=>`<table style="margin-top:6px"><thead><tr><th>field</th><th>sample</th><th>maps to</th>${a?'<th>answer</th>':''}</tr></thead><tbody>${fs.map(row).join('')}</tbody></table>`;
+ if(j.fields.length&&(open||j.kind=='heal')){
+  if(ask)h+=`<div class=lab style="margin-top:6px">${need.length} field${need.length==1?'':'s'} to answer${rest.length?` · ${rest.length} already known`:''} · fields left unanswered are carried unmapped</div>`;
+  if(shown.length&&(open||ask))h+=table(shown,ask);
+  if(rest.length)h+=`<details style="margin-top:6px"><summary class=lab>the ${rest.length} known field${rest.length==1?'':'s'}</summary>${table(rest,false)}</details>`;
+  else if(!open)h+=table(j.fields,false)}
+ if((j.certificates||[]).length&&open)h+=`<div class=lab style="margin-top:8px">Certificates: ${j.certificates.map(c=>`<span class="tag ${c.status=='resolved'?'ok':''}" title="${esc(c.candidates.join(' | '))}">${esc(c.field)} · ${esc((c.ambiguity||'').replace(/_/g,' '))}</span>`).join(' ')}</div>`;
+ if(ask){const B=j.blockers||[], miss=B.filter(b=>/mandatory/.test(b)), bad=B.find(b=>/fail to parse/.test(b)), dup=dups(j);
+  h+=`${miss.length?`<div class=amber style="margin-top:8px">Before promoting: ${esc(miss.map(b=>b.replace(/^.*mandatory attribute (\S+).*$/,'$1')).join(', '))} must be answered</div>`:''}
+  ${dup.length?`<div class=bad style="margin-top:4px">${esc(dup.join(', '))} ${dup.length==1?'is':'are'} chosen for more than one field — each attribute can be used once</div>`:''}
+  ${bad?`<div class=amber style="margin-top:4px">${esc(bad)}: an answer does not fit its values (e.g. text mapped to an address, a number to a time) — change it or leave the field unmapped</div>`:''}
+  <div class=btns style="margin-top:8px"><button onclick="useProposals('${j.id}')" ${need.some(f=>prop(f))?'':'disabled'}>Use the model's proposals</button><button class=go ${dup.length?'disabled':''} onclick="post('/api/promote',{job:'${j.id}'})">${j.state=='asking'?'Apply answers':'Promote'}</button></div>`}
+ h+=`<details style="margin-top:6px"><summary class=lab>steps</summary><ol class=steps>${j.steps.map(s=>`<li><span class="dim mono">${s.at}</span> ${esc(s.text)}</li>`).join('')}</ol></details>`;
  return h+'</details>'}
 async function tick(){try{S=await (await fetch('/api/state')).json()}catch(e){return}
- $('alerts').html=S.alerts.slice().reverse().map((a,n)=>n?`<div class="lab" style="margin:0 0 6px 4px">earlier alert · ${esc(a.format)} · ${a.at} · ${esc(a.outcome)}</div>`:`<div class="alert ${a.outcome.startsWith('healed')?'ok':a.outcome.startsWith('heal')?'':'bad'}"><b>DRIFT ALERT · ${esc(a.app)} · ${esc(a.format)}</b> <span class=dim>${a.at} · ${a.policy_version}</span><br>${esc(a.outcome)}
-   ${a.propagated?`<br><span class=lab>carried over: ${esc(a.propagated.join(', '))}${a.withheld&&a.withheld.length?' · withheld: '+esc(a.withheld.map(w=>w.field).join(', ')):''}${a.pack?' · pack '+esc(a.pack.pack_id)+' v'+a.pack.pack_version+' '+a.pack.sha256.slice(0,19)+'…':''}</span>`:''}
-   ${a.pack&&!a.rolled_back?` <button onclick="post('/api/rollback',{alert:'${a.id}'})" style="padding:2px 10px;margin-left:8px">Roll back</button>`:''}</div>`).join('');
- $('apps').html=S.apps.map(a=>`<tr class="click ${a.host==host?'sel':''}" onpointerdown="host='${a.host}';sel=null;tick()"><td><span class="dot ${a.connected?'ok':''}"></span><b>${esc(a.name)}</b>${a.real_device?' <span class="tag blue">REAL DEVICE</span>':''}${a.alert?' <span class=tag>attention</span>':''}<div class="lab mono">${esc(a.peer||'')}</div>${a.real_device?`<div class=lab>${esc(a.real_device.product)} ${esc(a.real_device.version)}${a.real_device.serial?` · serial ${esc(a.real_device.serial)}`:""}</div>`:''}</td>
-   <td>${esc(a.connector||'')}<div class="lab mono">${esc(a.channel||'')}</div>${(a.bound_packs||[]).length?`<div class=lab title="${esc(a.bound_packs.join(', '))}">bound: routed only among its source's ${a.bound_packs.length} pack${a.bound_packs.length>1?'s':''}</div>`:a.real_device?'<div class=lab>not bound yet: structure-only routing</div>':''}</td><td class=m>${a.events}<div class=lab><span class=ok>${a.usable} parsed</span> · <span class=amber>${a.quarantined} quarantined</span></div></td><td class=lab>${a.connected?'sending':'silent '+a.idle_s+' s'}${S.runtime.processes>1?`<div>process ${(a.processes||[]).join(', ')}${(a.processes||[]).length>1?' <span class=amber>(moved)</span>':''}</div>`:''}</td></tr>`).join('')||'<tr><td colspan=4 class=dim>no application has sent anything yet</td></tr>';
- $('ingress').html='listening: '+S.runtime.ingress.map(i=>`${i.label} <span class=mono>${i.addr}</span>`).join(' · ')+' — click an application to see its logs';
- $('rt').html=`<div><span class="dot ${S.runtime.up?'ok':'bad'}"></span>${S.runtime.up?'running':'DOWN'} · ${S.runtime.processes} process${S.runtime.processes>1?'es on the same ports (the kernel keeps each connection on one)':''} · hot reloads ${S.runtime.reloads}</div>
-   ${(S.processes.length>1||(S.scaling||{}).available)?`<table style="margin-top:6px"><tbody>${S.processes.map(p=>`<tr${p.state==='retired'?' class=dim':''}><td><span class="dot ${p.state==='retired'?'':p.up?'ok':'bad'}"></span>process ${p.process}${p.state&&p.state!=='running'?` <span class=${p.state==='retired'?'lab':'amber'}>${esc(p.state)}</span>`:''}</td><td class="lab mono">${esc(String(p.pid))} · ${esc((p.store_id||'').slice(0,12))}…</td><td class=m>${p.events}</td><td class=lab>${esc(p.applications.join(', ')||'no connection yet')}</td></tr>`).join('')}</tbody></table>`:''}
-   ${scaleView(S.scaling||{})}
-   <div class=lab style="margin-top:6px">parse success, last 40 events of the applications being onboarded</div><div class=big style="font-size:2rem">${S.parse_success==null?'—':Math.round(S.parse_success*100)+'%'}</div>
-   <div class=lab>${S.counts.frames} received · ${S.counts.usable} parsed · ${S.counts.quarantined} quarantined (bytes kept)</div>
-   <div class=lab style="margin-top:8px">onboarded formats</div>${S.runtime.packs.map(p=>`<div class=mono style="font-size:.85rem">${esc(p.family)} <span class=dim>v${p.pack_version}</span></div>`).join('')||'<div class=dim>none yet</div>'}
-   <div class=lab style="margin-top:6px">field labels: ${S.runtime.provider=='model'?'local model':'fixture (fallback, not the model)'}</div>`;
- $('p1').textContent='Auto-onboard new sources: '+(S.policy.auto_onboard?'ON':'OFF');$('p1').className=S.policy.auto_onboard?'on':'';$('p1').onclick=()=>post('/api/policy',{auto_onboard:!S.policy.auto_onboard});
- $('p3').style.display=S.runtime.relay_available?'':'none';$('p3').textContent='Four-vendor relay: '+(S.policy.vendor_relay?'ON':'OFF');$('p3').className=S.policy.vendor_relay?'on':'';$('p3').onclick=()=>post('/api/policy',{vendor_relay:!S.policy.vendor_relay});
- $('p2').textContent='Answers: '+(S.policy.prepared_answers?'prepared sheet':'ask me');$('p2').className=S.policy.prepared_answers?'on':'';$('p2').onclick=()=>post('/api/policy',{prepared_answers:!S.policy.prepared_answers});
- $('dests').html=S.egress.map(e=>`<div class=panel style="margin:0;border-color:${e.up?'var(--green)':'var(--red)'}"><h2 style="margin-bottom:6px">${esc(e.name)} ${e.ui?`<a class=pill style="padding:1px 8px;font-size:.75rem" href="${esc(e.ui)}" ${e.ui.startsWith('http')?'target=_blank':''}>open ↗</a>`:''}</h2>
-   <div class=big style="font-size:2rem" class="${e.up?'ok':'bad'}"><span class="${e.up?'ok':'bad'}">${e.up?'UP':'DOWN'}</span></div>
-   <div class=lab>ULPF is ahead of it by</div><div class=big style="font-size:2.4rem;color:${e.ahead_by>20?'var(--red)':e.ahead_by>0?'var(--amber)':'var(--green)'}">${e.ahead_by}</div>
-   <div class=lab>delivered ${e.delivered} · ${e.delivery=='stalled'?'<span class=bad>stalled — events kept in the spool, its cursor holds</span>':e.delivery=='delivering'?'delivering':'waiting'}</div>
-   ${e.rejected?`<div class="alert bad" style="margin:8px 0 0;padding:6px 10px"><b>REJECTED ${e.rejected}</b> — the destination refused events permanently (egress_rejected in the evidence log): check its index template</div>`:''}
-   ${e.skipped?`<div class="alert bad" style="margin:8px 0 0;padding:6px 10px"><b>SKIPPED ${e.skipped}</b> — the spool cap was reached while this destination was the slowest (egress_skipped records)</div>`:''}
-   <div class="lab mono" style="margin-top:6px">${esc(e.url)}</div></div>`).join('');
- const A=S.archive||{};const mb=b=>(b/1048576).toFixed(b<10485760?2:1)+' MB';
- $('arch').html=!A.configured?'<div class="alert bad">No evidence archive: the runtime runs with --dev-no-evidence-archive (development only) — the local evidence directory is the only copy.</div>':
-  `<div class=row><div><div class=lab>segments shipped (receipted in the archive)</div><div class=big style="font-size:2.2rem;color:var(--green)">${A.shipped_segments}</div><div class=lab>${mb(A.archived_bytes)} in the archive · ${A.checkpoints} signed checkpoints</div></div>
-   <div><div class=lab>segments pending (open, not yet committed or shipped)</div><div class=big style="font-size:2.2rem;color:${A.pending_segments>20?'var(--red)':A.pending_segments>6?'var(--amber)':'var(--green)'}">${A.pending_segments}</div><div class=lab>the committer ${A.committer?'<span class=ok>is running</span>':'<span class=bad>is NOT running</span>'}</div></div>
-   <div><div class=lab>local buffer</div><div class=big style="font-size:2.2rem">${mb(A.local_bytes)}</div><div class=lab>${A.local_segments} segments · ${(100*A.local_bytes/A.cap).toFixed(2)}% of the ${mb(A.cap)} cap · ${A.deleted_segments} deleted locally after shipping (grace ${esc(A.grace)})</div>
-    <div style="height:8px;background:var(--line);border-radius:4px;margin-top:6px"><div style="height:8px;border-radius:4px;width:${Math.min(100,100*A.local_bytes/A.cap).toFixed(2)}%;background:${A.local_bytes>0.8*A.cap?'var(--red)':'var(--green)'}"></div></div></div></div>
-   ${A.buffer_event&&A.buffer_event.kind!='evidence_buffer_resumed'?`<div class="alert bad" style="margin:8px 0 0"><b>${esc(A.buffer_event.kind)}</b> — ${esc(A.buffer_event.detail||'')}</div>`:''}
-   <p class=lab style="margin-top:8px">Sealed, committed segments are shipped byte-exact to <span class=mono>${esc(A.archive)}</span> by the committer and deleted here only when a signed checkpoint covers them, the receipt matches, the checkpoints are shipped, the grace period has passed and no proof is reading them. <b>Prove it</b> reads the archive when the local copy is gone. The kernel lock (P5) protects only this local buffer; in the archive, tampering is <i>detected</i> by the Merkle proofs and signatures — preventing it needs write-once storage.</p>`;
+ $('needs').html=S.jobs.filter(j=>['waiting_approval','answering','asking'].includes(j.state)).map(j=>`<div class=alert style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><b>${esc(nm(j.app))}</b><span>${j.state=='waiting_approval'?'new format: '+esc(fmtShort(j.format)):esc(fmtShort(j.format))+' — '+j.fields.filter(f=>!f.evidenced).length+' field(s) to answer'}</span>
+   ${j.state=='waiting_approval'?`<button class=go onclick="post('/api/approve',{job:'${j.id}'})">Onboard this format</button>`:`<button onclick="document.getElementById('job-${j.id}').scrollIntoView({behavior:'smooth'})">Answer</button>`}</div>`).join('')
+  +S.jobs.filter((j,i)=>j.state=='failed'&&!S.jobs.slice(i+1).some(k=>k.host==j.host&&k.format==j.format&&k.state=='done')).slice(-2).map(j=>`<div class="alert bad"><b>${esc(nm(j.app))}</b> ${esc(fmtShort(j.format))} — onboarding failed: ${esc(why(j))}. A new job starts by itself.</div>`).join('');
+ const dm=S.mode=='devices';
+ $('nav1').style.display=dm?'none':''; $('navsiem').href=dm?'http://127.0.0.1:5601/app/dashboards#/view/ulpf-real-devices':'http://127.0.0.1:5601/app/dashboards#/view/ulpf-overview';
+ const a0=S.alerts[S.alerts.length-1];
+ $('alerts').html=a0?`<div class="alert ${a0.outcome.startsWith('healed')?'ok':''}"><b>${a0.outcome.startsWith('heal')?'Drift healed':'Format change'} · ${esc((a0.app||'').replace(/\s*\(.*\)$/,''))} · ${esc(a0.format)}</b> <span class=dim>${esc(isNaN(Date.parse(a0.at))?a0.at:new Date(a0.at).toLocaleTimeString())}</span> — ${esc(short(a0.outcome))}${a0.pack&&!a0.rolled_back?` <button onclick="post('/api/rollback',{alert:'${a0.id}'})" style="padding:2px 10px;margin-left:8px">Roll back</button>`:''}</div>`:'';
+ const live=S.processes.filter(p=>p.state!='retired');
+ $('apps').html=S.apps.map(a=>`<tr class="click ${a.host==host?'sel':''}" onpointerdown="host='${a.host}';sel=null;tick()"><td><span class="dot ${a.connected?'ok':''}"></span><b>${esc((a.name||'').replace(/\s*\(.*\)$/,''))}</b><div class="lab mono">${esc(a.host)}</div></td>
+   <td class=m>${a.usable}${a.quarantined?` <span class=amber>· ${a.quarantined} quarantined</span>`:''}</td>
+   <td class=lab>${a.connected?'sending':'silent'}${live.length>1&&(a.process_labels||[]).length?' · process '+a.process_labels.join(', '):''}</td></tr>`).join('')||'<tr><td colspan=3 class=dim>nothing received yet</td></tr>';
+ const c=S.scaling||{}, retired=S.processes.filter(p=>p.state=='retired'), last=(c.history||[]).slice(-1)[0];
+ $('rt').html=`<div><span class="dot ${S.runtime.up?'ok':'bad'}"></span>${S.runtime.up?'Running':'DOWN'} · parse success <b>${S.parse_success==null?'—':Math.round(S.parse_success*100)+'%'}</b></div>
+   <table style="margin-top:6px"><tbody>${live.sort((x,y)=>(x.label??x.process)-(y.label??y.process)).map(p=>`<tr><td><span class="dot ${p.up?'ok':'bad'}"></span>${lbl(p)}${p.state!='running'?` <span class=amber>${esc(p.state)}</span>`:''}</td><td class=m>${p.events}</td></tr>`).join('')}</tbody></table>
+   ${c.available?`<div class=btns style="margin-top:8px"><button onclick="scaleAct('add')" ${c.busy||c.live>=c.limit?'disabled':''}>Add process</button><button onclick="scaleAct('remove')" ${c.busy||c.live<=1?'disabled':''}>Remove process</button>${retired.length?`<button onclick="showRetired=!showRetired;tick()">${showRetired?'Hide':'Show'} retired (${retired.length})</button>`:''}</div>
+     ${c.busy?`<div class="amber lab" style="margin-top:4px">${esc(c.busy)}</div>`:last?`<div class="lab ${last.ok?'':'bad'}" style="margin-top:4px">${esc(scaleMsg(last))}</div>`:''}
+     ${showRetired&&retired.length?`<table style="margin-top:6px"><tbody>${retired.map(p=>`<tr class=dim><td>${lbl(p)} · retired ${esc(p.retired_at||'')}</td><td class=m>${p.events}</td></tr>`).join('')}</tbody></table>`:''}
+     ${c.address_warning?`<div class="alert bad" style="margin:6px 0 0">${esc(c.address_warning)}</div>`:''}`:''}`;
  const siem=S.egress.find(e=>e.kind=='siem');
- $('siembtns').html=siem?(S.siem_action?`<span class=amber>SIEM: ${S.siem_action} in progress…</span>`:`<button class=danger onclick="post('/api/siem',{action:'outage'})" ${siem.up?'':'disabled'}>${S.mode=='devices'?'Stop OpenSearch (outage)':'Stop the SIEM (outage)'}</button><button class=go onclick="post('/api/siem',{action:'recover'})" ${siem.up?'disabled':''}>${S.mode=='devices'?'Start / connect OpenSearch':'Start the SIEM again'}</button><span class=lab style="margin-left:8px">The lake keeps flowing while the SIEM is down; on restart its backlog is delivered from its cursor — no document twice (_id = event_id).</span>`):'';
+ $('dests').html=S.egress.map(e=>{const s=e.kind=='siem';
+   const btn=s?(S.siem_action?`<span class=amber>${esc(S.siem_action)}…</span>`:e.up?`<button class=danger onclick="post('/api/siem',{action:'outage'})">Stop (outage)</button>`:`<button class=go onclick="post('/api/siem',{action:'recover'})">Start</button>`)
+     :(dm?(S.lake_writers?`<button onclick="post('/api/lake-control',{action:'disconnect'})">Disconnect</button>`:`<button class=go onclick="post('/api/lake-control',{action:'connect'})">Connect</button>`):'');
+   return `<div class=panel><h2>${s?'SIEM — OpenSearch':'Data lake — Parquet'} ${e.ui?`<a class=pill style="padding:1px 8px;font-size:.75rem" href="${esc(e.ui)}" ${e.ui.startsWith('http')?'target=_blank':''}>open ↗</a>`:''}</h2>
+   <div class=big style="font-size:1.8rem"><span class="${e.up?'ok':'bad'}">${e.up?'UP':'DOWN'}</span>${e.ahead_by?` <span style="font-size:1rem;color:${e.ahead_by>20?'var(--red)':'var(--amber)'}">${e.ahead_by} waiting</span>`:''}</div>
+   <div class=lab>${e.delivered} delivered</div>
+   ${e.rejected?`<div class="alert bad" style="margin:6px 0 0;padding:6px 10px">${e.rejected} rejected by the destination</div>`:''}${e.skipped?`<div class="alert bad" style="margin:6px 0 0;padding:6px 10px">${e.skipped} skipped (spool full)</div>`:''}
+   <div class=btns style="margin-top:8px">${btn}</div></div>`}).join('');
  devices();
- const isOpen=j=>!['done','failed'].includes(j.state);$('openjobs').html=S.jobs.filter(isOpen).reverse().map(jobHtml).join('');$('donejobs').html=(S.jobs.some(j=>!isOpen(j))?'<h1>Finished onboarding and healing</h1>':'')+S.jobs.filter(j=>!isOpen(j)).reverse().map(jobHtml).join('');
- if(host){$('logsec').style.display='';const a=S.apps.find(x=>x.host==host);$('logtitle').textContent='Incoming logs — '+(a?a.name:host);
+ const isOpen=j=>!['done','failed'].includes(j.state);
+ const done=S.jobs.filter(j=>!isOpen(j)).reverse();
+ const W=j=>['waiting_approval','answering','asking'].includes(j.state)?0:1;
+ const busyEl=document.activeElement, editing=busyEl&&['SELECT','INPUT'].includes(busyEl.tagName)&&$('jobs').contains(busyEl);
+ if(!editing)$('jobs').html=S.jobs.filter(isOpen).reverse().sort((x,y)=>W(x)-W(y)).map(jobHtml).join('')+(done.length?`<details class=panel><summary><h2 style="display:inline">Finished (${done.length})</h2></summary>${done.map(j=>`<div class=lab style="margin:4px 0">${KIND[j.kind]||'Onboarding'} · ${esc(j.app||'')} · ${esc(j.format||'')} — <span class="${j.state=='done'?'ok':'bad'}">${j.state}</span>${j.pack?' · '+esc(j.pack.pack_id)+' v'+esc(j.pack.pack_version):''}</div>`).join('')}</details>`:'');
+ $('policy').html=`<span class=lab style="align-self:center">Answers for a new format:</span><button class="${S.policy.prepared_answers?'on':''}" onclick="post('/api/policy',{prepared_answers:true})">Prepared sheet</button><button class="${S.policy.prepared_answers?'':'on'}" onclick="post('/api/policy',{prepared_answers:false})">Ask me</button>
+  <span class=lab style="align-self:center;margin-left:14px">New sources:</span><button class="${S.policy.auto_onboard?'':'on'}" onclick="post('/api/policy',{auto_onboard:false})">Wait for me</button><button class="${S.policy.auto_onboard?'on':''}" onclick="post('/api/policy',{auto_onboard:true})">Onboard automatically</button>${S.runtime.relay_available?`<button class="${S.policy.vendor_relay?'on':''}" style="margin-left:14px" onclick="post('/api/policy',{vendor_relay:${!S.policy.vendor_relay}})">Four-vendor relay: ${S.policy.vendor_relay?'ON':'OFF'}</button>`:''}`;
+ const A=S.archive||{}, mb=b=>(b/1048576).toFixed(1)+' MB';
+ $('arch').html=A.configured?`<div class=lab>Evidence archive: ${A.shipped_segments} segments shipped (${mb(A.archived_bytes)}), ${A.pending_segments} pending, local buffer ${mb(A.local_bytes)} of ${mb(A.cap)} · committer ${A.committer?'<span class=ok>running</span>':'<span class=bad>not running</span>'}</div>`:'<div class=bad>No evidence archive configured</div>';
+ if(host){$('logsec').style.display='';const a=S.apps.find(x=>x.host==host);$('logtitle').textContent='Logs — '+(a?a.name:host);
   const rows=await (await fetch('/api/logs?host='+host)).json();
-  $('logs').html=rows.map(r=>`<tr class="click ${r.event_id==sel?'sel':''}" onpointerdown="show('${r.event_id}')"><td class=m>${r.at}</td><td>${r.connector}</td><td>${esc(r.format)}</td><td>${r.ok?'<span class="tag ok">'+esc(r.outcome)+'</span>':r.ok===false?'<span class=tag>'+esc(r.outcome)+'</span>':'<span class=dim>…</span>'}</td><td class="m dim">${esc(r.preview)}</td></tr>`).join('');}}
-function devices(){const D=S.devices, dm=S.mode=='devices';
- $('nav1').textContent=dm?'1 Devices':'1 Generator';$('nav1').href=dm?'#devsec':'http://127.0.0.1:8780/';
- $('devsec').style.display=dm?'':'none';
- const siem=S.egress.find(e=>e.kind=='siem'), lake=S.egress.find(e=>e.kind=='lake');
- $('egressbtns').html=dm?`<button class=go onclick="post('/api/lake-control',{action:'connect'})" ${S.lake_writers?'disabled':''}>Connect the lake (start its writers)</button><button onclick="post('/api/lake-control',{action:'disconnect'})" ${S.lake_writers?'':'disabled'}>Disconnect the lake</button>
-   <span class=lab>lake writers running: ${S.lake_writers} · </span><a class=pill href="http://127.0.0.1:5601/app/dashboards#/view/ulpf-real-devices" target=_blank>Dashboard: real devices side by side ↗</a> <a class=pill href="http://127.0.0.1:5601/app/discover#/view/ulpf-lab-attacker" target=_blank>Saved search: one attacker, every device ↗</a>`:'';
- if(!dm||!D)return;const st=D.status||{}, busy=D.busy, dis=busy?'disabled':'';
+  $('logs').html=rows.map(r=>`<tr class="click ${r.event_id==sel?'sel':''}" onpointerdown="show('${r.event_id}')"><td class=m>${r.ms?new Date(r.ms).toLocaleTimeString():r.at}</td><td>${esc(r.format)}</td><td>${r.ok?'<span class="tag ok">parsed</span>':r.ok===false?'<span class=tag>quarantined</span>':'<span class=dim>…</span>'}</td><td class="m dim">${esc(r.preview)}</td></tr>`).join('');}}
+function devices(){const D=S.devices;
+ if(S.mode!='devices'||!D){$('devsec').style.display='none';return}
+ $('devsec').style.display='';const st=D.status||{}, dis=D.busy?'disabled':'';
  const app=h=>S.apps.find(a=>a.host==h)||{}, fa=app('172.20.20.2'), ia=app('172.20.20.11');
- const c=(n,ok,txt)=>`<div class=lab>${n}: <span class="${ok?'ok':'bad'}">${esc(txt)}</span></div>`;
- const fmt=D.format||st.syslog_format||'default';
- $('devs').html=`<div class=panel style="margin:0;flex:1;min-width:300px"><h2>FortiGate firewall <span class="tag blue">REAL DEVICE</span></h2>
-   ${c('licence',st.licence_valid,st.fgt_License_Status||'unknown')}<div class=lab>${esc((st['fgt_Version']||'').replace(/_/g,' '))} · serial ${esc(st['fgt_Serial-Number']||'?')}</div>
-   ${c('syslog to ULPF (its ingress connector)',st.fgt_syslog_on,st.fgt_syslog_on?'ON → '+(st.syslog_server||'')+':'+(st.syslog_port||'')+' TCP, format '+fmt:'OFF')}
-   ${c('seen by ULPF',fa.connected,fa.connected?'sending ('+fa.events+' events)':'not sending')}
-   <div class=btns style="margin-top:6px"><button class=go ${dis} onclick="dev('fgt-connect')">Connect to ULPF</button><button ${dis} onclick="dev('fgt-disconnect')">Disconnect</button></div>
-   <div class=lab style="margin-top:6px">log format — a live switch on the device (real drift)</div>
-   <div class=btns>${['default','json','csv','cef'].map(f=>`<button class="${fmt==f?'on':''}" ${dis} onclick="dev('fgt-format','${f}')">${f=='default'?'Default (key=value)':f.toUpperCase()}</button>`).join('')}</div>
-   <div class=btns><button ${dis} onclick="dev('fgt-logins',8)">Admin logins ×8 (system events)</button></div></div>
-  <div class=panel style="margin:0;flex:1;min-width:300px"><h2>Suricata IDS <span class="tag blue">REAL SENSOR</span></h2>
-   ${c('sensor',st['container_fgt-ids']=='running',st['container_fgt-ids']||'unknown')}<div class=lab>on the FortiGate's port2 wire (fgt-client's eth1) · 5 local rules, offline</div>
-   ${c('EVE → syslog forwarder → ULPF (its ingress connector)',st.ids_forwarder_on,st.ids_forwarder_on?'ON → 172.20.20.1:6515 TCP':'OFF')}
-   ${c('seen by ULPF',ia.connected,ia.connected?'sending ('+ia.events+' events)':'not sending')}
-   <div class=btns style="margin-top:6px"><button class=go ${dis} onclick="dev('ids-connect')">Connect to ULPF</button><button ${dis} onclick="dev('ids-disconnect')">Disconnect</button></div></div>
-  <div class=panel style="margin:0;flex:1;min-width:260px"><h2>Lab traffic</h2>
-   ${c('traffic loop (fgt-client → FortiGate → server)',st.traffic_loop=='running',st.traffic_loop||'unknown')}
-   <div class=lab>allowed web and ping; denied SSH, Telnet, SMB, RDP, DNS — every few seconds</div>
-   <div class=btns style="margin-top:6px"><button class=danger ${dis} onclick="dev('attack')">Attack traffic (Telnet/SMB/RDP + web attack ×5)</button></div>
-   <div class=lab>the FortiGate denies and logs it; Suricata, on the same wire, alerts on it</div>
-   ${c('Containerlab distro kept up',st.keepalive=='running',st.keepalive=='running'?'yes (no window needed)':'NO keep-alive')}</div>`;
- $('devlog').html=(busy?`<span class=amber>running: ${esc(busy)}…</span> `:'')+(D.history||[]).slice().reverse().slice(0,4).map(h=>`<div><span class=mono>${h.at}</span> ${esc(h.action)} ${esc((h.args||[]).join(' '))} — <span class="${h.rc?'bad':'ok'}">${h.rc?'failed':'ok'}</span> <span class=dim>${esc((h.output||'').split('\n').slice(-2).join(' · ').slice(0,200))}</span></div>`).join('')+(D.checked_s_ago!=null?`<div class=dim>device status read ${D.checked_s_ago} s ago</div>`:'');}
+ const state=(on,a)=>a.connected?`<span class=ok><span class="dot ok"></span>sending · ${a.events} events</span>`:on?'<span class=amber><span class="dot amber"></span>connecting…</span>':'<span class=dim><span class=dot></span>not connected</span>';
+ const fmt=D.format||st.syslog_format||'default', last=(D.history||[]).slice(-1)[0];
+ $('devsec').html=`<div class=panel><h2>FortiGate firewall ${st.licence_valid?'':'<span class="tag bad">licence not valid</span>'}</h2><div>${state(st.fgt_syslog_on,fa)}</div>
+   <div class=btns style="margin-top:8px"><button class=go ${dis} onclick="dev('fgt-connect')">Connect</button><button ${dis} onclick="dev('fgt-disconnect')">Disconnect</button></div>
+   <div class=lab style="margin-top:8px">log format</div><div class=btns>${['default','json','csv','cef'].map(f=>`<button class="${fmt==f?'on':''}" ${dis} onclick="dev('fgt-format','${f}')">${f=='default'?'Default':f.toUpperCase()}</button>`).join('')}</div></div>
+  <div class=panel><h2>Suricata IDS</h2><div>${state(st.ids_forwarder_on,ia)}</div>
+   <div class=btns style="margin-top:8px"><button class=go ${dis} onclick="dev('ids-connect')">Connect</button><button ${dis} onclick="dev('ids-disconnect')">Disconnect</button></div></div>
+  <div class=panel style="flex:0 0 280px"><h2>Lab traffic</h2><div class=btns><button class=danger ${dis} onclick="dev('attack')">Send attack traffic</button></div>
+   <div class=lab style="margin-top:8px">${D.busy?`<span class=amber>${esc(D.busy)}…</span>`:last?`last: ${esc(last.action)} — <span class="${last.rc?'bad':'ok'}">${last.rc?'failed':'ok'}</span>`:''}</div></div>`;}
 function dev(action,arg){fetch('/api/device',{method:'POST',body:JSON.stringify({action,arg})}).then(r=>r.ok?tick():r.text().then(t=>alert(t)))}
 async function show(id){sel=id;const d=await (await fetch('/api/log?id='+id)).json();$('detail').style.display='';
  $('d_raw').textContent=d.raw.text;
- $('d_rawmeta').html=`${d.raw.bytes} bytes · stored at ${esc(d.raw.segment)} + ${d.raw.offset} · ${esc(d.raw.raw_hash.slice(0,23))}… <span class="${d.raw.hash_verified_now?'ok':'bad'}">${d.raw.hash_verified_now?'hash verified just now':'HASH MISMATCH'}</span><br>arrived on <span class=mono>${esc(d.raw.ingest_channel)}</span> from <span class=mono>${esc(d.raw.peer)}</span> · framing ${esc(d.raw.framing&&d.raw.framing.method)}`;
- const f=d.format;$('d_fmt').html=[['envelope',f.envelope+(f.envelope_header?' — '+Object.entries(f.envelope_header).filter(([k,v])=>['device_vendor','device_product','device_version','signature_id'].includes(k)).map(([k,v])=>k+'='+v).join(', '):'')],['payload format',f.surface],['fields counted by the router',f.arity!='0'&&f.arity],['token classes',f.token_classes&&f.token_classes.join(' ')],['routing signature',f.routing_signature]].filter(x=>x[1]).map(x=>`<tr><td class=lab>${x[0]}</td><td class=m>${esc(x[1])}</td></tr>`).join('');
- const p=d.parsed;$('d_title').textContent=p.status=='normalized'?'Normalized event (OCSF)':'Not normalized';
- $('d_parsed').html=p.status=='normalized'?`<p class=lab>pack <span class=mono>${esc(p.pack)} v${esc(p.pack_version)}</span> · family <span class=mono>${esc(p.family)}</span></p><pre class=json>${esc(JSON.stringify(p.event,null,2))}</pre><h2 style="margin-top:14px">Lineage — back to the raw bytes</h2><pre class=json style="max-height:220px">${esc(JSON.stringify(p.lineage,null,2))}</pre>`
-   +`<p><button class=go onclick="prove('${id}');document.getElementById('findsec').scrollIntoView()">Prove it — this event, back to its original bytes</button></p>`
-   :p.status=='quarantined'?`<div class=alert><b>Quarantined at stage “${esc(p.stage)}”</b><br>${esc(p.reason)}<br><span class=lab>The bytes are kept in the evidence log; nothing was guessed.</span></div>`:'<span class=dim>still in flight</span>';
+ $('d_rawmeta').html=`${d.raw.bytes} bytes from <span class=mono>${esc(d.raw.peer)}</span> · <span class="${d.raw.hash_verified_now?'ok':'bad'}">${d.raw.hash_verified_now?'hash verified':'HASH MISMATCH'}</span>`;
+ const f=d.format;$('d_fmt').html=`<div class=big style="font-size:1.4rem">${esc(f.surface||'—')}</div><div class=lab>${esc(f.envelope)}</div>`;
+ const p=d.parsed;$('d_title').textContent=p.status=='normalized'?'Normalized (OCSF)':'Not normalized';
+ $('d_parsed').html=p.status=='normalized'?`<p class=lab>${esc(p.pack)} v${esc(p.pack_version)}</p><pre class=json>${esc(JSON.stringify(p.event,null,2))}</pre>
+   <p><button class=go onclick="prove('${id}')">Prove it</button></p>`
+   :p.status=='quarantined'?`<div class=alert><b>Quarantined</b> — ${esc(p.reason)}<br><span class=lab>The bytes are kept; nothing was guessed.</span></div>`:'<span class=dim>in flight</span>';
  tick()}
-async function finds(){try{F=await (await fetch('/api/findings')).json()}catch(e){F=[]}
- $('finds').html=F.slice(0,10).map(f=>`<tr><td>${esc(f.rule)}</td><td class=m>${new Date(f.at).toLocaleTimeString()}</td><td class=m>${esc(f.event_ids[0]||'')}${f.event_ids.length>1?' <span class=dim>+'+(f.event_ids.length-1)+'</span>':''}</td><td><button onclick="prove('${f.event_ids[0]}')">Prove it</button></td></tr>`).join('')||'<tr><td colspan=4 class=dim>no finding yet — the detector runs every minute (Generator: “Attack burst”, or wait for a known-bad address)</td></tr>';
- if(proving){const t=await (await fetch('/api/trace?id='+proving)).json();
-  $('trace').html=t?`<div class="alert ${t.ok?'ok':'bad'}" style="margin:0"><b>${t.ok?'PROVEN':'INCOMPLETE'} — ${esc(t.event_id)}</b><ol class=steps>${t.steps.map(s=>`<li><span class="${s.ok?'ok':'bad'}">${s.ok?'✓':'✗'}</span> <b>${esc(s.step)}</b> — ${esc(s.detail)}${s.raw?`<pre class=raw style="margin-top:4px">${esc(s.raw)}</pre>`:''}</li>`).join('')}</ol>
-   ${t.steps.some(s=>s.bundle)?`<div class=btns style="margin-top:6px"><a class=pill href="/api/bundle?id=${esc(t.event_id)}">Download the derivation bundle (offline-verifiable)</a> <a class=pill target=_blank href="/certificate?id=${esc(t.event_id)}">BSA §63(4) certificate — DRAFT, print</a></div>
-   <div class=lab>The certificate is a draft: Part A is pre-filled from ULPF's records, its declaration and Part B must be completed and signed by people. Not legal advice.</div>`:''}</div>`:`<span class=amber>proving ${esc(proving)}…</span>`;}}
+async function finds(){let F=[];try{F=await (await fetch('/api/findings')).json()}catch(e){}
+ $('finds').html=F.slice(0,6).map(f=>`<tr><td>${esc(f.rule)}</td><td class=m>${new Date(f.at).toLocaleTimeString()}</td><td><button onclick="prove('${f.event_ids[0]}')">Prove it</button></td></tr>`).join('')||'<tr><td class=dim>none yet</td></tr>';
+ if(proving){const t=await (await fetch('/api/trace?id='+proving)).json();$('tracesec').style.display='';
+  $('trace').html=t?`<div class="${t.ok?'ok':'bad'}" style="font-weight:700;margin-bottom:6px">${t.ok?'PROVEN':'INCOMPLETE'} <span class="mono dim" style="font-weight:400">${esc(t.event_id)}</span></div>
+   <ol class=steps>${t.steps.map(s=>`<li title="${esc(s.detail)}"><span class="${s.ok?'ok':'bad'}">${s.ok?'✓':'✗'}</span> ${esc(s.step)}</li>`).join('')}</ol>
+   ${t.steps.some(s=>s.bundle)?`<div class=btns style="margin-top:8px"><a class=pill target=_blank href="/certificate?id=${esc(t.event_id)}">BSA §63(4) certificate — draft</a><a class=pill href="/api/bundle?id=${esc(t.event_id)}">Download proof</a></div>`:''}`:`<span class=amber>proving…</span>`;}}
 async function tlogv(){let T;try{T=await (await fetch('/api/tlog')).json()}catch(e){return}
- const c=T.checkpoint||{};
- $('tlog').html=`<div class=lab>log <span class=mono>${esc(c.origin||'—')}</span> · checkpoint size ${c.size??'—'} · signed by ${esc((c.signatures||[]).join(', ')||'—')}${(c.signatures||[]).length>1?' <span class=ok>(witness-cosigned)</span>':''} · witness ${T.witness?`<span class=mono>${esc(T.witness)}</span> (on this machine — it stands in for an independent site)`:'<span class=amber>not running</span>'}. The runtime refuses any pack without a valid inclusion proof.</div>
-  <div class=btns style="margin:6px 0">${(S&&S.processes||[{process:1}]).filter(p=>!p.state||p.state==='running').map(p=>`<button onclick="pushUnlogged(${p.process})">Push an UNLOGGED pack to process ${p.process}</button>`).join('')}</div>
-  ${(T.refusals||[]).length?`<div class="alert bad" style="margin:4px 0">${T.refusals.slice().reverse().map(r=>`<div><b>REFUSED by process ${r.process}</b> ${esc(r.pack)} — recorded in its evidence log (<span class=mono>${esc(r.event_id)}</span>, ${esc(r.segment)}): ${esc((r.detail||'').slice(0,220))}</div>`).join('')}</div>`:''}
-  <table><thead><tr><th>#</th><th>pack</th><th>version</th><th>how it was produced</th><th>logged</th><th>sha256</th></tr></thead><tbody>${(T.entries||[]).map(e=>`<tr><td class=m>${e.index}</td><td>${esc(e.PackID)}${e.active?' <span class=tag>active</span>':''}</td><td class=m>${esc(e.PackVersion)}</td><td>${esc(e.ProducedBy)}</td><td class=m>${esc(e.LoggedAt)}</td><td class="mono lab">${esc((e.PackSHA256||'').slice(7,23))}…</td></tr>`).join('')}</tbody></table>`}
-function scaleView(c){
-  if(!c.available)return c.why?`<div class=lab style="margin-top:6px">processes: ${esc(c.why)}</div>`:'';
-  const h=(c.history||[]).slice(-2).reverse().map(x=>`<div class=${x.ok?'lab':'bad'}>${esc(x.at)} ${esc(x.action)}: ${esc(x.outcome||'')} (${x.seconds} s)</div>`).join('');
-  return `<div class=btns style="margin:6px 0"><button onclick="scaleAct('add')" ${c.busy||c.live>=c.limit?'disabled':''}>Add a process</button><button onclick="scaleAct('remove')" ${c.busy||c.live<=1?'disabled':''}>Remove a process</button></div>
-   <div class=lab>${c.live} of at most ${c.limit} (one per CPU Docker reports)${c.mem_available?` · ${Math.round(c.mem_available/1048576)} MiB free`:''} · each process: a runtime, a committer and a lake writer container</div>
-   ${c.busy?`<div class=amber>${esc(c.busy)}</div>`:''}${h}${c.address_warning?`<div class="alert bad" style="margin:4px 0">${esc(c.address_warning)}</div>`:''}`}
-async function scaleAct(a){const r=await fetch('/api/scale',{method:'POST',body:JSON.stringify({action:a})});if(!r.ok)alert(await r.text())}
-async function pushUnlogged(i){const r=await (await fetch('/api/push-unlogged',{method:'POST',body:JSON.stringify({process:i})})).json();alert((r.refused?'REFUSED by process ':'NOT refused?! process ')+r.process+': '+r.pack+'\n'+(r.reason||''));tlogv()}
-function prove(id){proving=id;fetch('/api/prove',{method:'POST',body:JSON.stringify({event_id:id})});finds()}
+ const live=(S&&S.processes||[]).filter(p=>p.state=='running');
+ $('tlog').html=`<div class=lab>Parser transparency log: ${(T.entries||[]).length} packs · the runtime loads only logged packs</div>
+  <div class=btns style="margin:6px 0">${live.map(p=>`<button onclick="pushUnlogged(${p.process})">Push an unlogged pack to ${lbl(p)}</button>`).join('')}</div>
+  ${(T.refusals||[]).length?`<div class="alert bad" style="margin:4px 0">${T.refusals.slice(-3).reverse().map(r=>`<div><b>Refused</b> ${esc(r.pack)} — recorded in the evidence log</div>`).join('')}</div>`:''}
+  <table><thead><tr><th>pack</th><th>version</th><th>produced</th><th>logged</th></tr></thead><tbody>${(T.entries||[]).slice(0,12).map((e,i,a)=>`<tr><td>${esc(e.PackID)}${e.active&&!a.slice(0,i).some(x=>x.PackID==e.PackID&&x.PackVersion==e.PackVersion)?' <span class="tag ok">active</span>':''}</td><td class=m>${esc(e.PackVersion)}</td><td>${esc(e.ProducedBy)}</td><td class=m>${esc((e.LoggedAt||'').replace('T',' ').replace('Z',''))}</td></tr>`).join('')}</tbody></table>`}
+async function useProposals(id){const j=S.jobs.find(x=>x.id==id);if(!j)return;
+ for(const f of j.fields.filter(f=>!f.evidenced&&!(f.field in (j.answers||{})))){const a=(f.mapped.concat(f.candidates||[]))[0];if(a&&S.attributes.includes(a))await fetch('/api/answer',{method:'POST',body:JSON.stringify({job:id,field:f.field,attribute:a,via:'proposal'})})}
+ tick()}
+async function scaleAct(a){const r=await fetch('/api/scale',{method:'POST',body:JSON.stringify({action:a})});if(!r.ok)alert(await r.text());tick()}
+async function pushUnlogged(i){const r=await (await fetch('/api/push-unlogged',{method:'POST',body:JSON.stringify({process:i})})).json();alert((r.refused?'Refused: ':'NOT refused: ')+r.pack);tlogv()}
+function prove(id){proving=id;$('tracesec').style.display='';$('trace').html='<span class=amber>proving…</span>';fetch('/api/prove',{method:'POST',body:JSON.stringify({event_id:id})});finds();$('tracesec').scrollIntoView({behavior:'smooth'})}
 tick();setInterval(tick,900);finds();setInterval(finds,3000);tlogv();setInterval(tlogv,5000);
 </script>

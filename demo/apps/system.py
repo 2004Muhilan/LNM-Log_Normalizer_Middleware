@@ -62,7 +62,17 @@ SHEET_V2 = {2: ("connection_info.protocol_num", "firmware 2.0 writes the IANA pr
 # A prepared sheet is BOUND to the source it was prepared for (2026-09-30): it answers that source's fields and no
 # other's. Before, the sheet was applied by column position to whatever was being onboarded — on the real FortiGate it
 # asserted "position 1 is time" on a CEF line; only the acceptance policy kept that pack out.
-PREPARED_SHEETS = {"flowtap-01": {"author": "op-014", "for": "the flowtap sensor's columns", "by_slot": SHEET, "v2": SHEET_V2}}
+# Suricata's EVE alert fields BY NAME (2026-10-02, the user's request: no hand labelling on every onboarding): op-014's
+# answers written down in advance from Suricata's EVE documentation, bound to this one sensor. The fields it does not name
+# are left unmapped (carried under their own names).
+SURICATA_SHEET = {"timestamp": ("time", "EVE: the time the event was logged", None),
+                  "src_ip": ("src_endpoint.ip", "EVE: the packet's source address", None), "src_port": ("src_endpoint.port", "EVE: the source port", None),
+                  "dest_ip": ("dst_endpoint.ip", "EVE: the packet's destination address", None), "dest_port": ("dst_endpoint.port", "EVE: the destination port", None),
+                  "proto": ("connection_info.protocol_name", "EVE: the transport protocol", None),
+                  "action": ("action_id", "EVE alert.action: what the sensor did — allowed 1, blocked 2 (OCSF's codes)", {"allowed": 1, "blocked": 2}),
+                  "signature": ("message", "EVE alert.signature: the rule's message", None)}
+PREPARED_SHEETS = {"flowtap-01": {"author": "op-014", "for": "the flowtap sensor's columns", "by_slot": SHEET, "v2": SHEET_V2},
+                   "suricata-lab-01": {"author": "op-014", "for": "Suricata's EVE alert fields, by name", "by_name": SURICATA_SHEET}}
 # Adding a runtime process (container deployment): at most one per CPU Docker reports, and not below this much free memory
 # (a process's three containers measured ~170 MiB together: runtime ~20, lake writer ~130, committer ~10 — docs/laptop-branch.md §7)
 MIN_FREE_BYTES = 512 << 20
@@ -161,6 +171,7 @@ class Proc:
         self.runtime = None
         self.ctl = ctl
         self.state = "starting"
+        self.label = i          # the number the page shows: a new process takes the lowest free one (2026-10-02, the user's request)
         self.final_log = None   # a removed runtime container's last log (its log goes with the container)
 
     def err_text(self):
@@ -436,21 +447,30 @@ class System:
             with self.tick_lock:
                 i = len(self.procs) + 1
                 p = Proc(i, self.dir, self.a, self.scaler)
+                used = {x.label for x in self.live()}
+                p.label = next(n for n in range(1, len(self.procs) + 2) if n not in used)
                 p.packs.write_text("".join(v["pack"] + "\n" for v in self.active.values()))
                 self.procs.append(p)
-            self.scale_busy = f"add: starting process {i} (runtime, committer, lake writer containers)"
+            self.scale_busy = f"add: starting process {p.label}"
             self.start_proc(p)
             for _ in range(120):
                 if "listening for" in p.err_text():
                     break
                 if self.scaler.state_of(i, "runtime") == "exited":
                     p.state = "retired"
-                    raise RuntimeError(f"process {i}'s runtime exited: {p.err_text()[-300:]}")
+                    raise RuntimeError(f"process {p.label}'s runtime exited: {p.err_text()[-300:]}")
                 time.sleep(0.5)
             else:
-                raise RuntimeError(f"process {i}'s runtime did not start listening in 60 s")
+                raise RuntimeError(f"process {p.label}'s runtime did not start listening in 60 s")
+            if self.lake_on:   # running = all of it answers: its lake writer too (a remove right after an add found it not up yet)
+                for _ in range(60):
+                    try:
+                        urllib.request.urlopen(f"http://127.0.0.1:{p.lake_port}/status", timeout=1).read()
+                        break
+                    except Exception:   # noqa: BLE001
+                        time.sleep(0.5)
             p.state = "running"
-        return {"process": i, "outcome": f"process {i} running: {p.ident()}, its own evidence store {p.store_id() or '(created on its first event)'}, "
+        return {"process": i, "label": p.label, "outcome": f"process {p.label} running: {p.ident()}, its own evidence store {p.store_id() or '(created on its first event)'}, "
                                          f"{len(self.active) + 1 + self.vendors_loaded} packs loaded"}
 
     def proc_ahead(self, p):
@@ -479,20 +499,20 @@ class System:
         every sealed segment to the archive, (4) stop the committer and the lake writer. The process stays on the page as
         RETIRED: its evidence store is kept, Prove it still works on its events. Its open connections close; the senders
         reconnect, and the kernel puts them on another process."""
-        p = self.live()[-1]
+        p = max(self.live(), key=lambda x: x.label)   # the highest-numbered process on the page
         down = [d["name"] for d in self.destinations if not self.health.get(d["name"], (False,))[0]]
         if down:
-            raise RuntimeError(f"{', '.join(down)} is down: process {p.i} would be removed with events still in its spool — reconnect it first")
+            raise RuntimeError(f"{', '.join(down)} is down: process {p.label} would be removed with events still in its spool — reconnect it first")
         with self.proc_lock:
             p.state = "draining"   # no reload goes to it from now on
-        self.scale_busy = f"remove: process {p.i} — waiting until every destination has what it parsed"
+        self.scale_busy = f"remove: process {p.label} — waiting until every destination has what it parsed"
         end = time.time() + 45
         while time.time() < end and self.proc_ahead(p) > 0:
             time.sleep(1)
-        self.scale_busy = f"remove: stopping process {p.i}'s runtime (it drains and seals its open segment)"
+        self.scale_busy = f"remove: stopping process {p.label}'s runtime (it drains and seals its open segment)"
         r = self.scaler.stop(p.i, "runtime", 30)
         p.final_log = r.get("log_tail") or ""
-        self.scale_busy = f"remove: process {p.i} — waiting until its committer has shipped every sealed segment"
+        self.scale_busy = f"remove: process {p.label} — waiting until its committer has shipped every sealed segment"
         end = time.time() + 120
         while time.time() < end and self.proc_pending(p) > 0:
             time.sleep(2)
@@ -516,8 +536,9 @@ class System:
         if self.scaler.state_of(p.i, "lake") != "absent":
             self.scaler.stop(p.i, "lake", 30)
         p.state = "retired"
-        return {"process": p.i, "accounting": "the runtime's exit summary" if summary is not None else "the console's count", "emitted": (summary or {}).get("emitted"),
-                "outcome": f"process {p.i} retired (runtime exit {r.get('exit_code')}): {ahead} parsed event(s) not delivered"
+        p.retired_at = time.strftime("%H:%M:%S")
+        return {"process": p.i, "label": p.label, "accounting": "the runtime's exit summary" if summary is not None else "the console's count", "emitted": (summary or {}).get("emitted"),
+                "outcome": f"process {p.label} retired (runtime exit {r.get('exit_code')}): {ahead} parsed event(s) not delivered"
                                            f"{' — kept in its spool' if ahead else ''}, {pending} segment(s) not shipped{' — kept locally' if pending else ''}; "
                                            "its evidence stays readable"}
 
@@ -670,7 +691,12 @@ class System:
                     continue
                 groups.setdefault(key, []).append(e)
         for key, evs in groups.items():
-            if len(evs) >= 10 and not any(j["key"] == key and (j["state"] not in ("done", "failed") or (j["state"] == "failed" and time.time() - j["started"] < 60)) for j in self.jobs):
+            sig0 = (evs[-1].get("sig") or "").split("|")[:2]
+            # one learning job at a time per SOURCE and FORMAT (2026-10-02): a CSV drift's lines differ in column count, so their
+            # signatures differ, and a second heal of the same format queued behind the first on the one model
+            same_format = any(j["state"] not in ("done", "failed") and j.get("host") == self.host_of(evs[-1]) and j.get("l1") == sig0[0]
+                              and j.get("l2") == (sig0[1] if len(sig0) > 1 else "?") for j in self.jobs)
+            if len(evs) >= 10 and not same_format and not any(j["key"] == key and (j["state"] not in ("done", "failed") or (j["state"] == "failed" and time.time() - j["started"] < 60)) for j in self.jobs):
                 kind = key.split(" ", 1)[0]
                 sig = evs[-1].get("sig", "")
                 parts = sig.split("|")
@@ -885,16 +911,26 @@ class System:
             size = sum(Path(f).stat().st_size for f in fs)
             out["sources"].append({"source": src.name, "path": str(src.relative_to(lake)) + "/region=…/accountId=…/eventDay=…/", "files": len(fs), "bytes": size, "distinct_schemas": len(schemas),
                                    "columns": len(json.loads(next(iter(schemas)))), "days": [{"day": str(d), "rows": r, "files": n} for d, r, n in days]})
-            if src.name == "ulpf_network_activity":
-                out["latest"] = [dict(zip(("event_id", "raw_hash", "segment_id", "offset", "time", "src", "dst", "action_id", "family_id", "file"), r)) for r in con.execute(
-                    f"SELECT event_id, raw_hash, segment_id, \"offset\", time, src_endpoint.ip, dst_endpoint.ip, action_id, family_id, filename FROM read_parquet({fs!r}, filename=true) ORDER BY time DESC LIMIT 25").fetchall()]
-                for r in out["latest"]:
-                    r["file"] = str(Path(r["file"]).relative_to(lake))
+            # the latest rows of EVERY class (2026-10-02: it was network activity only), each with the format its raw log
+            # arrived in — read off the console's record of the event (its routing signature), not guessed from the row
+            cols = {c[0] for c in con.execute(f"DESCRIBE SELECT * FROM read_parquet('{fs[-1]}')").fetchall()}
+            net = "src_endpoint" in cols and "dst_endpoint" in cols
+            q = (f"SELECT event_id, time, family_id, {'src_endpoint.ip, dst_endpoint.ip' if net else 'NULL, NULL'}, {'action_id' if 'action_id' in cols else 'NULL'}, filename "
+                 f"FROM read_parquet({fs!r}, filename=true, union_by_name=true) ORDER BY time DESC LIMIT 25")
+            for eid, t, fam, sip, dip, act, fn in con.execute(q).fetchall():
+                with LOCK:
+                    e = self.events.get(eid)
+                out["latest"].append({"event_id": eid, "time": t, "family_id": fam, "src": sip, "dst": dip, "action_id": act, "class": src.name.replace("ulpf_", "").replace("_", " "),
+                                      "format": self.fmt_of(e.get("sig")) if e else None,
+                                      "source": self.inventory.get(self.host_of(e), {}).get("name") if e else None, "file": str(Path(fn).relative_to(lake))})
             if event_id:
                 hit = con.execute(f"SELECT event_id, raw_hash, segment_id, \"offset\", length, source_id, parser_id, family_id, filename FROM read_parquet({fs!r}, filename=true) WHERE event_id = ?", [event_id]).fetchone()
                 if hit:
                     out["lookup"] = dict(zip(("event_id", "raw_hash", "segment_id", "offset", "length", "source_id", "parser_id", "family_id", "file"), hit))
                     out["lookup"]["file"] = str(Path(out["lookup"]["file"]).relative_to(lake))
+        out["latest"] = sorted(out["latest"], key=lambda r: r["time"] or 0, reverse=True)[:25]
+        out["checked_at"] = time.strftime("%H:%M:%S")
+        out["rotate_seconds"] = int(os.environ.get("ULPF_LAKE_ROTATE_SECONDS", "10"))
         return out
 
     def findings(self):
@@ -1214,6 +1250,11 @@ class System:
             if sheet:
                 self.step(job, f"answers: {sheet['author']}'s PREPARED SHEET for {src} ({sheet['for']}; policy prepared_answers is on)", "answering")
                 for f in list(job["fields"]):
+                    if "by_name" in sheet:
+                        ans = sheet["by_name"].get(f["field"])
+                        if ans and not f["propagated"]:
+                            self.assert_field(job, session, f["field"], ans[0], ans[1], "prepared sheet", lookup=ans[2])
+                        continue
                     ans = sheet["v2"].get(f["slot"]) if arity == 10 and f["slot"] in sheet["v2"] else sheet["by_slot"][f["slot"]] if f["slot"] < len(sheet["by_slot"]) else None
                     if ans and not f["propagated"]:
                         self.assert_field(job, session, f["field"], ans[0], ans[1], "prepared sheet")
@@ -1264,13 +1305,16 @@ class System:
 
     def wait_answers(self, job, session, only=None):
         """The page posts answers into job['answers'] and then sets job['promote']; each answer is applied through `respond`."""
-        done = set()
+        done = {}   # field -> (attribute, value map) applied; a change is applied again (a re-assertion replaces the mapping)
         while True:
             job["promote"].wait(0.3)
             for f, attr in list(job["answers"].items()):
-                if f not in done and (only is None or f in only):
-                    self.assert_field(job, session, f, attr, "chosen on the System page", "asked on the page", lookup=job.get("lookups", {}).get(f))
-                    done.add(f)
+                lk = job.get("lookups", {}).get(f)
+                if done.get(f) != (attr, json.dumps(lk, sort_keys=True)) and (only is None or f in only):
+                    via = job.get("answer_via", {}).get(f)
+                    self.assert_field(job, session, f, attr, "the model's proposal, accepted on the System page" if via == "proposal" else "chosen on the System page",
+                                      "accepted the model's proposal" if via == "proposal" else "asked on the page", lookup=lk)
+                    done[f] = (attr, json.dumps(lk, sort_keys=True))
                     self.publish_fields(job, session)
             if job["promote"].is_set():
                 job["promote"].clear()
@@ -1353,6 +1397,7 @@ class System:
                 a["bound_packs"] = (getattr(self, "runtime_bindings", {}) or {}).get(h, [])
                 a["alert"] = any(j.get("host") == h and j["state"] not in ("done", "failed") for j in self.jobs)
                 a["processes"], a["connections"] = sorted(a["processes"]), len(a.pop("peers"))
+                a["process_labels"] = sorted({self.procs[i - 1].label for i in a["processes"] if i <= len(self.procs) and self.procs[i - 1].state != "retired"})
             recent = [e for e in (self.events[i] for i in self.order[-200:]) if not e.get("record") and e.get("ok") is not None and self.learnable(e)][-40:]   # the applications being onboarded
             curs = {}   # (process, sink) -> cursor
             for pr in self.procs:
@@ -1376,7 +1421,7 @@ class System:
             jobs = [{k: v for k, v in j.items() if k not in ("go", "promote")} for j in self.jobs]
             procs = []
             for pr in self.procs:
-                procs.append({"process": pr.i, "pid": pr.ident(), "up": pr.alive(), "state": pr.state, "store_id": pr.store_id(),
+                procs.append({"process": pr.i, "label": pr.label, "pid": pr.ident(), "up": pr.alive(), "state": pr.state, "retired_at": getattr(pr, "retired_at", None), "store_id": pr.store_id(),
                               "evidence": str(pr.ev), "lake_port": pr.lake_port, "events": sum(1 for i in self.order if (self.events[i]["rec"].get("_proc") or 1) == pr.i and not self.events[i].get("record")),
                               "applications": sorted(h for h, a in apps.items() if pr.i in a["processes"])})
             return {"policy": self.policy, "processes": procs, "mode": self.mode,
@@ -1404,7 +1449,7 @@ class System:
             rows = []
             for i in ids:
                 e = self.events[i]; raw = self.raw(e["rec"]) or b""
-                rows.append({"event_id": i, "at": time.strftime("%H:%M:%S", time.localtime((e["rec"].get("ingest_time") or 0) / 1000)), "connector": (e["rec"].get("ingest_channel") or "").split(":")[0],
+                rows.append({"event_id": i, "at": time.strftime("%H:%M:%S", time.localtime((e["rec"].get("ingest_time") or 0) / 1000)), "ms": e["rec"].get("ingest_time"), "connector": (e["rec"].get("ingest_channel") or "").split(":")[0],
                              "bytes": e["rec"]["length"], "format": self.fmt_of(e.get("sig")) if e.get("ok") is not None else "…", "ok": e.get("ok"),
                              "outcome": e.get("family") if e.get("ok") else self.quarantine_label(e) if e.get("ok") is False else "in flight", "preview": raw[:130].decode("utf-8", "replace")})
             return rows
@@ -1493,11 +1538,12 @@ def handler(sysm):
                             sysm.policy[k] = d[k]
                 elif self.path == "/api/approve" and job:
                     job["go"].set()
-                elif self.path == "/api/answer" and job and d.get("attribute") in ATTRIBUTES and any(f["field"] == d.get("field") for f in job["fields"]):
+                elif self.path == "/api/answer" and job and (d.get("attribute") in ATTRIBUTES or d.get("attribute") == "unmapped") and any(f["field"] == d.get("field") for f in job["fields"]):
                     if d.get("lookup"):   # "success=1, failed=2": the operator's value map onto an enum attribute
                         lk = d["lookup"] if isinstance(d["lookup"], dict) else dict(x.split("=", 1) for x in str(d["lookup"]).replace(";", ",").split(",") if "=" in x)
                         job.setdefault("lookups", {})[d["field"]] = {str(k).strip(): int(str(v).strip()) for k, v in lk.items()}
                     job["answers"][d["field"]] = d["attribute"]
+                    job.setdefault("answer_via", {})[d["field"]] = "proposal" if d.get("via") == "proposal" else "operator"
                 elif self.path == "/api/promote" and job:
                     job["promote"].set()
                 elif self.path == "/api/rollback":

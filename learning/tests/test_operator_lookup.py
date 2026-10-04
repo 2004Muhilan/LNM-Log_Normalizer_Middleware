@@ -24,3 +24,12 @@ def test_without_a_map_the_assertion_is_what_it_was():
     p = apply_operator_assertion(plan(), "status", "status_detail", "op-014", "the status word", set())
     m = p.slots[0].parts[0].mappings[0]
     assert m.transform is None and m.attribute == "status_detail" and not m.mandatory
+
+
+def test_the_operator_may_leave_a_field_unmapped():
+    """2026-10-02: "unmapped" is the operator's answer that a field is none of the class's attributes; it replaces an
+    earlier assertion and is carried under its own name, like a withheld field."""
+    p = apply_operator_assertion(plan(), "status", "status_id", "op-014", "first answer", {"status_id"})
+    p = apply_operator_assertion(p, "status", "unmapped", "op-014", "not one of the class's attributes", {"status_id"})
+    part = p.slots[0].parts[0]
+    assert part.mappings == [] and part.unmapped_name == "status" and part.coerce is None and part.candidates == []

@@ -17,11 +17,11 @@ figures are in [demo-machine-setup.md](demo-machine-setup.md) — prepare the ma
 Measured here: the GTX 1650 laptop, WSL2 at its default 7.7 GB cap, driver 616.64, twice in a row on
 2026-09-07 (§5).
 
-## The final demo FROM CONTAINERS (2026-10-01) — the same pages, the same seven steps
+## The final demo FROM CONTAINERS (2026-10-01; pages simplified 2026-10-02) — the same pages, the same seven steps
 
 ULPF now runs as containers ([container-deployment.md](container-deployment.md)): each runtime process is its own
 container, with a committer and a lake writer beside it. Everything below ("The final demo") is unchanged; only the start
-differs, and the runtime block on the System page has two more buttons.
+differs, and the Runtime panel on the System page has **Add process** / **Remove process**.
 
 **T-30 min** (the lab and the model as before; the stack runs on the Linux Docker Engine of the `Containerlab` distro):
 
@@ -32,12 +32,11 @@ wsl -d Containerlab -- env ULPF_LAB_AGENT=http://127.0.0.1:8799 bash deploy/ulpf
 ```
 
 **The extra moment — after step 4 (flow), or whenever a judge asks "does it scale?":**
-- **Press:** runtime block → **Add a process**. **Seen:** in about a second a third row, *running*, with its own container
-  name and its own evidence store; the limit line says how many are allowed (one per CPU Docker reports).
+- **Press:** Runtime → **Add process**. **Seen:** in about a second a row *Process 3*. A new process always takes the lowest free
+  number; removed ones are listed only under **Show retired**. The limit is one per CPU Docker reports.
 - **Say:** "Each runtime process is a container. Adding one is a button: a new container with its own evidence store, every
   active parser loaded, on the same ingress port — the kernel spreads new connections over the processes."
-- **Press:** **Remove a process**. **Seen:** *draining*, then *retired*, and the outcome line: "0 parsed event(s) not
-  delivered, 0 segment(s) not shipped". The devices go on parsing.
+- **Press:** **Remove process**. **Seen:** *draining*, then the line "Process 3 removed — nothing left behind". The devices go on parsing.
 - **Say:** "Removing one loses nothing: it waits until every destination has what that process parsed, stops it — it seals
   its evidence — waits until its evidence is shipped to the archive, and only then removes it. Its events stay provable."
 - **Don't say:** that an open connection moves without a reconnect (it closes; the device reconnects to another process),
@@ -52,7 +51,7 @@ Two real devices in the lab:
 - **Suricata 7.0.7,** on the FortiGate's own wire.
 
 Two real destinations: **OpenSearch** and the **Parquet lake**. The pages are the same (System, Data lake, SIEM); the first
-tab now reads **1 Devices** and opens the Devices panel on the System page. The presenter never needs a terminal.
+device controls (FortiGate, Suricata, Lab traffic) are the top row of the System page. The presenter never needs a terminal.
 
 **The generator demo is the FALLBACK** (`bash demo/start-demo.sh`, unchanged below), and the gate runs on it. The gate
 cannot depend on the licensed VM.
@@ -78,8 +77,8 @@ cannot depend on the licensed VM.
 ### The seven steps — what to press, what to say
 
 **1. Connect ingress.**
-- **Press:** Devices panel → FortiGate **Connect to ULPF**, then Suricata **Connect to ULPF**.
-- **Seen:** each device's syslog connector turns ON. Within seconds both appear under *Applications sending logs*, as
+- **Press:** FortiGate **Connect**, then Suricata **Connect** (top row).
+- **Seen:** each device's syslog connector turns ON. Within seconds both appear under *Sources*, as
   *Syslog over TCP* on `tcp:0.0.0.0:6515`, with the REAL DEVICE tag, the FortiOS version and the serial.
 - **Say:** "Two real devices. The firewall is a licensed FortiGate VM; the IDS is Suricata watching the firewall's own
   wire. Each connects through ULPF's syslog ingress connector, over TCP. ULPF only sees a channel and a peer; the
@@ -88,7 +87,7 @@ cannot depend on the licensed VM.
   action log). The watchdog also re-commits its syslog if it goes silent for 60 s while ON.
 
 **2. Connect egress.**
-- **Press:** **Start / connect OpenSearch**, then **Connect the lake (start its writers)**.
+- **Press:** SIEM — OpenSearch **Start**, then Data lake **Connect**.
 - **Seen:** both destination blocks turn **UP**. *Ahead by* — what ULPF kept in its spool while they were not there —
   falls to 0.
 - **Say:** "Destinations are a list: a transport and an encoding each. Each has its own cursor over one bounded spool.
@@ -113,7 +112,7 @@ cannot depend on the licensed VM.
   in over SSH, and those login events are a family no pack owns. Leave it (it waits for a click), or onboard it as a bonus.
 
 **4. Flow.**
-- **Press:** Lab traffic → **Attack traffic**, then the SIEM tab.
+- **Press:** Lab traffic → **Send attack traffic**, then the SIEM tab.
 - **Seen:**
   - *Events per device over time*: FortiGate and Suricata side by side.
   - The link **Saved search: one attacker, every device** (`src_endpoint.ip: 10.10.1.10`) returns the FortiGate's denies
@@ -123,13 +122,13 @@ cannot depend on the licensed VM.
   `src_endpoint.ip`."
 
 **5. Egress outage.**
-- **Press:** **Stop OpenSearch (outage)**.
+- **Press:** SIEM — OpenSearch **Stop (outage)**.
 - **Seen:** the OpenSearch block goes DOWN and its *ahead by* climbs, while the lake's stays near 0.
-- **Press:** **Start / connect OpenSearch**. The backlog arrives from its cursor.
+- **Press:** SIEM — OpenSearch **Start**. The backlog arrives from its cursor.
 - **Say:** "No duplicates: the document id is the event id, so a redelivered event overwrites."
 
 **6. Drift.**
-- **Press:** Devices panel → FortiGate log format **JSON**. The device itself switches, live.
+- **Press:** FortiGate log format **JSON**. The device itself switches, live.
 - **Seen:** a DRIFT alert on the FortiGate (bound source). Most fields **heal automatically**: 44–47 of 50–53 in the
   runs, carried over by name from the answers ULPF already has for this device. The unknown ones are **asked**: 6–7, the
   interim-update counters, `app`, sometimes `dstcountry`. The healed pack loads, and the JSON parses.
@@ -142,11 +141,11 @@ cannot depend on the licensed VM.
 - **After:** switch the format back to **Default**.
 
 **7. Prove it, then the certificate.**
-- **Press:** click Suricata (or the FortiGate) in *Applications* → an event → **Prove it** in its detail.
+- **Press:** click Suricata (or the FortiGate) in *Sources* → an event → **Prove it** in its detail.
 - **Seen:** the SIEM document, the original bytes re-hashed from the evidence log or archive, the signed checkpoint, the
   Merkle proof, **Proof of Derivation** (the exact logged pack, re-run, reproduces the SIEM's document), and the same
   event in the lake.
-- **Then:** **BSA §63(4) certificate — DRAFT**.
+- **Then:** **BSA §63(4) certificate — draft** (in the *Prove it* panel).
 - **Say:** "Part A is filled from ULPF's records; the declaration and Part B are for people to complete and sign. It is
   never presented as complete, and it is not legal advice."
 

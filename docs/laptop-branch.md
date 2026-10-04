@@ -1005,3 +1005,28 @@ for reasons now fixed, none in the pipeline:
   (events emitted, delivered per destination, undelivered spool bytes); the end-to-end accounting (SIEM and lake hold
   every parsed event once) was and is the check that matters.
 - The offline bundle: `deploy/ulpf.sh export` → 1.4 GB (seven images, compose, the script) in 2.5 min; `import` loaded it.
+
+## 21. The pages simplified; answering fixed; Suricata's prepared sheet (2026-10-02)
+
+The user's requests, then what rehearsing on the real devices found:
+- **System page reduced** to what the demo uses (device controls, sources, runtime with Add/Remove process, the two
+  destinations, jobs, logs with raw/format/normalized and Prove it, findings); the parser log, evidence archive and policy
+  moved under **More**. A **Needs you** bar lists what waits for the operator, and failed onboardings with their reason.
+- **Process numbers:** a new process takes the lowest free number; retired ones only under *Show retired*.
+- **Lake page:** it always refreshed every 3 s; rows appear when the writer closes a file (10 s), which it now says. The
+  latest rows of every class, each with the **format** its raw log arrived in; a click shows raw log, format, storage and
+  the normalized event.
+- **Answering bugs found and fixed:** the answer table re-ordered rows as fields were answered (answers landed on the wrong
+  fields); a changed answer was never re-applied; dropdowns showed browser-remembered choices from an earlier run's job of
+  the same number; the page redrew while a dropdown was open; the value-map box showed for numeric fields. New:
+  **Use the model's proposals** (recorded as the operator accepting them), **— leave unmapped —** (an operator assertion,
+  `learning/ulpf_learn/discriminators.py`, test in `test_operator_lookup.py`), an attribute used twice is flagged and
+  Promote held (the pack contract refuses it), parse-failure blockers are shown.
+- **Suricata's prepared sheet** (`SURICATA_SHEET`, by field name, bound to `suricata-lab-01`): eight answers from Suricata's
+  EVE field descriptions; the rest left unmapped. With *Answers: prepared sheet* (default) onboarding is one click.
+- One learning job at a time per source and format (a CSV drift of the FortiGate started one job per column count).
+- Found, not changed: FortiGate's "CSV" is comma-separated key=value (the comma-kv surface raised on 2026-09-29), so
+  every column count looks like a new format and nothing carries by name; the model runs with 20 of 33 layers on the GPU
+  (the laptop's setting) — about 16 tokens/s on the desktop.
+- Final demo from containers with the prepared sheet (`docs/metrics/final-demo-containers-{3,4}.json`): all eight steps
+  WORKED, no nudge.
