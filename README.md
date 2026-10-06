@@ -1,202 +1,236 @@
 # ULPF — Universal Log Pre-processing Framework
 
-Smart India Hackathon 2026, problem statement 26156 (NTRO).
+Smart India Hackathon 2026 · Problem Statement 26156 (NTRO)
 
-Logs from any perimeter device go in; one standard schema (OCSF 1.3.0) comes out; the raw bytes are
-preserved and provably unaltered; new sources are onboarded without anyone hand-writing a parser.
+ULPF takes logs from perimeter devices (firewalls, IDS sensors, proxies), keeps every original byte, turns each event
+into one common schema (**OCSF 1.3.0**) and delivers it to a **SIEM** (OpenSearch) and a **data lake** (Parquet). It runs
+fully offline, ships as Docker containers, and onboards a new log format without anyone writing a parser by hand.
 
-It is a two-plane parser compiler. An offline **learning plane** (Python) turns a handful of sample
-lines into a signed *parser pack*: it induces the structure deterministically, asks a small local model
-only what the fields *mean*, refuses any meaning it cannot evidence, and when a mandatory field is
-ambiguous it issues a certificate naming the rivals and asks the operator for one specific piece of
-evidence (a device's `logformat` line, a vendor field-order table) rather than guessing. An always-on
-**runtime** (Go, one static binary, no model, no network) loads the packs, writes every received byte to
-an append-only evidence store *before* interpreting it, routes each event to its family without ever
-trying parsers, normalises it, and commits the evidence under signed Merkle checkpoints that an outside
-witness can verify with nothing but a public key. Absence is evidence too: a silenced source or a
-sequence gap becomes a signed leaf like any event.
+Step-by-step installation: **[SETUP.md](SETUP.md)**.
 
-Eight invariants govern it, each enforced by a test (plan §2). Seven build phases are complete; the
-eighth (automatic drift healing, metrics, polish) is designed and deliberately not built. Everything
-here was built one phase at a time, each phase ending in a report that records what was decided, what
-was tried and rejected, and what the next phase inherits.
+---
 
-## Three ways in
+## What makes it different
 
-**Throughput, measured:** [docs/throughput.md](docs/throughput.md) — parse ~10,400 events/s per process; with the evidence log (group commit, invariant 3 as amended 2026-09-27) 5,232/s per stream, 27× the fsync-per-event figure; end to end into OpenSearch and the lake 1,507/s, set by the lake writer. 
+- **AI proposes, never decides.** A small local model (Qwen3.5-4B, 4-bit, no internet) suggests what each field of a new
+  format means. It writes only a declarative description, never code, and a validator checks every suggestion against
+  the OCSF type tables. The runtime that parses live traffic (Go) has no model in it at all.
+- **Ambiguity certificates.** When the sample lines cannot tell two meanings apart (source or destination? event time or
+  logged time?), ULPF does not guess. It issues a certificate naming the candidates and asks for the cheapest evidence
+  that settles it: a labelled sample, the vendor's documentation, or the operator's answer. With a prepared answer sheet,
+  onboarding a device is one click.
+- **Self-healing on format change.** When a known device changes its format, ULPF quarantines the new lines (bytes kept),
+  raises an alert and heals by reusing earlier answers by field name. A real FortiGate switched to JSON live healed
+  45–47 of about 52 fields automatically; only 6–7 new fields were asked.
+- **Raw evidence first.** No event is parsed or delivered until its raw bytes are durable on disk. Sealed segments are
+  made immutable by the kernel; a separate committer signs Merkle checkpoints and ships the evidence to an archive.
+- **A transparency log for parsers.** Every parser pack is signed and appended to a witnessed Merkle log; the runtime
+  refuses any pack that is not in it.
+- **Proof of Derivation.** From any SIEM event, ULPF re-runs the exact logged parser on the original bytes and shows the
+  output equals the SIEM document, field for field, in a bundle anyone can verify offline. It also prints a draft
+  certificate under the Bharatiya Sakshya Adhiniyam 2023, Section 63(4).
 
-**Evidence archive (required):** `ulpf-runtime run` refuses to start without `--evidence-archive` (development: `--dev-no-evidence-archive`, loudly). ULPF keeps only a short local evidence buffer: the always-running committer ships sealed, committed segments and their signed checkpoints to the archive byte-exact; the store deletes a local copy only when every deletion condition holds; "Prove it", export and the verifier read the archive when the local copy is gone. [docs/evidence-archive-design.md](docs/evidence-archive-design.md).
+## System requirements
 
-**Parser Transparency Log and Proof of Derivation:** every parser pack is appended to an append-only Merkle log (C2SP signed-note checkpoints, `c2sp.org/tlog-proof` beside the pack, a witness that cosigns only consistent checkpoints) before any runtime may load it — the runtime refuses a pack without a valid inclusion proof. "Prove it" re-runs the exact logged pack on the committed raw bytes and shows the output equals the SIEM's event (one offline bundle, `ulpf-verify derivation`), and prints a DRAFT BSA §63(4) certificate for a person and an expert to complete. [docs/transparency-and-derivation.md](docs/transparency-and-derivation.md).
+| | Minimum | Recommended | What we tested on |
+|---|---|---|---|
+| OS | Windows 10/11 with WSL2, or Linux | Windows 11 with WSL2 | Windows 11 Pro, WSL2 |
+| CPU | 4 cores, virtualization on (VT-x / AMD-V) | 8 cores / 16 threads | AMD Ryzen 7 2700X |
+| RAM | 16 GB (WSL given 10 GB) | 32 GB (WSL given 24 GB) for the real-device lab | 32 GB, WSL 24 GB |
+| GPU | NVIDIA, 4 GB VRAM, CUDA 12.8 (driver R570 or newer) | NVIDIA, 8–16 GB VRAM | RTX 5060 Ti 16 GB; GTX 1650 4 GB |
+| Disk | 60 GB free | 100 GB free, SSD | NVMe SSD |
+| Network | internet once, for downloads | — | runs fully offline after setup |
 
-**Scale-out:** N runtime processes on the same ports (SO_REUSEPORT; `ULPF_PROCESSES=N bash demo/start-demo.sh`), each with its own evidence store, committer and lake writer — measured in [docs/throughput.md](docs/throughput.md).
+- **Without an NVIDIA GPU** the demo still runs with team-written proposals instead of the model
+  (`ULPF_DEMO_PROVIDER=fixture`, or `ULPF_PROVIDER=fixture` in containers). The page says so.
+- **Software:** WSL2 with an Ubuntu 24.04 distro, Docker Desktop (WSL integration and GPU support), Git. For the
+  real-device lab also: a second WSL distro (Debian) with Docker Engine, Containerlab and vrnetlab, nested
+  virtualization enabled, and a free Fortinet account for the FortiGate VM evaluation licence. All covered in
+  [SETUP.md](SETUP.md).
+- **Container deployment:** a Linux Docker Engine (not Docker Desktop) for ULPF's containers, because published ports
+  rewrite the sender's address and ULPF identifies devices by address.
 
-**Containers (2026-10-01):** `bash deploy/ulpf.sh build && bash deploy/ulpf.sh up generator|devices` on a Linux host
-with Docker Engine — every part a container, each runtime process its own container (with a committer and a lake writer
-beside it), added and removed from the System page while events flow; `deploy/ulpf.sh export` writes an offline install
-bundle. [docs/container-deployment.md](docs/container-deployment.md).
+## Running the demo
 
-**The gate, one command:** `bash scripts/gate.sh` — every check, the demo check with the real SIEM, and six steps + the live
-sequence twice on both model configurations, in parallel lanes: 12.7 min on the desktop (`--laptop` on the laptop).
+After the one-time setup in [SETUP.md](SETUP.md). Run these in PowerShell. The paths assume the repository is cloned at
+`C:\ulpf` (`/mnt/c/ulpf` in WSL); change them if yours is elsewhere.
 
-### 1. The demo with pages — three applications, everything a button (laptop branch)
+1. **Start the lab.** Only needed if the PC or WSL was restarted since the last run; it is safe to run again anyway. It
+   uses `docker start` only, so the licence is safe. Wait until it prints `License Status: Valid`.
+   ```powershell
+   wsl -d Containerlab -- bash /mnt/c/ulpf/demo/devices/fortigate/start.sh
+   ```
+2. **Start the model** (about 10 s):
+   ```powershell
+   wsl -d Ubuntu --cd /mnt/c/ulpf -- env ULPF_LLAMA_NGL=99 bash demo/llama-server.sh start
+   ```
+3. **Stop any running ULPF stack.** The device pre-flight in step 4 needs port 6515 free.
+   ```powershell
+   wsl -d Containerlab --cd /mnt/c/ulpf -- bash deploy/ulpf.sh down
+   ```
+4. **Device pre-flight.** It must end with `DEVICE PRE-FLIGHT: PASS`. If the licence isn't Valid, stop there: never
+   redeploy the lab.
+   ```powershell
+   wsl -d Ubuntu --cd /mnt/c/ulpf -- python3 demo/devices/preflight.py
+   ```
+5. **Start the lab agent,** which lets the System page's device buttons control the lab. It should print
+   `lab agent up: fgt_License_Status=Valid`.
+   ```powershell
+   wsl -d Containerlab -- bash /mnt/c/ulpf/demo/devices/agent/start.sh
+   ```
+6. **Start ULPF in containers.** It takes about 1–2 minutes and ends with `up. System http://127.0.0.1:8765/ …`. The
+   model folder and lab agent address come from `deploy/.env`.
+   ```powershell
+   wsl -d Containerlab --cd /mnt/c/ulpf -- bash deploy/ulpf.sh up devices
+   ```
+   If the code has changed since the last build, run `bash deploy/ulpf.sh build` first, the same way.
+7. **Open three browser tabs:**
+   - System: http://127.0.0.1:8765/
+   - Data lake: http://127.0.0.1:8765/lake
+   - SIEM: http://127.0.0.1:5601/app/dashboards#/view/ulpf-real-devices
 
-```bash
-bash demo/llama-server.sh start       # the 4B on the GPU (skip it with ULPF_DEMO_PROVIDER=fixture — the page then says "fallback, not the model")
-bash demo/start-demo.sh               # 1 Generator :8780 · 2 System :8765 · 3 Data lake :8765/lake · 4 SIEM (OpenSearch Dashboards) :5601
-                                      # stop: bash demo/start-demo.sh stop · fallbacks: ULPF_SIEM_DASHBOARDS=0, ULPF_SIEM=fake
+**Afterwards:**
+```powershell
+wsl -d Containerlab --cd /mnt/c/ulpf -- bash deploy/ulpf.sh down
+wsl -d Ubuntu --cd /mnt/c/ulpf -- bash demo/llama-server.sh stop
 ```
 
-What to press and what each page shows: [docs/laptop-branch.md](docs/laptop-branch.md) §5. The six-step page, the earlier
-live pages, the standalone log inspector and the recorded-replay bundle (`demo/replay/`) were REMOVED on this branch —
-they are on `main`; the six steps and the scripted live sequence still run, in the terminal, and remain the repeatable gate.
+What to press and say on stage: [docs/demo-runbook.md](docs/demo-runbook.md).
 
-### 2. I want to run the live demo — a few hours the first time on a fresh machine, 30 minutes after
+## Throughput
 
-Everything runs locally: a 4B model on the GPU labels the fields, the runtime ingests over TCP, a
-container plays the external witness. Needs:
+Measured on one desktop (Ryzen 7 2700X, 8 cores), evidence log on, exactly-once checked in every run
+([docs/throughput.md](docs/throughput.md)):
 
-| Requirement | Why |
+| What | Events per second |
 |---|---|
-| Linux or WSL2, Docker with GPU access | the model server and the witness are containers |
-| NVIDIA GPU with **≥ 4 GB** VRAM and a **driver ≥ R570** (CUDA 12.8) | the 4B in 4 GB with 20 layers offloaded; older drivers refuse the CUDA 12.8 image outright |
-| Go, Python 3.12 venv (`scripts/wsl-bootstrap.sh`) | the runtime and the learning plane |
-| the corpus cache (`corpus/tools/fetch_corpus.py`, needs network once) | the three vendor packs are onboarded from it at reset |
-| one model: Qwen3.5-4B-Q4, 2.7 GB (`learning/tools/models.py fetch --id qwen3.5-4b-q4_k_m`) | digest-verified against `models/manifest.json` |
-| ~12 GB disk for the llama.cpp CUDA image, weights and caches | |
+| Parse and normalize, 1 process | ~10,400 (62,289 with 8 processes) |
+| With the durable evidence log, 1 process | 5,232 (27× faster than one write per event) |
+| 1 / 2 / 4 / 6 processes | 5.4k / 9.5k / 13.9k / 15.8k |
+| Billion-a-day rate (11,574/s) | held by 4 processes: 13.6k–14.0k |
 
-Read, in this order:
+## Project structure
 
-1. **[docs/demo-machine-setup.md](docs/demo-machine-setup.md)** — what must be true on the machine, in
-   the order the problems bite, with everything the first laptop run cost hours to learn: the driver
-   check; WSL2 at `memory=10GB` (not 12 — Windows needs the rest); **weights on the WSL ext4 disk, never
-   under `/mnt/c`** (the model server stalls for good otherwise); port 8080 may already be taken (it was,
-   by Jenkins); `--ngl 20 --ctx 8192` for the 8B or it is slower than CPU; the upstream llama.cpp image
-   instead of a 75-minute local CUDA build; the measured timings for both candidate models.
-2. **[docs/demo-runbook.md](docs/demo-runbook.md)** — the six steps, what to say and click, the
-   pre-flight list, the one-flag fallback per step, and the twice-consecutive timings.
-
-Then:
-
-```bash
-bash demo/llama-server.sh start                    # the 4B on the GPU, port 8081
-bash demo/reset.sh && bash demo/preflight.sh       # clean state; 15 checks that fail loudly and early
-bash demo/run.sh                                   # the six steps (~2 min 40 s; step 2 is the model)
+```
+.
+├── README.md, SETUP.md            this file; step-by-step setup
+├── ulpf-implementation-plan.md    the design: stack, eight invariants, contracts, decision log (§11)
+├── runtime/                       Go runtime: ingest, evidence, routing, parsing, egress (no model)
+├── learning/                      Python learning plane: onboarding, certificates, healing
+├── contracts/                     frozen JSON schemas + golden test vectors
+├── deploy/                        container deployment (Docker Compose, scaler, init)
+├── demo/                          demo apps (System, Generator, Data lake pages), real-device lab, SIEM setup
+├── adapters/lake/                 the Parquet data lake writer
+├── library/                       vendor field tables and the discriminator library
+├── ocsf/                          pinned OCSF 1.3.0 class tables
+├── corpus/                        catalogue of public test logs (fetched, never committed)
+├── acceptance/                    acceptance policy for promoting a parser
+├── models/                        model manifest (weights fetched, never committed)
+├── keys/                          trust store: public keys only
+├── drafts/                        hand-drafted specs used to freeze the parser language
+├── spike/                         model comparison results (which model, which settings)
+├── metrics/                       replay mix used for coverage figures
+├── scripts/                       bootstrap, phase checks, the gate, benchmarks, release packs
+└── docs/                          reports, runbook, throughput, design notes
 ```
 
-### 3. I want to develop on it — a day to read, an hour to build
+### `runtime/` — the Go runtime
 
-```bash
-bash scripts/wsl-bootstrap.sh                                 # Go under ~/sdk, venv under ~/.venvs/ulpf, env file ~/.ulpf-env
-bash scripts/wsl-run.sh python corpus/tools/fetch_corpus.py   # pinned fixtures into the git-ignored cache
-bash scripts/wsl-run.sh python ocsf/tools/fetch_ocsf.py       # OCSF 1.3.0 export + source
-bash scripts/p1-check.sh                                      # then p2 … p7: each phase's exit criteria, runnable
-```
-
-Start with **[ulpf-implementation-plan.md](ulpf-implementation-plan.md)** (v1.6): §1 the settled stack,
-§2 the eight invariants and the test that enforces each, §3 the six frozen contracts, §4 the decisions
-register, §11 the divergence log — every place the build departed from the plan, with the report that
-carries the reasoning. Then the **[phase reports](docs/README.md)** P1–P8 (P8 is the closing account, with the [test-coverage audit](docs/p8-test-audit.md)): each ends with "what was
-tried and rejected" and "what the next phase inherits"; they are the project's memory.
-
-| If you want to change… | Read | Then run |
-|---|---|---|
-| a contract (schema) | [contracts/README.md](contracts/README.md) — every version bump and why | `scripts/p1-check.sh` (golden vectors, both stacks) |
-| the parser DSL or executor | plan §4, P2/P4 reports (the op-coverage matrix) | `scripts/p2-check.sh`, `scripts/p4-check.sh` |
-| onboarding, certificates, the model provider | P3/P4 reports; `learning/ulpf_learn/` | `scripts/p3-check.sh`, `scripts/p4-check.sh`; `scripts/p4-spike.sh` to measure a model |
-| evidence, checkpoints, signing, the witness | P5 report; `runtime/internal/{evidence,checkpoint,merkle}` | `scripts/p5-check.sh` (needs Docker for the capability boundary) |
-| routing, families, propagation, ML tuple | P6 report; `runtime/internal/route`, `library/` | `scripts/p6-check.sh` (four-vendor build needs the corpus cache) |
-| transports, framing, envelopes, gap records | P7 report; `runtime/internal/{frame,gap}` | `scripts/p7-check.sh` (invariant 7 under load, sized to the machine) |
-| versioned corrections (invariant 8), the audit, effort figures | P8 report; `runtime/internal/lake`, `pipeline/renormalize.go`, `learning/tools/effort.py` | `scripts/p8-check.sh` (needs corpus + Docker; zero skips; named tests by name; goldens checked, never regenerated); `bash demo/run.sh 7 7` (correction), `bash demo/run.sh 8 8` (drift healing) |
-| the **live sequence**: two generator apps over two ingress connectors → quarantine until a human says *onboard this* → live onboarding (certificates, operator assertion) → hot-loaded pack → two egress connectors → a consumer app's SQLite with its own page; a killed consumer as an evidence leaf and a catch-up from the cursor; format drift healing itself with an alert (and asking about what it has no evidence for); backfill from the evidence log; whitespace drift, the case nothing heals | [live-demo-report.md](docs/live-demo-report.md); `demo/live/` | `bash demo/live/run-live.sh` (screen `5`; `ULPF_LIVE_INTERACTIVE=1` for the dropdowns), `bash demo/live/twice-live.sh`, `bash demo/live/parse-drop-check.sh` |
-| coverage under the **declared** replay mix (four stated assumptions), evidence requests per coverage band, candidate-set distribution | P8 report §13; `metrics/replay-mix.json`, `learning/tools/coverage_curve.py`, `docs/metrics/coverage.{json,svg}` | `bash scripts/p8-coverage.sh` (regenerates and compares; `--write` to regenerate; needs the corpus cache) |
-| connectors: six ingress paths, three egress sinks, a sink outage as an evidence leaf | P8 report §9; `runtime/internal/egress` | `scripts/p8-connectors-smoke.sh`; `ulpf-runtime run --forward syslog+tcp://host:port --forward https://… --out FILE`, `ulpf-runtime forward` |
-
-The contracts are frozen: a change is a version bump, a same-commit golden-vector update and green
-suites on both stacks, recorded in `contracts/README.md`. Anything that touches an invariant or a settled
-decision is *raised* in the phase report, not absorbed.
-
-## Layout
-
-| Path | What |
+| Path | What it does |
 |---|---|
-| `contracts/` | The six frozen data contracts (JSON Schema 2020-12), golden vectors, the README of every version bump |
-| `learning/` | Python learning plane: contract validation, induction, enumerator, acceptance engine, certificates, discriminators, model provider (llama-server), pack emission and signing, the review CLI, the spike and discovery tools |
-| `runtime/` | Go runtime: DSL compiler/executor, framing (newline, RFC 6587, UDP, TCP, HTTP, directory pull, multiline, de-batching, envelope chains), evidence store, routing DAG, normaliser, gap accounting, committer, verifier, Dockerfile |
-| `ocsf/` | Pinned OCSF 1.3.0 class tables, cross-checked against the schema source |
-| `library/`, `acceptance/` | Discriminator library, vendor tables, crosswalk; per-class acceptance policy |
-| `corpus/` | Corpus catalogue (pinned commits and hashes), licence verdict, fetch tools — content is cached locally, never committed |
-| `drafts/sufficiency/` | Hand-drafted vendor specs used to check the DSL's sufficiency |
-| `models/` | `manifest.json` pins every model by source and sha256; weights are fetched into a git-ignored cache |
-| `keys/` | Trust-store layout; dev key pairs are generated locally by `scripts/keys-bootstrap.sh`, never committed |
-| `spike/` | The P4 model spike: cases with team-authored ground truth, results per machine |
-| `demo/` | The live demo (steps, reset, pre-flight, UI) and the replay-bundle builder |
-| `docs/` | Phase reports P1–P8, the test-coverage audit, the demo machine setup, the presenter's runbook |
-| `scripts/` | Bootstrap and the `pN-check.sh` scripts — each phase's exit criteria as a command |
+| `cmd/ulpf-runtime` | the main binary: `run` (live ingest), `parse`, `compile`, `verify-pack`, `export`, `derive`, `reconstruct`, `renormalize`, `forward`, `lake` |
+| `cmd/ulpf-committer` | signs Merkle checkpoints over sealed evidence and ships segments to the archive; `keygen` |
+| `cmd/ulpf-verify` | standalone verifier for evidence bundles and Proof-of-Derivation bundles (public key only) |
+| `cmd/ulpf-tlog` | the parser transparency log: append, prove, verify, list, cosign |
+| `cmd/ulpf-witness` | the witness that cosigns consistent log checkpoints |
+| `cmd/ulpf-bench` | benchmark helper |
+| `internal/frame` | framing: newline, RFC 6587 octet counting, UDP, HTTP, multiline, syslog/CEF/LEEF envelopes |
+| `internal/evidence` | append-only evidence store, group commit, kernel immutable flag |
+| `internal/merkle`, `internal/checkpoint`, `internal/keys` | Merkle trees, signed checkpoints, Ed25519 keys |
+| `internal/archive` | shipping to the evidence archive; the bounded local buffer and its deletion rules |
+| `internal/route` | routing by structural signature; per-device routing (bindings) |
+| `internal/dsl`, `internal/spec`, `internal/spanmap` | the closed parser language, its compiler and byte-exact span maps |
+| `internal/pack` | loading parser packs: signature, transparency-log proof, contract and time checks |
+| `internal/normalize` | OCSF events with the lineage block |
+| `internal/pipeline` | the whole path, hot reload (SIGHUP), quarantine, drift signals |
+| `internal/egress` | bounded spool, one cursor per destination, OpenSearch bulk, HTTP, syslog |
+| `internal/gap`, `internal/lake`, `internal/mlfeat`, `internal/derivation` | gap records (silences, outages, refusals), the versioned store of corrections, ML feature record, Proof of Derivation |
+| `Dockerfile` | images: `runtime`, `committer`, `verify`, `witness`, `binaries`, `test` |
 
-## Fixtures and licences
+### `learning/` — the learning plane (Python)
 
-The reference corpus (Elastic Beats module test fixtures, Elastic License 2.0; logstash-patterns-core
-specs, Apache-2.0) is **fetched at build time** from commits and content hashes pinned in
-`corpus/catalogue.json` into the git-ignored `corpus/cache/`. It is fine to run tests against and not
-something to embed in a repository that may become public — git history is permanent. The same rule
-covers everything derived from it: the demo state, the replay capture and the replay zip live outside
-the tree and are ignored. `corpus/README.md` has the licence verdict and the attribution text; the replay
-bundle carries Elastic's licence and a `NOTICE.md` because it does embed fixture lines, for a direct send
-only.
+| Path | What it does |
+|---|---|
+| `ulpf_learn/cli.py`, `__main__.py` | `python -m ulpf_learn onboard / onboard-spec / respond / promote / merge / seed-propagation` |
+| `ulpf_learn/session.py` | an onboarding session: samples → structure → proposals → certificates → pack |
+| `ulpf_learn/induce.py`, `surface.py`, `envelope.py`, `anchors.py`, `draft.py` | structure induction for positional, CSV, key=value, JSON, XML and envelopes |
+| `ulpf_learn/model/`, `provider.py` | the local model client (llama.cpp, grammar-constrained) and the fixture provider |
+| `ulpf_learn/enumerate_.py`, `analyze.py`, `predict.py` | the validator: candidate attributes from the OCSF tables |
+| `ulpf_learn/discriminators.py`, `library.py` | ambiguity certificates and discriminators; operator assertions |
+| `ulpf_learn/acceptance.py` | what may be promoted (no mandatory field on a proposal alone; time must be a timestamp) |
+| `ulpf_learn/propagation.py` | answers carried over by field name between formats of the same device |
+| `ulpf_learn/emit.py`, `signing.py`, `sourcepack.py` | emit, sign and log parser packs; vendor packs |
+| `ulpf_learn/dslexec.py`, `plan.py` | Python twin of the parser language; the field plan |
+| `ulpf_contracts/` | contract validation shared by the tests |
+| `tools/` | `models.py` (fetch/verify weights), `drift.py`, `autoheal.py`, `effort.py`, `coverage_curve.py`, `discover.py` |
+| `tests/` | the Python suite |
+| `Dockerfile`, `requirements.txt` | the learning image (model bundled); Python dependencies |
 
-Model weights, the OCSF caches and the dev signing keys are likewise reproduced locally and never
-committed.
+### `deploy/` — containers
 
-## Reference: commands by phase
+| File | What it does |
+|---|---|
+| `ulpf.sh` | one command: `build`, `up generator\|devices`, `scale add\|remove`, `status`, `down`, `purge`, `export`, `import` |
+| `compose.yaml` | init, witness, scaler, OpenSearch, Dashboards, SIEM setup, console, generator, optional model |
+| `Dockerfile` | the `ulpf-app` image (console, learning plane, lake writer) and the `ulpf-scaler` image |
+| `scaler.py` | the only container with Docker access; starts runtime, committer and lake writer per process from a fixed template |
+| `init.sh`, `console.sh`, `siem-setup.sh` | first-start keys and shipped packs; console start; OpenSearch setup |
+| `destinations.json`, `env.example` | delivery targets; settings template (copy to `deploy/.env`) |
+| `check.sh`, `check.py` | end-to-end check of the container deployment (the gate's lane C) |
 
-<details>
-<summary>Onboarding (P3/P4), the model provider, packs</summary>
+### `demo/`
 
-```bash
-cd learning
-python -m ulpf_learn onboard --samples ../contracts/golden/squid-native/samples/access.log --source-id squid-proxy-01 --operator op-014 --session /tmp/s
-python -m ulpf_learn certificates --session /tmp/s      # the ambiguity certificates, incl. the unresolved one
-python -m ulpf_learn respond --session /tmp/s --discriminator device_logformat_configuration --input "logformat squid %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt"
-python -m ulpf_learn promote --session /tmp/s --out /tmp/pack --pack-id squid-native-emitted
-python -m ulpf_learn onboard --provider model --model-id qwen3.5-4b-q4_k_m --server http://127.0.0.1:8081 --mode whole ...
-python -m ulpf_learn onboard-spec --samples S --spec ../drafts/sufficiency/asa-302013.json --vendor cisco-asa --family-id asa-302013 --unwrap-envelope --provider recorded --recording ../spike/results/... ...
-bash ../scripts/fetch-models.sh                          # every manifest model, ~27 GB; or --id for one
-bash ../scripts/p4-spike.sh <machine> gpu|cpu            # measure every model on THIS machine
-```
-</details>
+| Path | What it does |
+|---|---|
+| `start-demo.sh` | starts the host-process demo (`devices` for the real devices); `stop` |
+| `apps/system.py` | the System console: sources, runtime processes, onboarding and drift jobs, Prove it, APIs |
+| `apps/generator.py` | a log-generating application (six formats, drift, attack bursts) |
+| `apps/trace.py`, `apps/certificate.py` | the Prove-it round trip; the draft BSA §63(4) certificate |
+| `apps/devices.py`, `apps/inventory.json` | real-device controls; which device sits behind which address |
+| `ui/` | the pages: `system.html`, `lake.html`, `generator.html`, `theme.css` |
+| `devices/fortigate/` | FortiGate lab: `start.sh`, `fortigate-base.conf`, `patch-vrnetlab.py`, `teardown.ps1`, traffic |
+| `devices/suricata/` | Suricata IDS on the FortiGate's wire: Dockerfile, offline rules, rsyslog forwarder, `start.sh` |
+| `devices/lab.sh`, `devices/agent/` | device actions (connect, format switch, attack); the lab agent for containers |
+| `devices/preflight.py`, `devices/final_demo.py` | device pre-flight checks; the final demo driven end to end |
+| `siem/` | `siem.sh` (OpenSearch up/down), `setup.py` (templates, rules, dashboards), test stand-in and contract check |
+| `llama-server.sh`, `lib.sh` | start/stop the model server; shared settings |
+| `reset.sh`, `preflight.sh` | clean state, keys and vendor packs; 17 pre-flight checks |
+| `run.sh`, `steps/`, `live/`, `twice.sh` | the scripted six-step and live sequences (used by the gate) |
+| `apps-check.sh` | headless check of the demo against a real SIEM |
 
-<details>
-<summary>Runtime, evidence, verification (P2/P5/P6/P7)</summary>
+### `scripts/`
 
-```bash
-runtime/bin/ulpf-runtime verify-pack --pack contracts/golden/squid-native
-runtime/bin/ulpf-runtime run --pack A --pack B --source-id relay-01 --input mixed.log --evidence EV --out out.jsonl --quarantine q.jsonl --ml-out ml.jsonl
-runtime/bin/ulpf-runtime run --pack P --listen tcp::6514 --silence-after 30s --evidence EV --out -     # RFC 6587, gap records
-runtime/bin/ulpf-runtime run --pack P --listen http::8514 --evidence EV --out -                          # POST bodies, JSON arrays de-batched
-runtime/bin/ulpf-runtime run --pack P --pull-dir /drop --evidence EV --out -                            # directory-drop collector
-runtime/bin/ulpf-runtime reconstruct --evidence EV --out stream.log                                     # byte-exact original stream
-runtime/bin/ulpf-committer commit --evidence EV --key keys/dev/ulpf-committer-dev.json
-runtime/bin/ulpf-committer daily  --evidence EV --key keys/dev/ulpf-committer-dev.json
-runtime/bin/ulpf-runtime export --evidence EV --event-id ev_... --out bundle/
-runtime/bin/ulpf-verify evidence --evidence EV --trust keys/trust        # recompute every root, check chain + signatures
-runtime/bin/ulpf-verify bundle --bundle bundle/ --trust keys/trust        # the external witness's command
-runtime/bin/ulpf-verify gaps --evidence EV --trust keys/trust            # every gap record with its checkpoint and verdict
-python learning/tools/discover.py capture.log                            # family discovery, ranked by volume
-bash scripts/p5-boundary-test.sh                                         # kernel immutable flag vs an unprivileged committer (Docker)
-bash scripts/p5-witness-test.sh                                          # a fresh container verifies an exported bundle
-```
-</details>
+| Script | What it does |
+|---|---|
+| `wsl-bootstrap.sh`, `wsl-run.sh` | install Go and the Python venv; run a command with the environment |
+| `keys-bootstrap.sh` | build the Go binaries, create development keys, sign the golden pack |
+| `gate.sh` | the full test gate in parallel lanes (`--laptop` drops the 33-layer lane) |
+| `p1-check.sh` … `p8-check.sh` | each build phase's exit checks |
+| `release-packs.sh` | sign the shipped parser packs with the release key (release machine only) |
+| `p6-build-packs.sh` | build the vendor packs from the corpus |
+| `bench/` | throughput and capacity benchmarks |
 
-<details>
-<summary>Images</summary>
+## Documentation
 
-```bash
-docker build -f runtime/Dockerfile --target runtime -t ulpf-runtime .     # 2.6 MB, no model, no Python (invariant 2)
-bash scripts/build-llama-image.sh                                          # llama-server, CUDA 12.8, sm_75+sm_120 (~75 min); or use ghcr.io/ggml-org/llama.cpp:server-cuda
-DOCKER_BUILDKIT=1 docker build -f learning/Dockerfile --target learning --build-arg MODEL=qwen3.5-4b-q4_k_m --build-context models=models/cache -t ulpf-learning:qwen3.5-4b .
-```
-</details>
-
-From Windows, run any script as `wsl -d Ubuntu -- bash /mnt/c/<path-to-repo>/scripts/<script>.sh`
-(from Git Bash, prefix `MSYS_NO_PATHCONV=1`).
+| Document | About |
+|---|---|
+| [SETUP.md](SETUP.md) | installation, one step at a time |
+| [docs/demo-runbook.md](docs/demo-runbook.md) | what to press and say in the demo; what to do when something hangs |
+| [docs/container-deployment.md](docs/container-deployment.md) | the container deployment and process scaling |
+| [docs/throughput.md](docs/throughput.md) | every throughput measurement |
+| [docs/transparency-and-derivation.md](docs/transparency-and-derivation.md) | parser transparency log and Proof of Derivation |
+| [docs/evidence-archive-design.md](docs/evidence-archive-design.md) | the bounded evidence buffer and the archive |
+| [docs/real-device-fortigate.md](docs/real-device-fortigate.md), [docs/real-device-suricata.md](docs/real-device-suricata.md) | the real-device lab and what it found |
+| [docs/demo-machine-setup.md](docs/demo-machine-setup.md) | GPU, driver, WSL memory and model details |
+| [docs/laptop-branch.md](docs/laptop-branch.md) | change history since 2026-09-21 |
+| [ulpf-implementation-plan.md](ulpf-implementation-plan.md), `docs/p1-report.md` … `p8-report.md` | the design and each phase's report |

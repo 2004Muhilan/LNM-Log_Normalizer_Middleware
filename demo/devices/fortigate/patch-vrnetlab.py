@@ -13,7 +13,9 @@ make a new firewall with a new serial number):
 import os
 import sys
 
-UUID = "e9fbd16d-8991-4beb-8ec9-66767115dd38"
+# the UUID of the boot in which the licence was activated: FGT_UUID (start.sh reads it from ~/.fgt-uuid, SETUP.md step 21),
+# else this lab's own (its licence was activated with it)
+UUID = os.environ.get("FGT_UUID", "").strip() or "e9fbd16d-8991-4beb-8ec9-66767115dd38"
 EDITS = [
     ('self._uuid = os.getenv("UUID") or str(uuid.uuid4())',
      f'self._uuid = os.getenv("UUID") or "{UUID}"  # ULPF: pinned, the licence\'s UUID'),

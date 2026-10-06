@@ -29,7 +29,7 @@ pgrep -f "ulpf-fortigate-keepalive" > /dev/null || setsid -f bash -c 'exec -a ul
 t=$(mktemp -d)
 docker cp "$FGT:/vrnetlab.py" "$t/vrnetlab.py"
 if ! grep -q "ULPF: port2" "$t/vrnetlab.py" || ! grep -q "ULPF: pinned" "$t/vrnetlab.py"; then
-  docker run --rm --entrypoint /.venv/bin/python -v "$t:/w" -v "$HERE:/p:ro" "$IMG" /p/patch-vrnetlab.py /w/vrnetlab.py /w/vrnetlab.new
+  docker run --rm --entrypoint /.venv/bin/python -e FGT_UUID="$(cat "$HOME/.fgt-uuid" 2>/dev/null)" -v "$t:/w" -v "$HERE:/p:ro" "$IMG" /p/patch-vrnetlab.py /w/vrnetlab.py /w/vrnetlab.new
   docker cp "$t/vrnetlab.new" "$FGT:/vrnetlab.py"
 fi
 # the launcher's prompt fix: without it vrnetlab never sees "fgt #", hangs at "Password", and ~68 min after boot its read
