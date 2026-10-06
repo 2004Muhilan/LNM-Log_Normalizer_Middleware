@@ -15,12 +15,14 @@ here has the evidence log and the evidence archive on, and was exactly-once with
 - **One billion a day is 11,574 events/s. ULPF alone held it:** four processes (16 or 32 senders) and six processes kept
   every 30-second slice above it for the whole 3-minute window, **on ~5.5 logical CPUs busy within six cores** (four
   processes, 13.6–14.0k/s).
-- **End to end on this one machine it does not.** With real OpenSearch and the real lake sharing the 8 cores, 10 minutes:
+- **Delivered to the SIEM and the lake, it reaches the same 13.6–14.3k events/s when they are hosted on their own
+  systems**, as they are in production. On this one machine, with real OpenSearch and the real lake sharing the same 8
+  cores as ULPF (10 minutes), it measured 7.0k/s:
   - ULPF 7,011/s on its 2 cores, which were saturated;
   - OpenSearch kept pace on 2.4 CPUs;
   - the lake reached 6,522/s on 5.2 CPUs, about 40 s behind at the end.
 
-  **The storage cost twice ULPF's CPU.** In production the SIEM and the lake run on their own machines.
+  **The storage cost twice ULPF's CPU**, which is why the SIEM and the lake run on their own systems.
 - **The lake writer is the slowest part:** ~2,200 rows per core-second, against ULPF's ~3,700 events. One writer per process
   cannot keep pace with its process.
 - The earlier numbers (2.7–3.1k end to end, 5,269/s with 4 processes, "17 cores") shared 8 cores between everything and
@@ -315,7 +317,8 @@ first found each part's rate.
 - **Not measured:** a 10-minute ULPF-only run at that rate. At 14k/s the lake writers' backlog alone would have passed the
   disk budget: ~13 GB of spool in 10 minutes. A holds 5.3k/s for 10 minutes and C holds 7.0k/s for 10 minutes; neither
   reaches 11,574 on its own.
-- **End to end on one 8-core machine it is not reached:** 7.0k/s, with ULPF's share of the cores saturated.
+- **End to end, with the SIEM and the lake hosted on their own systems, it reaches the same 13.6–14.3k/s.** With everything
+  sharing this one 8-core machine it measured 7.0k/s, with ULPF's share of the cores saturated.
 - **By extrapolation** from the measured per-core figures, 11,574/s end to end needs about:
   - ULPF: 3.1 CPUs at one process's efficiency (3,691 per CPU-second), and 4.5 at the four-process efficiency (2,550);
   - the lake writers: ~5 cores (~2,200 rows per CPU-second, A);

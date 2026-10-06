@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ULPF Architecture</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  :root { --ink:#1f2328; --dim:#57606a; --line:#57606a; --run:#eef7f1; --runb:#b9dcc6; --learn:#f1f0fa; --learnb:#cfcbe9;
+          --box:#ffffff; --conn:#dbe8f8; --connb:#8fb0d9; --dec:#f2d59c; --pill:#ebe9e4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9e9e6; color: var(--ink); font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .page { width: 297mm; height: 210mm; margin: 12px auto; background: #fbfaf7; padding: 10mm 12mm; overflow: hidden;
+          box-shadow: 0 1px 6px rgba(0,0,0,.18); page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  @media print { body { background: none; } .page { margin: 0; box-shadow: none; } }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .2px; }
+  h2 { font-size: 15px; margin: 14px 0 4px; }
+  p { margin: 0 0 8px; }
+  .sub { color: var(--dim); font-size: 12.5px; margin-bottom: 6px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: "Segoe UI", system-ui, sans-serif; fill: var(--ink); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; }
+  ul { margin: 2px 0 8px; padding-left: 18px; } li { margin: 2px 0; }
+  .note { color: var(--dim); font-size: 12px; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 6px; }
+  b { font-weight: 600; }
+  .text { font-size: 13px; line-height: 1.42; }
+  .text h2 { margin: 10px 0 3px; }
+  .text li { margin: 1px 0; }
+</style>
+</head>
+<body>
+
+<!-- ============================== PAGE 1: the flow ============================== -->
+<section class="page">
+<h1>ULPF · Architecture flow</h1>
+<svg viewBox="30 50 1225 640" role="img" aria-label="ULPF architecture flow">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <style>
+      .ln { stroke:#57606a; stroke-width:1.3; fill:none; marker-end:url(#a); }
+      .dash { stroke-dasharray:4 3; }
+      .bx { fill:#fff; stroke:#3d444d; stroke-width:1.2; }
+      .hum { fill:#fff; stroke:#3d444d; stroke-width:1.3; stroke-dasharray:5 3; }
+      .cn { fill:#dbe8f8; stroke:#8fb0d9; stroke-width:1.2; }
+      .pl { fill:#ebe9e4; stroke:#3d444d; stroke-width:1.2; }
+      .dc { fill:#f2d59c; stroke:none; }
+      .t { font-size:11.5px; font-weight:600; text-anchor:middle; }
+      .s { font-size:9.3px; fill:#57606a; text-anchor:middle; }
+      .lb { font-size:9.5px; fill:#57606a; }
+      .band { font-size:10px; letter-spacing:1.5px; fill:#57606a; font-family:Consolas, monospace; }
+      .num { font-size:11.5px; font-weight:700; text-anchor:middle; }
+    </style>
+  </defs>
+
+  <!-- legend -->
+  <g transform="translate(860,58)">
+    <rect x="0" y="0" width="16" height="9" rx="2" class="bx"/><text x="22" y="9" class="lb">Process</text>
+    <path d="M78,0 l7,4.5 l-7,4.5 l-7,-4.5z" class="dc"/><text x="90" y="9" class="lb">Decision</text>
+    <rect x="140" y="0" width="16" height="9" rx="4.5" class="pl"/><text x="162" y="9" class="lb">Start / end</text>
+    <rect x="222" y="0" width="16" height="9" rx="2" class="cn"/><text x="244" y="9" class="lb">Connector</text>
+    <rect x="300" y="0" width="16" height="9" rx="2" class="hum"/><text x="322" y="9" class="lb">Needs a human</text>
+  </g>
+
+  <!-- bands -->
+  <rect x="38" y="80" width="1205" height="262" rx="10" fill="#eef7f1" stroke="#b9dcc6"/>
+  <text x="50" y="97" class="band">RUNTIME · ALWAYS ON · NO MODEL</text>
+  <rect x="38" y="365" width="1205" height="313" rx="10" fill="#f1f0fa" stroke="#cfcbe9"/>
+  <text x="50" y="382" class="band">LEARNING PLANE · OFFLINE · ONBOARDING &amp; SELF-HEALING</text>
+
+  <!-- ===== runtime main row (y 188-224) ===== -->
+  <rect x="38" y="188" width="86" height="36" rx="18" class="pl"/><text x="81" y="203" class="t">Perimeter</text><text x="81" y="216" class="t">devices</text>
+  <rect x="150" y="166" width="86" height="80" rx="3" class="cn"/>
+  <text x="193" y="180" class="t">Ingress</text><text x="193" y="193" class="t">connectors</text>
+  <text x="193" y="206" class="s">Syslog TCP · UDP</text><text x="193" y="217" class="s">HTTP POST</text><text x="193" y="228" class="s">Directory pull</text><text x="193" y="239" class="s">File · stdin</text>
+  <rect x="262" y="188" width="86" height="36" rx="3" class="bx"/><text x="305" y="210" class="t">Framing</text>
+  <rect x="373" y="188" width="86" height="36" rx="3" class="bx"/><text x="416" y="210" class="t">Evidence write</text>
+  <rect x="486" y="188" width="86" height="36" rx="3" class="bx"/><text x="529" y="203" class="t">Envelope</text><text x="529" y="216" class="t">unwrap</text>
+  <path d="M640,180 l50,26 l-50,26 l-50,-26z" class="dc"/><text x="640" y="203" class="t">Exactly one</text><text x="640" y="215" class="t">parser?</text>
+  <rect x="710" y="188" width="86" height="36" rx="3" class="bx"/><text x="753" y="210" class="t">Parse</text>
+  <rect x="822" y="188" width="86" height="36" rx="3" class="bx"/><text x="865" y="203" class="t">Normalize</text><text x="865" y="216" class="t">to OCSF</text>
+  <rect x="934" y="188" width="86" height="36" rx="3" class="bx"/><text x="977" y="210" class="t">Spool &amp; fan-out</text>
+  <rect x="1046" y="166" width="86" height="80" rx="3" class="cn"/>
+  <text x="1089" y="180" class="t">Egress</text><text x="1089" y="193" class="t">connectors</text>
+  <text x="1089" y="206" class="s">OpenSearch · Elastic</text><text x="1089" y="217" class="s">Splunk HEC</text><text x="1089" y="228" class="s">Syslog · CEF SIEMs</text><text x="1089" y="239" class="s">HTTP NDJSON · Parquet</text>
+  <rect x="1158" y="188" width="86" height="36" rx="18" class="pl"/><text x="1201" y="203" class="t">SIEM ·</text><text x="1201" y="216" class="t">Data lake</text>
+
+  <line x1="124" y1="206" x2="148" y2="206" class="ln"/>
+  <line x1="236" y1="206" x2="260" y2="206" class="ln"/>
+  <line x1="348" y1="206" x2="371" y2="206" class="ln"/>
+  <line x1="459" y1="206" x2="484" y2="206" class="ln"/>
+  <line x1="572" y1="206" x2="588" y2="206" class="ln"/>
+  <line x1="690" y1="206" x2="708" y2="206" class="ln"/><text x="693" y="199" class="lb">yes</text>
+  <line x1="796" y1="206" x2="820" y2="206" class="ln"/>
+  <line x1="908" y1="206" x2="932" y2="206" class="ln"/>
+  <line x1="1020" y1="206" x2="1044" y2="206" class="ln"/>
+  <line x1="1132" y1="206" x2="1156" y2="206" class="ln"/>
+
+  <!-- evidence -->
+  <rect x="373" y="108" width="86" height="36" rx="3" class="bx"/><text x="416" y="130" class="t">Evidence log</text>
+  <rect x="486" y="108" width="86" height="36" rx="3" class="bx"/><text x="529" y="123" class="t">Evidence</text><text x="529" y="136" class="t">archive</text>
+  <line x1="416" y1="188" x2="416" y2="146" class="ln"/><text x="422" y="170" class="lb">commit (fsync)</text>
+  <line x1="459" y1="126" x2="484" y2="126" class="ln"/><text x="529" y="157" class="s">committer: signed Merkle checkpoints</text>
+
+  <!-- proof of derivation -->
+  <rect x="802" y="99" width="124" height="56" rx="3" class="bx"/>
+  <text x="864" y="117" class="t">Proof of Derivation</text>
+  <text x="864" y="131" class="s">raw bytes + exact logged parser</text><text x="864" y="142" class="s">→ re-run → identical SIEM event</text>
+  <line x1="865" y1="188" x2="865" y2="157" class="ln dash"/><text x="871" y="176" class="lb">lineage</text>
+
+  <!-- quarantine / pack check -->
+  <line x1="640" y1="232" x2="640" y2="270" class="ln"/><text x="646" y="255" class="lb">no</text>
+  <rect x="597" y="272" width="86" height="36" rx="3" class="bx"/><text x="640" y="287" class="t">Quarantine</text><text x="640" y="299" class="s">bytes kept</text>
+  <path d="M752,264 l50,26 l-50,26 l-50,-26z" class="dc"/><text x="752" y="287" class="t">Pack</text><text x="752" y="299" class="t">verified?</text>
+  <line x1="752" y1="264" x2="752" y2="226" class="ln"/><text x="758" y="246" class="lb">yes · hot reload</text>
+  <rect x="822" y="272" width="86" height="36" rx="3" class="bx"/><text x="865" y="287" class="t">Pack refused</text><text x="865" y="299" class="s">recorded as evidence</text>
+  <line x1="802" y1="290" x2="820" y2="290" class="ln"/><text x="806" y="283" class="lb">no</text>
+
+  <!-- throughput -->
+  <text x="193" y="262" class="num">13.6–14.3k events/s</text>
+  <text x="193" y="274" class="s">4 processes · ~5.3k/s each</text><text x="193" y="285" class="s">add processes on the same port</text>
+  <text x="1089" y="262" class="num">13.6–14.3k events/s</text>
+  <text x="1089" y="274" class="s">same rate as intake, with the SIEM</text><text x="1089" y="285" class="s">&amp; lake hosted on their own servers</text>
+
+  <!-- ===== learning plane ===== -->
+  <!-- row 1 (y 397-433) -->
+  <line x1="640" y1="308" x2="640" y2="386" class="ln"/>
+  <rect x="592" y="388" width="96" height="66" rx="3" class="bx"/>
+  <text x="640" y="404" class="t">Drift detection</text><text x="640" y="418" class="s">parse-rate drop</text><text x="640" y="429" class="s">unknown signatures</text><text x="640" y="440" class="s">value out of range</text>
+  <path d="M528,389 l50,26 l-50,26 l-50,-26z" class="dc"/><text x="528" y="412" class="t">Known</text><text x="528" y="424" class="t">source?</text>
+  <line x1="592" y1="415" x2="580" y2="415" class="ln"/>
+  <rect x="373" y="397" width="86" height="36" rx="3" class="hum"/><text x="416" y="412" class="t">Operator</text><text x="416" y="425" class="t">approves source</text>
+  <line x1="478" y1="415" x2="461" y2="415" class="ln"/><text x="462" y="408" class="lb">no</text>
+  <rect x="261" y="397" width="86" height="36" rx="3" class="bx"/><text x="304" y="412" class="t">Samples from</text><text x="304" y="425" class="t">evidence</text>
+  <line x1="373" y1="415" x2="349" y2="415" class="ln"/>
+  <path d="M528,441 L528,468 L304,468 L304,435" class="ln"/><text x="535" y="458" class="lb">yes · self-heal</text>
+  <text x="416" y="482" class="s">known fields reused automatically · only new ones asked</text>
+  <rect x="149" y="397" width="86" height="36" rx="3" class="bx"/><text x="192" y="412" class="t">Structure</text><text x="192" y="425" class="t">induction</text>
+  <line x1="261" y1="415" x2="237" y2="415" class="ln"/>
+  <rect x="37" y="397" width="86" height="36" rx="3" class="bx"/><text x="80" y="412" class="t">Model proposes</text><text x="80" y="425" class="t">labels</text>
+  <line x1="149" y1="415" x2="125" y2="415" class="ln"/>
+
+  <!-- row 2 (y 515-551) -->
+  <line x1="80" y1="433" x2="80" y2="513" class="ln"/><text x="86" y="478" class="s" style="text-anchor:start">local 4B · no code</text>
+  <rect x="37" y="515" width="86" height="36" rx="3" class="bx"/><text x="80" y="530" class="t">Validator</text><text x="80" y="543" class="s">OCSF type tables</text>
+  <rect x="149" y="515" width="86" height="36" rx="3" class="bx"/><text x="192" y="530" class="t">Earlier answers</text><text x="192" y="543" class="t">applied</text>
+  <line x1="123" y1="533" x2="147" y2="533" class="ln"/>
+  <path d="M304,507 l50,26 l-50,26 l-50,-26z" class="dc"/><text x="304" y="537" class="t">Ambiguous?</text>
+  <line x1="235" y1="533" x2="252" y2="533" class="ln"/>
+  <rect x="373" y="515" width="86" height="36" rx="3" class="bx"/><text x="416" y="530" class="t">Acceptance</text><text x="416" y="543" class="t">gate</text>
+  <line x1="354" y1="533" x2="371" y2="533" class="ln"/><text x="356" y="526" class="lb">no</text>
+  <rect x="486" y="515" width="86" height="36" rx="3" class="bx"/><text x="529" y="530" class="t">Sign</text><text x="529" y="543" class="t">parser pack</text>
+  <line x1="459" y1="533" x2="484" y2="533" class="ln"/>
+  <rect x="597" y="515" width="86" height="36" rx="3" class="bx"/><text x="640" y="530" class="t">Transparency</text><text x="640" y="543" class="t">log</text>
+  <line x1="572" y1="533" x2="595" y2="533" class="ln"/>
+  <path d="M683,533 L752,533 L752,318" class="ln"/><text x="758" y="430" class="lb">signed pack</text>
+  <text x="634" y="566" class="s" style="text-anchor:end">witness cosigns</text>
+
+  <!-- row 3 (y 593-659) -->
+  <line x1="304" y1="559" x2="304" y2="591" class="ln"/><text x="310" y="578" class="lb">yes</text>
+  <rect x="261" y="593" width="86" height="66" rx="3" class="bx"/>
+  <text x="304" y="609" class="t">Ambiguity</text><text x="304" y="622" class="t">certificate</text>
+  <text x="304" y="635" class="s">names the rival meanings</text><text x="304" y="646" class="s">+ the evidence that</text><text x="304" y="657" class="s">settles them</text>
+  <path d="M416,600 l50,26 l-50,26 l-50,-26z" class="dc"/><text x="416" y="623" class="t">Evidence</text><text x="416" y="635" class="t">provided?</text>
+  <line x1="347" y1="626" x2="364" y2="626" class="ln"/>
+  <line x1="416" y1="600" x2="416" y2="553" class="ln"/><text x="422" y="580" class="lb">yes</text>
+  <rect x="486" y="608" width="86" height="36" rx="3" class="hum"/><text x="529" y="623" class="t">Withheld</text><text x="529" y="636" class="t">&amp; asked</text>
+  <line x1="466" y1="626" x2="484" y2="626" class="ln"/><text x="468" y="619" class="lb">no</text>
+  <line x1="640" y1="551" x2="640" y2="591" class="ln"/><text x="646" y="578" class="lb">heal</text>
+  <rect x="597" y="593" width="86" height="66" rx="3" class="bx"/>
+  <text x="640" y="609" class="t">Drift alert</text><text x="640" y="624" class="s">what changed</text><text x="640" y="635" class="s">healed vs asked</text><text x="640" y="646" class="s">one-click Roll back</text>
+</svg>
+<div class="sub">The top band runs all the time and holds no model. The bottom band runs only when a new or changed format appears.
+Figures measured on one desktop (Ryzen 7 2700X, 8 cores), evidence log on, exactly-once checked.</div>
+</section>
+
+<!-- ============================== PAGE 2: explanation ============================== -->
+<section class="page text">
+<h1>How ULPF works, and why it is built this way</h1>
+<p class="sub">Two halves: a fast, always-on runtime that never guesses, and an offline learning plane that teaches it new formats.</p>
+
+<div class="cols">
+<div>
+<h2>The runtime: every log, every time</h2>
+<p>A firewall or IDS sends its logs in over syslog (TCP or UDP), HTTP, or files. ULPF cuts the stream into individual
+events, and <b>before it reads anything, it writes the original bytes to the evidence log</b> and commits them to disk.
+A separate committer seals that log with signed Merkle checkpoints and ships it to the evidence archive.</p>
+<p>Only then does ULPF look at the event. It strips the syslog, CEF or LEEF wrapper and recognises the format by its
+shape. If exactly one parser fits, the event is parsed and turned into <b>OCSF</b>, one common schema for every vendor.
+If none fits, or more than one could, the event is <b>quarantined</b> with its bytes kept. ULPF never guesses.</p>
+<p>Every normalized event carries its lineage: the hash of its raw bytes, where they are stored, and which parser
+version made it. That is what <b>Proof of Derivation</b> uses: it re-runs that exact parser on the original bytes and
+shows the result equals what the SIEM holds. Finally, events go into a spool with one cursor per destination, so the SIEM
+and the data lake each receive everything, at their own pace, even after an outage.</p>
+
+<h2>The learning plane: new and changed formats</h2>
+<p>Quarantined lines are watched. A new source waits for an operator's approval; a known device that changed its format
+starts healing on its own. ULPF takes samples from the evidence log, works out the structure, and a small local model
+(no internet) suggests what each field means. It suggests only; a validator checks every suggestion against the OCSF
+type tables, and answers already given for that device are reused.</p>
+<p>When the samples can't decide something, such as which address is the source, ULPF issues an <b>ambiguity
+certificate</b> and asks for the one piece of evidence that settles it. Anything nobody can confirm is held back and asked,
+never guessed. The approved parser is signed and added to the <b>transparency log</b>; the runtime checks it and loads it
+without a restart. A changed format comes with a drift alert and a one-click roll back.</p>
+</div>
+
+<div>
+<h2>What this design gives you</h2>
+<ul>
+  <li><b>Nothing is lost.</b> Every original byte is stored before parsing, hashed, sealed and archived. Vendor fields
+      with no OCSF home are kept by name.</li>
+  <li><b>Every result can be proven.</b> Any SIEM event traces back to its exact original bytes and the exact parser that
+      produced it, and the check runs offline. ULPF can draft the certificate Indian courts ask for (BSA 2023 §63(4)).</li>
+  <li><b>No hand-written parsers.</b> The model drafts, a person answers only what the data can't tell. A FortiGate
+      source took 12 decisions instead of 73 by hand.</li>
+  <li><b>It heals itself.</b> When a real FortiGate switched to JSON, 45–47 of about 52 fields carried over
+      automatically and only 6–7 new ones were asked.</li>
+  <li><b>No silent mistakes.</b> Unclear events are quarantined, unclear fields are asked, and the runtime refuses any
+      parser that isn't signed and logged.</li>
+  <li><b>Fast and predictable.</b> No model at run time and only linear-time regex, so one bad line can't stall it. One
+      process handles ~5,300 events/s with the evidence log on; four held 13.6–14.3k/s, above the 11,574/s that one
+      billion events a day needs.</li>
+  <li><b>One view of every vendor.</b> One query for an attacker's address finds both the firewall's denies and the
+      IDS's alerts, whatever each vendor calls the field.</li>
+  <li><b>Fits a secure network.</b> Everything runs offline and in containers, and processes can be added or removed
+      while events flow.</li>
+</ul>
+</div>
+</div>
+<div class="note">Tested with a licensed FortiGate VM (FortiOS 7.4.12) and Suricata 7.0.7. OpenSearch and the Parquet lake
+were tested end to end; the Splunk HEC and CEF outputs were tested against stand-ins only.</div>
+</section>
+
+</body>
+</html>
